@@ -27,6 +27,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
 
+    env:
+      WPCAP_DIR: "C:\\WpdPack"
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -38,6 +41,12 @@ jobs:
           choco install graphviz -y
         shell: powershell
 
+      - name: Download and install WinPcap Developer Pack (WpdPack)
+        run: |
+          Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WpdPack_4_1_2.zip" -OutFile "WpdPack.zip"
+          Expand-Archive WpdPack.zip -DestinationPath "C:\WpdPack"
+        shell: powershell
+        
       - name: Add Graphviz to PATH
         run: |
           echo "C:\Program Files\Graphviz\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
