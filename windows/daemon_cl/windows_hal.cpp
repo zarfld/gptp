@@ -38,6 +38,34 @@
 #include <PeerList.hpp>
 #include <gptp_log.hpp>
 
+static bool getClockRateFromIpHelper(PIP_ADAPTER_INFO adapterInfo, uint32_t *rate)
+{
+    ULONG ret_sz = 15000;
+    IP_ADAPTER_ADDRESSES *addrBuf = (IP_ADAPTER_ADDRESSES *)malloc(ret_sz);
+    if (!addrBuf)
+        return false;
+    if (GetAdaptersAddresses(AF_UNSPEC, 0, NULL, addrBuf, &ret_sz) != ERROR_SUCCESS)
+    {
+        free(addrBuf);
+        return false;
+    }
+    for (IP_ADAPTER_ADDRESSES *p = addrBuf; p != NULL; p = p->Next)
+    {
+        if (p->PhysicalAddressLength == adapterInfo->AddressLength &&
+            memcmp(p->PhysicalAddress, adapterInfo->Address, adapterInfo->AddressLength) == 0)
+        {
+            if (p->ReceiveLinkSpeed)
+            {
+                *rate = (uint32_t)p->ReceiveLinkSpeed;
+                free(addrBuf);
+                return true;
+            }
+        }
+    }
+    free(addrBuf);
+    return false;
+}
+
 DWORD WINAPI OSThreadCallback( LPVOID input ) {
 	OSThreadArg *arg = (OSThreadArg*) input;
 	arg->ret = arg->func( arg->arg );
@@ -263,20 +291,25 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 
 	if( pAdapterInfo == NULL ) return false;
 
-	DeviceClockRateMapping *rate_map = DeviceClockRateMap;
-	while (rate_map->device_desc != NULL)
-	{
-		if (strstr(pAdapterInfo->Description, rate_map->device_desc) != NULL)
-			break;
-		++rate_map;
-	}
-	if (rate_map->device_desc != NULL) {
-		netclock_hz.QuadPart = rate_map->clock_rate;
-	}
-	else {
-		GPTP_LOG_ERROR("Unable to determine clock rate for interface %s", pAdapterInfo->Description);
-		return false;
-	}
+        DeviceClockRateMapping *rate_map = DeviceClockRateMap;
+        while (rate_map->device_desc != NULL)
+        {
+                if (strstr(pAdapterInfo->Description, rate_map->device_desc) != NULL)
+                        break;
+                ++rate_map;
+        }
+        if (rate_map->device_desc != NULL) {
+                netclock_hz.QuadPart = rate_map->clock_rate;
+        }
+        else {
+                uint32_t detected_rate;
+                if (getClockRateFromIpHelper(pAdapterInfo, &detected_rate))
+                        netclock_hz.QuadPart = detected_rate;
+                else {
+                        GPTP_LOG_ERROR("Unable to determine clock rate for interface %s", pAdapterInfo->Description);
+                        return false;
+                }
+        }
 
 	GPTP_LOG_INFO( "Adapter UID: %s\n", pAdapterInfo->AdapterName );
 	PLAT_strncpy( network_card_id, NETWORK_CARD_ID_PREFIX, 63 );
