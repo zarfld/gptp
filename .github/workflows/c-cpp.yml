@@ -7,22 +7,8 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
-      
-  build-test:
+     
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,3 +23,33 @@ jobs:
         run: |
           cd build
           ctest --output-on-failure
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies (Chocolatey)
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+          choco install doxygen -y
+          choco install graphviz -y
+        shell: powershell
+
+      - name: Add Graphviz to PATH
+        run: |
+          echo "C:\Program Files\Graphviz\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+        shell: powershell
+
+      - name: Configure project
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build project
+        run: cmake --build build --config Release
+
+      - name: Generate Documentation (Optional)
+        run: doxygen Doxyfile
+        shell: bash
+        continue-on-error: true  # Skip this step gracefully if Doxyfile is missing
