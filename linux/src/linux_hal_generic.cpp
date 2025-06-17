@@ -224,8 +224,8 @@ bool LinuxTimestamperGeneric::Adjust( void *tmx ) const {
 bool LinuxTimestamperGeneric::HWTimestamper_init
 ( InterfaceLabel *iface_label, OSNetworkInterface *iface ) {
 	cross_stamp_good = false;
-	int phc_index;
-	char ptp_device[] = PTP_DEVICE;
+        int phc_index;
+        char ptp_device[32];
 #ifdef PTP_HW_CROSSTSTAMP
 	struct ptp_clock_caps ptp_capability;
 #endif
@@ -240,9 +240,7 @@ bool LinuxTimestamperGeneric::HWTimestamper_init
 		return false;
 	}
 
-	snprintf
-		( ptp_device+PTP_DEVICE_IDX_OFFS,
-		  sizeof(ptp_device)-PTP_DEVICE_IDX_OFFS, "%d", phc_index );
+        snprintf( ptp_device, sizeof( ptp_device ), "%s%d", PTP_DEVICE, phc_index );
 	GPTP_LOG_ERROR("Using clock device: %s", ptp_device);
 	phc_fd = open( ptp_device, O_RDWR );
 	if( phc_fd == -1 || (_private->clockid = FD_TO_CLOCKID(phc_fd)) == -1 ) {
