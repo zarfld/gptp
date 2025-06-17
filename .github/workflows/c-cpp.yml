@@ -46,6 +46,13 @@ jobs:
           Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WpdPack_4_1_2.zip" -OutFile "WpdPack.zip"
           Expand-Archive WpdPack.zip -DestinationPath "C:\WpdPack"
         shell: powershell
+
+      - name: Verify WpdPack structure and env
+        run: |
+          echo "WPCAP_DIR is: $env:WPCAP_DIR"
+          dir "C:\WpdPack\Include"
+          dir "C:\WpdPack\Lib"
+        shell: powershell
         
       - name: Add Graphviz to PATH
         run: |
