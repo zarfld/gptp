@@ -1,5 +1,5 @@
 #Windows specifc build of named pipe test
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION VERSION 3.12...4.0)
 project (named_pipe_test)
 
 include_directories( ".." )
