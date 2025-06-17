@@ -37,6 +37,7 @@
 #include <ether_port.hpp>
 
 #include <pthread.h>
+#include <sched.h>
 #include <linux_ipc.hpp>
 
 #include <sys/mman.h>
@@ -646,7 +647,7 @@ bool TicketingLock::lock( bool *got ) {
 		goto done;
 	}
 
-	if( yield ) pthread_yield();
+       if( yield ) sched_yield();
 
  done:
 	return ret;
