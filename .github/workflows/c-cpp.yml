@@ -50,6 +50,7 @@ jobs:
       - name: Verify WpdPack structure and env
         run: |
           echo "WPCAP_DIR is: $env:WPCAP_DIR"
+          dir "C:\WpdPack"
           dir "C:\WpdPack\Include"
           dir "C:\WpdPack\Lib"
         shell: powershell
