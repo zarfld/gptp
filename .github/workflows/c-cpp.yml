@@ -44,7 +44,7 @@ jobs:
       - name: Download and install WinPcap Developer Pack (WpdPack)
         run: |
           Invoke-WebRequest -Uri "https://www.winpcap.org/install/bin/WpdPack_4_1_2.zip" -OutFile "WpdPack.zip"
-          Expand-Archive WpdPack.zip -DestinationPath "C:\WpdPack"
+          Expand-Archive WpdPack.zip -DestinationPath "C:\"
         shell: powershell
 
       - name: Verify WpdPack structure and env
