@@ -700,6 +700,8 @@ public:
 
 #define I217_DESC "I217-LM"
 #define I219_DESC "I219-V"
+#define I225_DESC "I225"
+#define I226_DESC "I226"
 
 #define NETWORK_CARD_ID_PREFIX "\\\\.\\"			/*!< Network adapter prefix */
 #define OID_INTEL_GET_RXSTAMP 0xFF020264			/*!< Get RX timestamp code*/
@@ -718,9 +720,11 @@ typedef struct
 */
 static DeviceClockRateMapping DeviceClockRateMap[] =
 {
-	{ 1000000000, I217_DESC	},
-	{ 1008000000, I219_DESC	},
-	{ 0, NULL },
+        { 1000000000, I217_DESC },
+        { 1008000000, I219_DESC },
+        { 1000000000, I225_DESC },
+        { 1000000000, I226_DESC },
+        { 0, NULL },
 };
 
 /**
