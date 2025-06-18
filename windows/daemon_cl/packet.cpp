@@ -154,7 +154,9 @@ packet_error_t packetBind( struct packet_handle *handle, uint16_t ethertype ) {
     packet_error_t ret = PACKET_NO_ERROR;
     char filter_expression[32] = "ether proto 0x";
 
-    sprintf_s( filter_expression+strlen(filter_expression), 31-strlen(filter_expression), "%hx", ethertype );
+    snprintf( filter_expression + strlen(filter_expression),
+              sizeof(filter_expression) - strlen(filter_expression),
+              "%hx", ethertype );
     if( pcap_compile( handle->iface, &handle->filter, filter_expression, 1, 0 ) == -1 ) {
         ret = PACKET_BIND_ERROR;
         goto fnexit;
