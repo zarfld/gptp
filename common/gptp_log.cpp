@@ -57,9 +57,9 @@ void gptpLog(GPTP_LOG_LEVEL level, const char *tag, const char *path, int line, 
 {
 	char msg[1024];
 
-	va_list args;
-	va_start(args, fmt);
-	vsprintf(msg, fmt, args);
+       va_list args;
+       va_start(args, fmt);
+       vsnprintf(msg, sizeof(msg), fmt, args);
 
 #ifndef GENIVI_DLT
 	std::chrono::system_clock::time_point cNow = std::chrono::system_clock::now();
