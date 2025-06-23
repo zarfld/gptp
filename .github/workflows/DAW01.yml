@@ -12,6 +12,12 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Set up MSVC Build Tools environment
+      run: |
+        call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+      shell: cmd
+
+
     - name: Check for Visual Studio Build Tools (cl.exe)
       run: |
         if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
