@@ -1,0 +1,43 @@
+name: Manual GPTP Test on Self-Hosted Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-gptp:
+    name: Run GPTP Test on i210 Windows Host
+    runs-on: [self-hosted, windows, i210]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check for Visual Studio Build Tools (cl.exe)
+      run: |
+        if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+          Write-Error "❌ cl.exe (Visual C++) not found in PATH. Please install Visual Studio Build Tools and set up the environment."
+          exit 1
+        } else {
+          Write-Host "✅ cl.exe found"
+        }
+      shell: pwsh
+
+    - name: Build gptp.exe
+      run: |
+        cl /EHsc gptp.cpp /Fe:gptp.exe
+      shell: cmd
+
+    - name: Check that gptp.exe was created
+      run: |
+        if (-not (Test-Path "$PWD\gptp.exe")) {
+          Write-Error "❌ gptp.exe not found after build"
+          exit 1
+        } else {
+          Write-Host "✅ gptp.exe built successfully"
+        }
+      shell: pwsh
+
+    - name: Run gptp.exe
+      run: |
+        .\gptp.exe --help
+      shell: cmd
