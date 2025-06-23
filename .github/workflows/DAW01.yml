@@ -20,7 +20,7 @@ jobs:
         } else {
           Write-Host "✅ cl.exe found"
         }
-      shell: pwsh
+      shell: powershell
 
     - name: Build gptp.exe
       run: |
@@ -35,7 +35,7 @@ jobs:
         } else {
           Write-Host "✅ gptp.exe built successfully"
         }
-      shell: pwsh
+      shell: powershell
 
     - name: Run gptp.exe
       run: |
