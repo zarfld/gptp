@@ -42,6 +42,6 @@ jobs:
     - name: Run gptp.exe
       run: |
         $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
-        & $exe.FullName --help
+        & $exe.FullName "68-05-CA-8B-76-4E"
       shell: powershell
 
