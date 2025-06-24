@@ -29,12 +29,14 @@ jobs:
 
     - name: Check that gptp.exe was created
       run: |
-        if (-not (Test-Path "$PWD\gptp.exe")) {
-          Write-Error "❌ gptp.exe not found after build"
-          exit 1
-        } else {
-          Write-Host "✅ gptp.exe built successfully"
-        }
+          $gptpExe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
+          
+          if (-not $gptpExe) {
+              Write-Error "❌ gptp.exe not found after build"
+              exit 1
+          } else {
+              Write-Host "✅ Found: $($gptpExe.FullName)"
+          }
       shell: powershell
 
     - name: Run gptp.exe
