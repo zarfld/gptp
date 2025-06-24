@@ -12,20 +12,26 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Check for Visual Studio Build Tools (cl.exe)
+    - name: Install Dependencies (Chocolatey)
       run: |
-        if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
-          Write-Error "❌ cl.exe (Visual C++) not found in PATH. Please install Visual Studio Build Tools and set up the environment."
-          exit 1
-        } else {
-          Write-Host "✅ cl.exe found"
-        }
+        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+        choco install doxygen -y
+        choco install graphviz -y
       shell: powershell
 
-    - name: Build gptp.exe
+    - name: Verify WpdPack structure and env
       run: |
-        cl /EHsc gptp.cpp /Fe:gptp.exe
-      shell: cmd
+        echo "WPCAP_DIR is: $env:WPCAP_DIR"
+        #dir "C:\WpdPack"
+        #dir "C:\WpdPack\Include"
+        #dir "C:\WpdPack\Lib"
+      shell: powershell
+
+    - name: Configure project
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build project
+      run: cmake --build build --config Release
 
     - name: Check that gptp.exe was created
       run: |
