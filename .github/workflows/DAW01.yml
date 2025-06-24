@@ -40,6 +40,9 @@ jobs:
       shell: powershell
 
     - name: Run gptp.exe
+      shell: pwsh
       run: |
-        .\gptp.exe --help
-      shell: cmd
+        $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
+        & $exe.FullName --help
+    shell: powershell
+
