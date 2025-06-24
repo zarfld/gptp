@@ -1,0 +1,62 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Check WPCAP_DIR environment",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-Command",
+          "echo WPCAP_DIR is: $env:WPCAP_DIR"
+        ]
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Check CMake version",
+      "type": "shell",
+      "windows": {
+        "command": "cmake",
+        "args": [ "--version" ]
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+
+    {
+      "label": "Configure project",
+      "type": "shell",
+      "windows": {
+        "command": "cmake",
+        "args": [
+          "-B", "build",
+          "-DCMAKE_BUILD_TYPE=Release"
+        ]
+      },
+      "dependsOn": [
+        "Check WPCAP_DIR environment",
+        "Check CMake version"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build project",
+      "type": "shell",
+      "windows": {
+        "command": "cmake",
+        "args": [
+          "--build", "build",
+          "--config", "Release"
+        ]
+      },
+      "dependsOn": [
+        "Configure project"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
