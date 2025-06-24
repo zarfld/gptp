@@ -12,12 +12,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install Dependencies (Chocolatey)
-      run: |
-        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
-        choco install doxygen -y
-        choco install graphviz -y
-      shell: powershell
 
     - name: Verify WpdPack structure and env
       run: |
