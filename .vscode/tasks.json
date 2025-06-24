@@ -57,6 +57,57 @@
       ],
       "group": "build",
       "problemMatcher": []
+    },
+        {
+      "label": "Configure Debug",
+      "type": "shell",
+      "windows": {
+        "command": "cmake",
+        "args": [
+          "-B", "build",
+          "-DCMAKE_BUILD_TYPE=Debug"
+        ]
+      },
+      "dependsOn": [
+        "Check WPCAP_DIR environment",
+        "Check CMake version"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build project Debug",
+      "type": "shell",
+      "windows": {
+        "command": "cmake",
+        "args": [
+          "--build", "build",
+          "--config", "Debug"
+        ]
+      },
+      "dependsOn": [
+        "Configure Debug"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Debug gptp",
+      "type": "shell",
+      "windows": {
+          "command": "powershell",
+          "args": [
+            "-NoProfile",
+            "-Command",
+            "$mac = (Get-NetAdapter | Where-Object { $_.MacAddress } | Select-Object -First 1 -ExpandProperty MacAddress);",
+            "& 'build\\Debug\\gptp.exe' $mac"
+          ]
+        },
+        "dependsOn": [
+        "Build project Debug"
+      ],
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }
