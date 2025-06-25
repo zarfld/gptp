@@ -721,7 +721,7 @@ static DeviceClockRateMapping DeviceClockRateMap[] =
 {
 	{ 1000000000, I217_DESC	},
 	{ 1008000000, I219_DESC	},
-	[2]={ 1250000000, I210_DESC	},	/*!< I210 clock rate */
+	{ 1250000000, I210_DESC	},
 	{ 0, NULL },
 };
 
