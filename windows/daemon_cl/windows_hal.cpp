@@ -282,11 +282,52 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 	PLAT_strncpy( network_card_id, NETWORK_CARD_ID_PREFIX, 63 );
 	PLAT_strncpy( network_card_id+strlen(network_card_id), pAdapterInfo->AdapterName, 63-strlen(network_card_id) );
 
-	miniport = CreateFile( network_card_id,
-		GENERIC_READ | GENERIC_WRITE,
-		FILE_SHARE_READ | FILE_SHARE_WRITE,
-		NULL, OPEN_EXISTING, 0, NULL );
-	if( miniport == INVALID_HANDLE_VALUE ) return false;
+        miniport = CreateFile( network_card_id,
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                NULL, OPEN_EXISTING, 0, NULL );
+        if( miniport == INVALID_HANDLE_VALUE ) return false;
+
+#ifdef OID_TIMESTAMP_CAPABILITY
+        {
+                NDIS_TIMESTAMP_CAPABILITIES caps;
+                DWORD returned = 0;
+                DWORD result;
+
+                memset(&caps, 0, sizeof(caps));
+                result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
+                if(result != ERROR_SUCCESS || returned < sizeof(caps)) {
+                        GPTP_LOG_ERROR("Failed to query timestamp capability");
+                        return false;
+                }
+
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+                if(caps.TimestampFlags == 0) {
+                        GPTP_LOG_ERROR("Adapter lacks timestamping capability");
+                        return false;
+                }
+#else
+                if(caps.HwTimestampCapabilities == 0 && caps.SoftwareTimestampCapabilities == 0) {
+                        GPTP_LOG_ERROR("Adapter lacks timestamping capability");
+                        return false;
+                }
+#endif
+
+#ifdef OID_TIMESTAMP_CURRENT_CONFIG
+                NDIS_TIMESTAMP_CAPABILITIES cfg;
+                memset(&cfg, 0, sizeof(cfg));
+                if(readOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg), &returned) == ERROR_SUCCESS) {
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+                        cfg.TimestampFlags = caps.TimestampFlags;
+#else
+                        cfg.HwTimestampCapabilities = caps.HwTimestampCapabilities;
+                        cfg.SoftwareTimestampCapabilities = caps.SoftwareTimestampCapabilities;
+#endif
+                        setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg));
+                }
+#endif
+        }
+#endif
 
 	tsc_hz.QuadPart = getTSCFrequency( true );
 	if( tsc_hz.QuadPart == 0 ) {

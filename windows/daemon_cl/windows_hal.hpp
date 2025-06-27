@@ -707,6 +707,13 @@ public:
 #define OID_INTEL_GET_TXSTAMP 0xFF020263			/*!< Get TX timestamp code*/
 #define OID_INTEL_GET_SYSTIM  0xFF020262			/*!< Get system time code */
 #define OID_INTEL_SET_SYSTIM  0xFF020261			/*!< Set system time code */
+/* Provide timestamp capability OIDs when building with older SDKs */
+#ifndef OID_TIMESTAMP_CAPABILITY
+#define OID_TIMESTAMP_CAPABILITY 0x00010265
+#endif
+#ifndef OID_TIMESTAMP_CURRENT_CONFIG
+#define OID_TIMESTAMP_CURRENT_CONFIG 0x00010266
+#endif
 
 typedef struct
 {
@@ -748,6 +755,21 @@ private:
 		if( rc == 0 ) return GetLastError();
 		return ERROR_SUCCESS;
 	}
+        DWORD setOID( NDIS_OID oid, void *input_buffer, DWORD size ) const {
+                DWORD returned;
+                NDIS_OID oid_l = oid;
+                DWORD rc = DeviceIoControl(
+                        miniport,
+                        IOCTL_NDIS_QUERY_GLOBAL_STATS,
+                        &oid_l,
+                        sizeof(oid_l),
+                        input_buffer,
+                        size,
+                        &returned,
+                        NULL );
+                if( rc == 0 ) return GetLastError();
+                return ERROR_SUCCESS;
+        }
 	Timestamp nanoseconds64ToTimestamp( uint64_t time ) const {
 		Timestamp timestamp;
 		timestamp.nanoseconds = time % 1000000000;
