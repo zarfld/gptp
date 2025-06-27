@@ -301,17 +301,28 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
                         return false;
                 }
 
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+                if(caps.TimestampFlags == 0) {
+                        GPTP_LOG_ERROR("Adapter lacks timestamping capability");
+                        return false;
+                }
+#else
                 if(caps.HwTimestampCapabilities == 0 && caps.SoftwareTimestampCapabilities == 0) {
                         GPTP_LOG_ERROR("Adapter lacks timestamping capability");
                         return false;
                 }
+#endif
 
 #ifdef OID_TIMESTAMP_CURRENT_CONFIG
                 NDIS_TIMESTAMP_CAPABILITIES cfg;
                 memset(&cfg, 0, sizeof(cfg));
                 if(readOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg), &returned) == ERROR_SUCCESS) {
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+                        cfg.TimestampFlags = caps.TimestampFlags;
+#else
                         cfg.HwTimestampCapabilities = caps.HwTimestampCapabilities;
                         cfg.SoftwareTimestampCapabilities = caps.SoftwareTimestampCapabilities;
+#endif
                         setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg));
                 }
 #endif
