@@ -96,6 +96,9 @@ To run from the command line:
 	daemon_cl.exe xx-xx-xx-xx-xx-xx
 
 where xx-xx-xx-xx-xx-xx is the mac address of the local interface
+Windows timestamping relies on NDIS OID_TIMESTAMP_CAPABILITY and OID_TIMESTAMP_CURRENT_CONFIG to enable NIC hardware timestamps.
+
+
 
 Windows Wireless Specific
 +++++++++++++++++++++++++
