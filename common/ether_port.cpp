@@ -819,6 +819,7 @@ int EtherPort::getTxTimestamp
 			( sourcePortIdentity, messageId, timestamp,
 			  counter_value, last );
 	}
+	GPTP_LOG_ERROR("No hardware timestamper available, falling back to system time (TX)");
 	timestamp = clock->getSystemTime();
 	return 0;
 }

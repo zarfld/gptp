@@ -829,10 +829,13 @@ public:
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
 		if( result != ERROR_GEN_FAILURE ) {
-			fprintf( stderr, "Error is: %d\n", result );
+			fprintf( stderr, "readOID failed,  Error is: %d\n", result );
 			return GPTP_EC_FAILURE;
 		}
-		if( returned != sizeof(buf_tmp) ) return GPTP_EC_EAGAIN;
+		if( returned != sizeof(buf_tmp) ){
+			fprintf( stderr, "Error reading TX timestamp: %d\n", result );
+			return GPTP_EC_EAGAIN;
+		} 
 		tx_r = (((uint64_t)buf[1]) << 32) | buf[0];
 		tx_s = scaleNativeClockToNanoseconds( tx_r );
 		timestamp = nanoseconds64ToTimestamp( tx_s );
@@ -963,7 +966,7 @@ public:
 		uint8_t  clock_identity[],
 		uint8_t  priority1,
 		uint8_t  clock_class,
-                uint16_t offset_scaled_log_variance,
+        uint16_t offset_scaled_log_variance,
 		uint8_t  clock_accuracy,
 		uint8_t  priority2,
 		uint8_t  domain_number,
