@@ -289,42 +289,62 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
         if( miniport == INVALID_HANDLE_VALUE ) return false;
 
 #ifdef OID_TIMESTAMP_CAPABILITY
-        {
-                NDIS_TIMESTAMP_CAPABILITIES caps;
-                DWORD returned = 0;
-                DWORD result;
+       {
+               DWORD returned = 0;
+               DWORD result;
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+               NDIS_TIMESTAMP_CAPABILITIES caps;
+#else
+               /*
+                * Fall back to the IPHLPAPI INTERFACE_TIMESTAMP_CAPABILITIES
+                * structure when the newer NDIS timestamp capability flags are
+                * not available in the SDK headers.
+                */
+               INTERFACE_TIMESTAMP_CAPABILITIES caps;
+#endif
 
-                memset(&caps, 0, sizeof(caps));
-                result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
-                if(result != ERROR_SUCCESS || returned < sizeof(caps)) {
-                        GPTP_LOG_ERROR("Failed to query timestamp capability");
-                        return false;
-                }
+               memset(&caps, 0, sizeof(caps));
+               result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
+               if(result != ERROR_SUCCESS || returned < sizeof(caps)) {
+                       GPTP_LOG_ERROR("Failed to query timestamp capability");
+                       return false;
+               }
 
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-                if(caps.TimestampFlags == 0) {
-                        GPTP_LOG_ERROR("Adapter lacks timestamping capability");
-                        return false;
-                }
+               if(caps.TimestampFlags == 0) {
+                       GPTP_LOG_ERROR("Adapter lacks timestamping capability");
+                       return false;
+               }
 #else
-                if(caps.HwTimestampCapabilities == 0 && caps.SoftwareTimestampCapabilities == 0) {
-                        GPTP_LOG_ERROR("Adapter lacks timestamping capability");
-                        return false;
-                }
+               /* INTERFACE_TIMESTAMP_CAPABILITIES does not expose a single
+                * flag field. Treat an all-zero structure as lack of
+                * timestamp support.
+                */
+               INTERFACE_TIMESTAMP_CAPABILITIES zeroCaps;
+               memset(&zeroCaps, 0, sizeof(zeroCaps));
+               if(!memcmp(&caps, &zeroCaps, sizeof(caps))) {
+                       GPTP_LOG_ERROR("Adapter lacks timestamping capability");
+                       return false;
+               }
 #endif
 
 #ifdef OID_TIMESTAMP_CURRENT_CONFIG
-                NDIS_TIMESTAMP_CAPABILITIES cfg;
-                memset(&cfg, 0, sizeof(cfg));
-                if(readOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg), &returned) == ERROR_SUCCESS) {
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-                        cfg.TimestampFlags = caps.TimestampFlags;
+               NDIS_TIMESTAMP_CAPABILITIES cfg;
 #else
-                        cfg.HwTimestampCapabilities = caps.HwTimestampCapabilities;
-                        cfg.SoftwareTimestampCapabilities = caps.SoftwareTimestampCapabilities;
+               INTERFACE_TIMESTAMP_CAPABILITIES cfg;
 #endif
-                        setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg));
-                }
+               memset(&cfg, 0, sizeof(cfg));
+               if(readOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg), &returned) == ERROR_SUCCESS) {
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+                       cfg.TimestampFlags = caps.TimestampFlags;
+#else
+                       /* Older IPHLPAPI path uses the same structure for
+                        * capability and configuration. */
+                       memcpy(&cfg, &caps, sizeof(cfg));
+#endif
+                       setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg));
+               }
 #endif
         }
 #endif
