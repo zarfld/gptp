@@ -272,10 +272,46 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 	}
 	if (rate_map->device_desc != NULL) {
 		netclock_hz.QuadPart = rate_map->clock_rate;
+		GPTP_LOG_INFO("Using predefined clock rate %llu Hz for interface %s", 
+			rate_map->clock_rate, pAdapterInfo->Description);
 	}
 	else {
-		GPTP_LOG_ERROR("Unable to determine clock rate for interface %s", pAdapterInfo->Description);
-		return false;
+		// Fallback: Try to get clock rate from timestamp capabilities
+		bool clock_rate_found = false;
+#ifdef OID_TIMESTAMP_CAPABILITY
+		DWORD returned = 0;
+		DWORD result;
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+		NDIS_TIMESTAMP_CAPABILITIES caps;
+#else
+		INTERFACE_TIMESTAMP_CAPABILITIES caps;
+#endif
+		memset(&caps, 0, sizeof(caps));
+		result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
+		if(result == ERROR_SUCCESS && returned >= sizeof(caps)) {
+#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
+			// NDIS path: Check for HardwareClockFrequencyHz field
+			if (caps.HardwareClockFrequencyHz > 0) {
+				netclock_hz.QuadPart = caps.HardwareClockFrequencyHz;
+				clock_rate_found = true;
+				GPTP_LOG_INFO("Using hardware clock frequency from NDIS timestamp capabilities: %llu Hz for interface %s", 
+					caps.HardwareClockFrequencyHz, pAdapterInfo->Description);
+			}
+#else
+			// INTERFACE_TIMESTAMP_CAPABILITIES has HardwareClockFrequencyHz
+			if (caps.HardwareClockFrequencyHz > 0) {
+				netclock_hz.QuadPart = caps.HardwareClockFrequencyHz;
+				clock_rate_found = true;
+				GPTP_LOG_INFO("Using hardware clock frequency from IPHLPAPI timestamp capabilities: %llu Hz for interface %s", 
+					caps.HardwareClockFrequencyHz, pAdapterInfo->Description);
+			}
+#endif
+		}
+#endif
+		if (!clock_rate_found) {
+			GPTP_LOG_ERROR("Unable to determine clock rate for interface %s", pAdapterInfo->Description);
+			return false;
+		}
 	}
 
 	GPTP_LOG_INFO( "Adapter UID: %s\n", pAdapterInfo->AdapterName );
@@ -288,65 +324,66 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
                 NULL, OPEN_EXISTING, 0, NULL );
         if( miniport == INVALID_HANDLE_VALUE ) return false;
 
+	// Verify timestamp capabilities and configure if needed
 #ifdef OID_TIMESTAMP_CAPABILITY
-       {
-               DWORD returned = 0;
-               DWORD result;
+	{
+		DWORD returned = 0;
+		DWORD result;
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-               NDIS_TIMESTAMP_CAPABILITIES caps;
+		NDIS_TIMESTAMP_CAPABILITIES caps;
 #else
-               /*
-                * Fall back to the IPHLPAPI INTERFACE_TIMESTAMP_CAPABILITIES
-                * structure when the newer NDIS timestamp capability flags are
-                * not available in the SDK headers.
-                */
-               INTERFACE_TIMESTAMP_CAPABILITIES caps;
+		/*
+		 * Fall back to the IPHLPAPI INTERFACE_TIMESTAMP_CAPABILITIES
+		 * structure when the newer NDIS timestamp capability flags are
+		 * not available in the SDK headers.
+		 */
+		INTERFACE_TIMESTAMP_CAPABILITIES caps;
 #endif
 
-               memset(&caps, 0, sizeof(caps));
-               result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
-               if(result != ERROR_SUCCESS || returned < sizeof(caps)) {
-                       GPTP_LOG_ERROR("Failed to query timestamp capability");
-                       return false;
-               }
+		memset(&caps, 0, sizeof(caps));
+		result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
+		if(result != ERROR_SUCCESS || returned < sizeof(caps)) {
+			GPTP_LOG_ERROR("Failed to query timestamp capability");
+			return false;
+		}
 
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-               if(caps.TimestampFlags == 0) {
-                       GPTP_LOG_ERROR("Adapter lacks timestamping capability");
-                       return false;
-               }
+		if(caps.TimestampFlags == 0) {
+			GPTP_LOG_ERROR("Adapter lacks timestamping capability");
+			return false;
+		}
 #else
-               /* INTERFACE_TIMESTAMP_CAPABILITIES does not expose a single
-                * flag field. Treat an all-zero structure as lack of
-                * timestamp support.
-                */
-               INTERFACE_TIMESTAMP_CAPABILITIES zeroCaps;
-               memset(&zeroCaps, 0, sizeof(zeroCaps));
-               if(!memcmp(&caps, &zeroCaps, sizeof(caps))) {
-                       GPTP_LOG_ERROR("Adapter lacks timestamping capability");
-                       return false;
-               }
+		/* INTERFACE_TIMESTAMP_CAPABILITIES does not expose a single
+		 * flag field. Treat an all-zero structure as lack of
+		 * timestamp support.
+		 */
+		INTERFACE_TIMESTAMP_CAPABILITIES zeroCaps;
+		memset(&zeroCaps, 0, sizeof(zeroCaps));
+		if(!memcmp(&caps, &zeroCaps, sizeof(caps))) {
+			GPTP_LOG_ERROR("Adapter lacks timestamping capability");
+			return false;
+		}
 #endif
 
 #ifdef OID_TIMESTAMP_CURRENT_CONFIG
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-               NDIS_TIMESTAMP_CAPABILITIES cfg;
+		NDIS_TIMESTAMP_CAPABILITIES cfg;
 #else
-               INTERFACE_TIMESTAMP_CAPABILITIES cfg;
+		INTERFACE_TIMESTAMP_CAPABILITIES cfg;
 #endif
-               memset(&cfg, 0, sizeof(cfg));
-               if(readOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg), &returned) == ERROR_SUCCESS) {
+		memset(&cfg, 0, sizeof(cfg));
+		if(readOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg), &returned) == ERROR_SUCCESS) {
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-                       cfg.TimestampFlags = caps.TimestampFlags;
+			cfg.TimestampFlags = caps.TimestampFlags;
 #else
-                       /* Older IPHLPAPI path uses the same structure for
-                        * capability and configuration. */
-                       memcpy(&cfg, &caps, sizeof(cfg));
+			/* Older IPHLPAPI path uses the same structure for
+			 * capability and configuration. */
+			memcpy(&cfg, &caps, sizeof(cfg));
 #endif
-                       setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg));
-               }
+			setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg));
+		}
 #endif
-        }
+	}
 #endif
 
 	tsc_hz.QuadPart = getTSCFrequency( true );
