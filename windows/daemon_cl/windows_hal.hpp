@@ -36,7 +36,7 @@
 
 /**@file*/
 
-#include <IPCListener.hpp>
+#include "IPCListener.hpp"
 #include "avbts_osnet.hpp"
 #include "avbts_oslock.hpp"
 #include "avbts_oscondition.hpp"
@@ -56,6 +56,11 @@
 #include <ntddndis.h>
 
 #include <map>
+#include <list>
+
+// Include modular Windows HAL components for enhanced functionality  
+#include "windows_hal_iphlpapi.hpp"
+#include "windows_hal_ndis.hpp"
 #include <list>
 
 /**
@@ -699,7 +704,7 @@ public:
 };
 
 #define I217_DESC "I217-LM"
-#define I219_DESC "I219-V"
+#define I219_DESC "I219" // Intel I219-V and I219-LM
 #define I210_DESC "I210"
 
 #define NETWORK_CARD_ID_PREFIX "\\\\.\\"			/*!< Network adapter prefix */

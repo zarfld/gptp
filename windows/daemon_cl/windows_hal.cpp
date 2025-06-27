@@ -38,35 +38,6 @@
 #include <PeerList.hpp>
 #include <gptp_log.hpp>
 
-DWORD WINAPI OSThreadCallback( LPVOID input ) {
-	OSThreadArg *arg = (OSThreadArg*) input;
-	arg->ret = arg->func( arg->arg );
-	return 0;
-}
-
-VOID CALLBACK WindowsTimerQueueHandler( PVOID arg_in, BOOLEAN ignore ) {
-	WindowsTimerQueueHandlerArg *arg = (WindowsTimerQueueHandlerArg *) arg_in;
-	size_t diff;
-
-	// Remove myself from unexpired timer queue
-	AcquireSRWLockExclusive( &arg->timer_queue->lock );
-	diff  = arg->timer_queue->arg_list.size();
-	arg->timer_queue->arg_list.remove( arg );
-	diff -= arg->timer_queue->arg_list.size();
-	ReleaseSRWLockExclusive( &arg->timer_queue->lock );
-
-	// If the remove was unsuccessful bail because we were
-	// stepped on by 'cancelEvent'
-	if( diff == 0 ) return;
-
-	arg->func( arg->inner_arg );
-
-	// Add myself to the expired timer queue
-	AcquireSRWLockExclusive( &arg->queue->retiredTimersLock );
-	arg->queue->retiredTimers.push_front( arg );
-	ReleaseSRWLockExclusive( &arg->queue->retiredTimersLock );
-}
-
 inline uint64_t scale64(uint64_t i, uint32_t m, uint32_t n)
 {
 	uint64_t tmp, res, rem;
@@ -263,52 +234,37 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 
 	if( pAdapterInfo == NULL ) return false;
 
-	DeviceClockRateMapping *rate_map = DeviceClockRateMap;
-	while (rate_map->device_desc != NULL)
-	{
-		if (strstr(pAdapterInfo->Description, rate_map->device_desc) != NULL)
-			break;
-		++rate_map;
+	// Use the modular hardware clock rate detection
+	// This tries IPHLPAPI first, then NDIS, then falls back to legacy mapping
+	uint64_t detected_rate = 0;
+	
+	// Try IPHLPAPI method
+	detected_rate = getHardwareClockRate_IPHLPAPI(pAdapterInfo->Description);
+	if (detected_rate == 0) {
+		// Try NDIS method
+		detected_rate = getHardwareClockRate_NDIS(pAdapterInfo->Description);
 	}
-	if (rate_map->device_desc != NULL) {
-		netclock_hz.QuadPart = rate_map->clock_rate;
-		GPTP_LOG_INFO("Using predefined clock rate %llu Hz for interface %s", 
-			rate_map->clock_rate, pAdapterInfo->Description);
+	
+	if (detected_rate > 0) {
+		netclock_hz.QuadPart = detected_rate;
+		GPTP_LOG_INFO("Using detected clock rate %llu Hz for interface %s", 
+			detected_rate, pAdapterInfo->Description);
 	}
 	else {
-		// Fallback: Try to get clock rate from timestamp capabilities
-		bool clock_rate_found = false;
-#ifdef OID_TIMESTAMP_CAPABILITY
-		DWORD returned = 0;
-		DWORD result;
-#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-		NDIS_TIMESTAMP_CAPABILITIES caps;
-#else
-		INTERFACE_TIMESTAMP_CAPABILITIES caps;
-#endif
-		memset(&caps, 0, sizeof(caps));
-		result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
-		if(result == ERROR_SUCCESS && returned >= sizeof(caps)) {
-#if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-			// NDIS path: Check for HardwareClockFrequencyHz field
-			if (caps.HardwareClockFrequencyHz > 0) {
-				netclock_hz.QuadPart = caps.HardwareClockFrequencyHz;
-				clock_rate_found = true;
-				GPTP_LOG_INFO("Using hardware clock frequency from NDIS timestamp capabilities: %llu Hz for interface %s", 
-					caps.HardwareClockFrequencyHz, pAdapterInfo->Description);
-			}
-#else
-			// INTERFACE_TIMESTAMP_CAPABILITIES has HardwareClockFrequencyHz
-			if (caps.HardwareClockFrequencyHz > 0) {
-				netclock_hz.QuadPart = caps.HardwareClockFrequencyHz;
-				clock_rate_found = true;
-				GPTP_LOG_INFO("Using hardware clock frequency from IPHLPAPI timestamp capabilities: %llu Hz for interface %s", 
-					caps.HardwareClockFrequencyHz, pAdapterInfo->Description);
-			}
-#endif
+		// Fallback to legacy device mapping
+		DeviceClockRateMapping *rate_map = DeviceClockRateMap;
+		while (rate_map->device_desc != NULL)
+		{
+			if (strstr(pAdapterInfo->Description, rate_map->device_desc) != NULL)
+				break;
+			++rate_map;
 		}
-#endif
-		if (!clock_rate_found) {
+		if (rate_map->device_desc != NULL) {
+			netclock_hz.QuadPart = rate_map->clock_rate;
+			GPTP_LOG_INFO("Using predefined clock rate %llu Hz for interface %s", 
+				rate_map->clock_rate, pAdapterInfo->Description);
+		}
+		else {
 			GPTP_LOG_ERROR("Unable to determine clock rate for interface %s", pAdapterInfo->Description);
 			return false;
 		}
