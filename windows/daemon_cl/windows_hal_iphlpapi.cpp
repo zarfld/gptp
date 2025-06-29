@@ -1,5 +1,6 @@
 #include "windows_hal_iphlpapi.hpp"
 #include "windows_hal.hpp" // For DeviceClockRateMapping definition
+#include "windows_hal_vendor_intel.hpp" // For Intel-specific detection
 
 uint64_t getHardwareClockRate_IPHLPAPI(const char* iface_label) {
     if (!iface_label) {
@@ -66,32 +67,14 @@ uint64_t getHardwareClockRate_IPHLPAPI(const char* iface_label) {
                     }
 #endif
 
-                    // Method 2: Try accessing adapter properties via registry/WMI-style lookup
-                    // This uses the adapter's hardware information when available
+                    // Method 2: Try Intel-specific detection using vendor module
                     if (detected_rate == 0 && pCurrAddresses->PhysicalAddressLength == 6) {
-                        // Check if it's an Intel adapter by looking at OUI (first 3 bytes of MAC)
+                        // Check if it's an Intel adapter using the vendor module
                         BYTE* mac = pCurrAddresses->PhysicalAddress;
                         
-                        // Intel OUI prefixes: 00:01:C8, 00:03:47, 00:07:E9, 00:0E:0C, 00:13:CE, 00:15:17, etc.
-                        bool is_intel = (mac[0] == 0x00 && mac[1] == 0x1C && mac[2] == 0xC8) ||  // Intel I217/I218/I219
-                                       (mac[0] == 0x00 && mac[1] == 0x15 && mac[2] == 0x17) ||  // Intel newer
-                                       (mac[0] == 0x00 && mac[1] == 0x1B && mac[2] == 0x21) ||  // Intel I350
-                                       (mac[0] == 0x00 && mac[1] == 0x0E && mac[2] == 0x0C);    // Intel generic
-                        
-                        if (is_intel) {
-                            // For Intel adapters, try to determine model from description
-                            // Use the narrow string we already converted
-                            if (strstr(desc_narrow, "I217") || strstr(desc_narrow, "I218")) {
-                                detected_rate = 1000000000ULL; // 1 GHz for I217/I218
-                            } else if (strstr(desc_narrow, "I219")) {
-                                detected_rate = 1008000000ULL; // 1.008 GHz for I219
-                            } else if (strstr(desc_narrow, "I210") || strstr(desc_narrow, "I211")) {
-                                detected_rate = 1000000000ULL; // 1 GHz for I210/I211
-                            } else if (strstr(desc_narrow, "I350")) {
-                                detected_rate = 1000000000ULL; // 1 GHz for I350
-                            } else if (strstr(desc_narrow, "82599") || strstr(desc_narrow, "X520")) {
-                                detected_rate = 1000000000ULL; // 1 GHz for 10GbE controllers
-                            }
+                        if (isIntelDevice(mac)) {
+                            // Use Intel vendor module for device-specific detection
+                            detected_rate = getIntelClockRate(desc_narrow);
                         }
                     }
                     
@@ -185,29 +168,28 @@ bool isHardwareTimestampSupported_IPHLPAPI(const char* iface_label) {
                     }
 #endif
 
-                    // Method 2: Fall back to checking known hardware that supports timestamping
+                    // Method 2: Use Intel vendor module for known hardware detection
                     if (!supports_hw_timestamp && pCurrAddresses->PhysicalAddressLength == 6) {
-                        // Check if it's hardware known to support timestamping
-                        // Intel I210, I211, I217, I218, I219, I350, 82599, X520, etc.
-                        if (strstr(desc_narrow, "I210") || strstr(desc_narrow, "I211") ||
-                            strstr(desc_narrow, "I217") || strstr(desc_narrow, "I218") ||
-                            strstr(desc_narrow, "I219") || strstr(desc_narrow, "I350") ||
-                            strstr(desc_narrow, "82599") || strstr(desc_narrow, "X520") ||
-                            strstr(desc_narrow, "X540") || strstr(desc_narrow, "X550") ||
-                            strstr(desc_narrow, "X710") || strstr(desc_narrow, "XL710")) {
-                            supports_hw_timestamp = true;
+                        // Check if it's Intel hardware with known timestamping support
+                        BYTE* mac = pCurrAddresses->PhysicalAddress;
+                        
+                        if (isIntelDevice(mac)) {
+                            // Use Intel vendor module for timestamp capability detection
+                            supports_hw_timestamp = isIntelTimestampSupported(desc_narrow);
                         }
                         
                         // Check other vendors that support hardware timestamping
-                        // Broadcom NetXtreme-E (some models)
-                        if (strstr(desc_narrow, "NetXtreme-E") || 
-                            strstr(desc_narrow, "BCM57") || strstr(desc_narrow, "BCM58")) {
-                            supports_hw_timestamp = true;
-                        }
-                        
-                        // Mellanox ConnectX series
-                        if (strstr(desc_narrow, "ConnectX") || strstr(desc_narrow, "Mellanox")) {
-                            supports_hw_timestamp = true;
+                        if (!supports_hw_timestamp) {
+                            // Broadcom NetXtreme-E (some models)
+                            if (strstr(desc_narrow, "NetXtreme-E") || 
+                                strstr(desc_narrow, "BCM57") || strstr(desc_narrow, "BCM58")) {
+                                supports_hw_timestamp = true;
+                            }
+                            
+                            // Mellanox ConnectX series
+                            if (strstr(desc_narrow, "ConnectX") || strstr(desc_narrow, "Mellanox")) {
+                                supports_hw_timestamp = true;
+                            }
                         }
                     }
                     
