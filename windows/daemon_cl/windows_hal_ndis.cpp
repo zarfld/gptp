@@ -32,6 +32,31 @@
 ******************************************************************************/
 
 #include "windows_hal_ndis.hpp"
+#include "windows_hal.hpp" // For NETWORK_CARD_ID_PREFIX
+#include <iphlpapi.h>
+#include <vector>
+#include <cstring>
+
+static auto open_adapter = [](const char* label, HANDLE& handle) -> bool {
+    IP_ADAPTER_INFO info[32];
+    DWORD len = sizeof(info);
+    if (GetAdaptersInfo(info, &len) != ERROR_SUCCESS) {
+        return false;
+    }
+    for (PIP_ADAPTER_INFO p = info; p; p = p->Next) {
+        if (p->Description && strcmp(p->Description, label) == 0) {
+            char deviceName[128];
+            strncpy(deviceName, NETWORK_CARD_ID_PREFIX, sizeof(deviceName));
+            strncat(deviceName, p->AdapterName, sizeof(deviceName) - strlen(deviceName) - 1);
+            handle = CreateFile(deviceName,
+                               GENERIC_READ | GENERIC_WRITE,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE,
+                               NULL, OPEN_EXISTING, 0, NULL);
+            return handle != INVALID_HANDLE_VALUE;
+        }
+    }
+    return false;
+};
 
 uint64_t getHardwareClockRate_NDIS(const char* iface_label) {
     if (!iface_label) {
@@ -39,29 +64,31 @@ uint64_t getHardwareClockRate_NDIS(const char* iface_label) {
     }
 
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-    // TODO: Implement NDIS-specific clock rate detection
-    // This would involve:
-    // 1. Opening the network adapter using the interface label
-    // 2. Querying NDIS_TIMESTAMP_CAPABILITIES via OID
-    // 3. Extracting HardwareClockFrequencyHz from the capabilities structure
-    
-    // For now, return a placeholder indicating NDIS support is detected but not implemented
-    // This maintains the modular structure while allowing future implementation
-    
-    // Placeholder implementation - would need actual NDIS OID queries
-    NDIS_TIMESTAMP_CAPABILITIES caps = {0};
-    
-    // In a real implementation, this would query the network adapter:
-    // - Open handle to network adapter
-    // - Query OID_TIMESTAMP_CAPABILITY 
-    // - Extract HardwareClockFrequencyHz from the result
-    
-    if (caps.HardwareClockFrequencyHz != 0) {
-        return caps.HardwareClockFrequencyHz;
+    HANDLE h = INVALID_HANDLE_VALUE;
+    if (!open_adapter(iface_label, h)) {
+        return 0;
     }
-#endif
 
-    return 0; // NDIS timestamping not available or not supported
+    NDIS_TIMESTAMP_CAPABILITIES caps;
+    DWORD returned = 0;
+    NDIS_OID oid = OID_TIMESTAMP_CAPABILITY;
+    memset(&caps, 0, sizeof(caps));
+
+    BOOL ok = DeviceIoControl(h, IOCTL_NDIS_QUERY_GLOBAL_STATS,
+                              &oid, sizeof(oid),
+                              &caps, sizeof(caps),
+                              &returned, NULL);
+    CloseHandle(h);
+
+    if (!ok || returned < sizeof(caps) || caps.TimestampFlags == 0) {
+        return 0;
+    }
+
+    return caps.HardwareClockFrequencyHz;
+#else
+    (void)iface_label;
+    return 0;
+#endif
 }
 
 bool isHardwareTimestampSupported_NDIS(const char* iface_label) {
@@ -70,22 +97,30 @@ bool isHardwareTimestampSupported_NDIS(const char* iface_label) {
     }
 
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-    // TODO: Implement NDIS-specific hardware timestamp support detection
-    // This would involve:
-    // 1. Opening the network adapter using the interface label
-    // 2. Querying NDIS_TIMESTAMP_CAPABILITIES via OID
-    // 3. Checking if hardware timestamping capabilities are available
-    
-    // Placeholder implementation - would need actual NDIS OID queries
-    NDIS_TIMESTAMP_CAPABILITIES caps = {0};
-    
-    // In a real implementation, this would query:
-    // - OID_TIMESTAMP_CAPABILITY to get capabilities
-    // - Check if NDIS_TIMESTAMP_CAPABILITY_* flags indicate HW support
-    
-    return (caps.HardwareTimestampCapabilities != 0);
+    HANDLE h = INVALID_HANDLE_VALUE;
+    if (!open_adapter(iface_label, h)) {
+        return false;
+    }
+
+    NDIS_TIMESTAMP_CAPABILITIES caps;
+    DWORD returned = 0;
+    NDIS_OID oid = OID_TIMESTAMP_CAPABILITY;
+    memset(&caps, 0, sizeof(caps));
+
+    BOOL ok = DeviceIoControl(h, IOCTL_NDIS_QUERY_GLOBAL_STATS,
+                              &oid, sizeof(oid),
+                              &caps, sizeof(caps),
+                              &returned, NULL);
+    CloseHandle(h);
+
+    if (!ok || returned < sizeof(caps)) {
+        return false;
+    }
+
+    return caps.TimestampFlags != 0;
 #else
-    return false; // NDIS timestamping not available in this build environment
+    (void)iface_label;
+    return false;
 #endif
 }
 
@@ -95,26 +130,45 @@ bool configureHardwareTimestamp_NDIS(const char* iface_label) {
     }
 
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
-    // TODO: Implement NDIS-specific hardware timestamp configuration
-    // This would involve:
-    // 1. Opening the network adapter
-    // 2. Setting up NDIS_TIMESTAMP_CAPABILITIES configuration
-    // 3. Enabling hardware timestamping via appropriate OIDs
-    
-    NDIS_TIMESTAMP_CAPABILITIES cfg = {0};
-    
-    // Placeholder configuration setup
-    cfg.Header.Type = NDIS_OBJECT_TYPE_DEFAULT;
-    cfg.Header.Revision = NDIS_TIMESTAMP_CAPABILITIES_REVISION_1;
-    cfg.Header.Size = sizeof(NDIS_TIMESTAMP_CAPABILITIES);
-    
-    // In a real implementation, this would:
-    // - Configure timestamp capabilities
-    // - Set OID_TIMESTAMP_CAPABILITY to enable timestamping
-    // - Verify configuration was applied successfully
-    
-    return true; // Placeholder success
+    HANDLE h = INVALID_HANDLE_VALUE;
+    if (!open_adapter(iface_label, h)) {
+        return false;
+    }
+
+    NDIS_TIMESTAMP_CAPABILITIES caps;
+    DWORD returned = 0;
+    NDIS_OID oid = OID_TIMESTAMP_CAPABILITY;
+    memset(&caps, 0, sizeof(caps));
+
+    BOOL ok = DeviceIoControl(h, IOCTL_NDIS_QUERY_GLOBAL_STATS,
+                              &oid, sizeof(oid),
+                              &caps, sizeof(caps),
+                              &returned, NULL);
+    if (!ok || returned < sizeof(caps) || caps.TimestampFlags == 0) {
+        CloseHandle(h);
+        return false;
+    }
+
+#ifdef OID_TIMESTAMP_CURRENT_CONFIG
+    NDIS_TIMESTAMP_CAPABILITIES cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    oid = OID_TIMESTAMP_CURRENT_CONFIG;
+    if (DeviceIoControl(h, IOCTL_NDIS_QUERY_GLOBAL_STATS,
+                        &oid, sizeof(oid),
+                        &cfg, sizeof(cfg),
+                        &returned, NULL)) {
+        cfg.TimestampFlags = caps.TimestampFlags;
+        DeviceIoControl(h, IOCTL_NDIS_QUERY_GLOBAL_STATS,
+                        &oid, sizeof(oid),
+                        &cfg, sizeof(cfg),
+                        &returned, NULL);
+    }
+#endif
+
+    CloseHandle(h);
+    return true;
 #else
-    return false; // NDIS timestamping not available in this build environment
+    (void)iface_label;
+    return false;
 #endif
 }
