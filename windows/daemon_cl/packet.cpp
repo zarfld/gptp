@@ -40,10 +40,25 @@
 
 #define MAX_FRAME_SIZE 96
 
-#define WINPCAP_INTERFACENAMEPREFIX "rpcap://\\Device\\NPF_"
-#define WINPCAP_INTERFACENAMEPREFIX_LENGTH 20
-#define WINPCAP_INTERFACENAMESUFFIX_LENGTH 38
-#define WINPCAP_INTERFACENAME_LENGTH WINPCAP_INTERFACENAMEPREFIX_LENGTH+WINPCAP_INTERFACENAMESUFFIX_LENGTH
+// ✅ IMPLEMENTING: WinPcap to Npcap Migration - Runtime Backend Detection
+// Support both modern Npcap and legacy WinPcap with proper identification
+
+#define PCAP_INTERFACENAMEPREFIX "rpcap://\\Device\\NPF_"
+#define PCAP_INTERFACENAMEPREFIX_LENGTH 20
+#define PCAP_INTERFACENAMESUFFIX_LENGTH 38
+#define PCAP_INTERFACENAME_LENGTH PCAP_INTERFACENAMEPREFIX_LENGTH+PCAP_INTERFACENAMESUFFIX_LENGTH
+
+// Runtime backend detection
+#ifdef USING_NPCAP
+    #define PCAP_BACKEND_NAME "Npcap"
+    #define PCAP_BACKEND_MODERN true
+#elif defined(USING_WINPCAP)
+    #define PCAP_BACKEND_NAME "WinPcap"
+    #define PCAP_BACKEND_MODERN false
+#else
+    #define PCAP_BACKEND_NAME "Unknown"
+    #define PCAP_BACKEND_MODERN false
+#endif
 
 struct packet_handle {
     pcap_t *iface;
@@ -82,7 +97,7 @@ void freePacketHandle( struct packet_handle *handle ) {
 
 packet_error_t openInterfaceByAddr( struct packet_handle *handle, packet_addr_t *addr, int timeout ) {
     packet_error_t ret = PACKET_NO_ERROR;
-    char name[WINPCAP_INTERFACENAME_LENGTH+1] = "\0";
+    char name[PCAP_INTERFACENAME_LENGTH+1] = "\0";
 
     PIP_ADAPTER_ADDRESSES pAdapterAddress;
     IP_ADAPTER_ADDRESSES AdapterAddress[32];       // Allocate information for up to 32 NICs
@@ -103,9 +118,15 @@ packet_error_t openInterfaceByAddr( struct packet_handle *handle, packet_addr_t 
     }
 
     if( pAdapterAddress != NULL ) {
-        strcpy_s( name, WINPCAP_INTERFACENAMEPREFIX );
-        strncpy_s( name+WINPCAP_INTERFACENAMEPREFIX_LENGTH, WINPCAP_INTERFACENAMESUFFIX_LENGTH+1, pAdapterAddress->AdapterName, WINPCAP_INTERFACENAMESUFFIX_LENGTH );
+        strcpy_s( name, PCAP_INTERFACENAMEPREFIX );
+        strncpy_s( name+PCAP_INTERFACENAMEPREFIX_LENGTH, PCAP_INTERFACENAMESUFFIX_LENGTH+1, pAdapterAddress->AdapterName, PCAP_INTERFACENAMESUFFIX_LENGTH );
+        
+        // ✅ Log packet capture backend information for debugging
+        printf("INFO: Packet capture backend: %s (modern: %s)\n", 
+               PCAP_BACKEND_NAME, 
+               PCAP_BACKEND_MODERN ? "yes" : "no");
         printf( "Opening: %s\n", name );
+        
         handle->iface = pcap_open(  name, MAX_FRAME_SIZE, PCAP_OPENFLAG_MAX_RESPONSIVENESS | PCAP_OPENFLAG_PROMISCUOUS | PCAP_OPENFLAG_NOCAPTURE_LOCAL,
                                     timeout, NULL, handle->errbuf );
         if( handle->iface == NULL ) {

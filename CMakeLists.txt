@@ -37,18 +37,40 @@ if(UNIX)
   add_executable (gptp ${GPTP_COMMON} ${GPTP_OS})
   target_link_libraries(gptp pthread rt)
 elseif(WIN32)
+  # ✅ IMPLEMENTING: WinPcap to Npcap Migration - Dual SDK Support
+  # Supports both modern Npcap (preferred) and legacy WinPcap (fallback)
+  # for maximum Windows 10/11 compatibility
+  
+  # Detect available packet capture SDK
+  if(DEFINED ENV{NPCAP_DIR})
+    # Modern Npcap SDK (preferred for Windows 10/11)
+    set(PCAP_ROOT_DIR $ENV{NPCAP_DIR})
+    set(PCAP_LIBRARY_NAME "Packet")  # Npcap uses Packet.lib
+    message(STATUS "✅ Using Npcap SDK from: ${PCAP_ROOT_DIR}")
+    add_definitions(-DUSING_NPCAP)
+  elseif(DEFINED ENV{WPCAP_DIR})
+    # Legacy WinPcap SDK (fallback for older systems)  
+    set(PCAP_ROOT_DIR $ENV{WPCAP_DIR})
+    set(PCAP_LIBRARY_NAME "wpcap")   # WinPcap uses wpcap.lib
+    message(STATUS "⚠️  Using legacy WinPcap SDK from: ${PCAP_ROOT_DIR}")
+    add_definitions(-DUSING_WINPCAP)
+  else()
+    message(FATAL_ERROR "❌ Neither NPCAP_DIR nor WPCAP_DIR environment variable found. Please install Npcap SDK or WinPcap SDK.")
+  endif()
+
+  # Set up include and library directories
   if( CMAKE_SIZEOF_VOID_P EQUAL 8 )
-    link_directories($ENV{WPCAP_DIR}/Lib/x64)
+    link_directories(${PCAP_ROOT_DIR}/Lib/x64)
   elseif( CMAKE_SIZEOF_VOID_P EQUAL 4 )
-    link_directories($ENV{WPCAP_DIR}/Lib)
+    link_directories(${PCAP_ROOT_DIR}/Lib)
   endif()
 
   # HAVE_REMOTE change pcap include options
   add_definitions(-D_CRT_SECURE_NO_WARNINGS -DHAVE_REMOTE)
-  include_directories( include "./windows/daemon_cl" $ENV{WPCAP_DIR}/Include )
+  include_directories( include "./windows/daemon_cl" ${PCAP_ROOT_DIR}/Include )
   file(GLOB GPTP_OS "./windows/daemon_cl/*.cpp" "./windows/daemon_cl/gptp.manifest")
   add_executable (gptp ${GPTP_COMMON} ${GPTP_OS})
-  target_link_libraries(gptp wpcap Iphlpapi Ws2_32)
+  target_link_libraries(gptp ${PCAP_LIBRARY_NAME} Iphlpapi Ws2_32)
 
   add_subdirectory("windows/named_pipe_test")
 
