@@ -65,4 +65,41 @@ bool isHardwareTimestampSupported_NDIS(const char* iface_label);
  */
 bool configureHardwareTimestamp_NDIS(const char* iface_label);
 
+// NDIS-specific event-driven link monitoring (conceptual framework)
+
+/**
+ * @brief NDIS-style interface change notification callback
+ */
+typedef void (*NDIS_INTERFACE_CHANGE_CALLBACK)(
+    const char* interfaceDesc,
+    bool linkUp,
+    void* context
+);
+
+/**
+ * @brief NDIS-style link monitoring context
+ */
+struct NDISLinkMonitorContext;
+
+/**
+ * @brief Start NDIS-style event-driven link monitoring
+ * @param interfaceDesc Interface description
+ * @param macAddress Interface MAC address
+ * @param callback Callback function for link state changes
+ * @param context User context for callback
+ * @return Monitoring context or NULL on failure
+ */
+NDISLinkMonitorContext* startNDISLinkMonitoring(
+    const char* interfaceDesc,
+    const BYTE* macAddress,
+    NDIS_INTERFACE_CHANGE_CALLBACK callback,
+    void* context
+);
+
+/**
+ * @brief Stop NDIS-style event-driven link monitoring
+ * @param context NDIS monitoring context
+ */
+void stopNDISLinkMonitoring(NDISLinkMonitorContext* context);
+
 #endif // WINDOWS_HAL_NDIS_HPP

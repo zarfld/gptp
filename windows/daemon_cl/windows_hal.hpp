@@ -1000,4 +1000,64 @@ public:
 		uint16_t port_number );
 };
 
+// Forward declarations for event-driven link monitoring
+class CommonPort;
+
+/**
+ * @brief Event-driven link monitoring structures and functions
+ * 
+ * Provides real-time network interface state change notifications
+ * using Windows NotifyAddrChange and NotifyRouteChange APIs
+ */
+
+/**
+ * @brief Link monitoring context for event-driven notifications
+ */
+struct LinkMonitorContext {
+    CommonPort* pPort;              // Associated port for notifications
+    HANDLE hAddrChange;             // Handle for address change notifications
+    HANDLE hRouteChange;            // Handle for route change notifications
+    HANDLE hMonitorThread;          // Background monitoring thread handle
+    DWORD dwThreadId;               // Monitoring thread ID
+    volatile bool bStopMonitoring;  // Flag to stop monitoring
+    char interfaceDesc[256];        // Interface description for matching
+    BYTE macAddress[6];             // MAC address for interface matching
+};
+
+/**
+ * @brief Start event-driven link monitoring for a network interface
+ * @param pPort Pointer to the CommonPort to monitor
+ * @param interfaceDesc Interface description string
+ * @param macAddress MAC address of interface (6 bytes)
+ * @return Pointer to LinkMonitorContext, or NULL on failure
+ */
+LinkMonitorContext* startLinkMonitoring(CommonPort* pPort, const char* interfaceDesc, const BYTE* macAddress);
+
+/**
+ * @brief Stop event-driven link monitoring
+ * @param pContext Pointer to LinkMonitorContext from startLinkMonitoring
+ */
+void stopLinkMonitoring(LinkMonitorContext* pContext);
+
+/**
+ * @brief Background thread function for event-driven link monitoring
+ * @param lpParam Pointer to LinkMonitorContext
+ * @return Thread exit code
+ */
+DWORD WINAPI linkMonitorThreadProc(LPVOID lpParam);
+
+/**
+ * @brief Check current link status for an interface
+ * @param interfaceDesc Interface description string
+ * @param macAddress MAC address of interface (6 bytes)
+ * @return true if link is up, false if down or error
+ */
+bool checkLinkStatus(const char* interfaceDesc, const BYTE* macAddress);
+
+/**
+ * @brief Cleanup link monitoring subsystem
+ * Call this during application shutdown to properly clean up all monitoring threads
+ */
+void cleanupLinkMonitoring();
+
 #endif

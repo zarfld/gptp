@@ -272,6 +272,9 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	while( !exit_flag ) Sleep( 1200 );
 
+	// Cleanup link monitoring before exiting
+	cleanupLinkMonitoring();
+
 	delete( ipc );
 
 	return 0;

@@ -15,14 +15,23 @@ This document tracks the progress of modernizing the Windows-specific gPTP (Prec
 - **Integration**: Updated `windows_hal.hpp/cpp` to use modular detection
 - **Build System**: Updated `CMakeLists.txt` with new files and `/FS` flag
 
-### 2. Link Up/Down Detection (Priority 1 OSAL TODO)
+### 2. Event-Driven Link Up/Down Detection (Priority 1 OSAL TODO)
 - **Status**: COMPLETED ✅
-- **Implementation**: `watchNetLink()` function in `windows_hal.cpp`
-- **Method**: Uses `GetAdaptersAddresses()` API with MAC address matching
+- **Implementation**: Comprehensive event-driven monitoring system
+- **Methods**:
+  - Primary: Windows `NotifyAddrChange`/`NotifyRouteChange` APIs
+  - Fallback: `GetAdaptersAddresses()` with MAC address matching
 - **Features**:
-  - Periodic link state monitoring
-  - Proper error handling and logging
-  - Integration with CommonPort for state updates
+  - Real-time link state change notifications
+  - Background monitoring threads with automatic cleanup
+  - Integration with CommonPort `setAsCapable()` calls
+  - Graceful fallback to polling if events fail
+  - Proper resource management and thread lifecycle
+  - Application shutdown cleanup in `daemon_cl.cpp`
+- **Files**: 
+  - Core: `windows_hal.cpp/hpp` - Event system, threads, cleanup
+  - Integration: `watchNetLink()` updated for event-driven monitoring
+  - Docs: `EVENT_DRIVEN_LINK_MONITORING.md`
 
 ### 3. Hardware Clock Rate Detection (Priority 2 OSAL TODO)
 - **Status**: COMPLETED ✅

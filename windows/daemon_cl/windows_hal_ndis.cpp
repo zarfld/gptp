@@ -36,6 +36,73 @@
 #include <stdio.h>  // For snprintf
 #include <string.h> // For strstr
 
+// NDIS-specific event monitoring structures and functions for advanced integration
+//
+// Note: True NDIS event monitoring requires kernel-mode drivers or special privileges.
+// This implementation provides NDIS-style conceptual framework that could be
+// extended with proper NDIS driver integration in the future.
+
+/**
+ * @brief NDIS-style interface change notification callback
+ * This is a conceptual implementation showing how NDIS notifications would work
+ */
+typedef void (*NDIS_INTERFACE_CHANGE_CALLBACK)(
+    const char* interfaceDesc,
+    bool linkUp,
+    void* context
+);
+
+/**
+ * @brief NDIS-style link monitoring context
+ * Conceptual structure for NDIS-based event monitoring
+ */
+struct NDISLinkMonitorContext {
+    char interfaceDesc[256];
+    BYTE macAddress[6];
+    NDIS_INTERFACE_CHANGE_CALLBACK callback;
+    void* callbackContext;
+    volatile bool monitoring;
+    HANDLE monitorThread;
+};
+
+/**
+ * @brief Start NDIS-style event-driven link monitoring
+ * @param interfaceDesc Interface description
+ * @param macAddress Interface MAC address
+ * @param callback Callback function for link state changes
+ * @param context User context for callback
+ * @return Monitoring context or NULL on failure
+ */
+NDISLinkMonitorContext* startNDISLinkMonitoring(
+    const char* interfaceDesc,
+    const BYTE* macAddress,
+    NDIS_INTERFACE_CHANGE_CALLBACK callback,
+    void* context
+) {
+    // This is a conceptual implementation
+    // In a real NDIS implementation, this would:
+    // 1. Register for NDIS interface change notifications
+    // 2. Set up OID_GEN_LINK_STATE monitoring
+    // 3. Configure async event callbacks
+    
+    // For now, return NULL to indicate NDIS monitoring not available
+    // The main HAL will fall back to standard Windows APIs
+    return NULL;
+}
+
+/**
+ * @brief Stop NDIS-style event-driven link monitoring
+ * @param context NDIS monitoring context
+ */
+void stopNDISLinkMonitoring(NDISLinkMonitorContext* context) {
+    // Conceptual cleanup for NDIS monitoring
+    if (context) {
+        context->monitoring = false;
+        // Clean up NDIS registrations
+        delete context;
+    }
+}
+
 uint64_t getHardwareClockRate_NDIS(const char* iface_label) {
     if (!iface_label) {
         return 0;

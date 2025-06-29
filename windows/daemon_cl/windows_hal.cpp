@@ -436,25 +436,24 @@ bool WindowsNamedPipeIPC::update_network_interface(
 
 void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 {
-	// ✅ IMPLEMENTED: Link up/down detection using GetAdaptersAddresses API
-	// This function monitors network interface status changes and can notify the port
+	// ✅ IMPLEMENTED: Event-driven link up/down detection using Windows notification APIs
+	// This function starts continuous monitoring of network interface status changes
 	// Replaces TODO: "add link up/down detection, Google MIB_IPADDR_DISCONNECTED"
 	//
 	// Implementation provides:
+	// - Event-driven monitoring using NotifyAddrChange/NotifyRouteChange
 	// - Interface operational status monitoring (IfOperStatusUp/Down)
 	// - IP address connectivity state checking (DadState validation)
 	// - Proper MAC address matching with the PTP port
-	// - Comprehensive logging for debugging
-	//
-	// Note: This is a one-time check implementation. For continuous monitoring,
-	// consider using NotifyAddrChange/NotifyRouteChange for event-driven updates.
+	// - Background thread for continuous monitoring with automatic cleanup
+	// - Real-time notifications to CommonPort when link state changes
 	
 	if (!pPort) {
 		GPTP_LOG_ERROR("Invalid port pointer in watchNetLink");
 		return;
 	}
 
-	// Get the interface information for status monitoring
+	// Get the interface information to start event-driven monitoring
 	PIP_ADAPTER_ADDRESSES pAddresses = NULL;
 	PIP_ADAPTER_ADDRESSES pCurrAddresses = NULL;
 	ULONG outBufLen = 0;
@@ -471,7 +470,7 @@ void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 			GPTP_LOG_ERROR("Memory allocation failed for adapter addresses");
 			return;
 		}
-	} else {
+	} else if (dwRetVal != ERROR_SUCCESS) {
 		GPTP_LOG_ERROR("GetAdaptersAddresses initial call failed with error %d", dwRetVal);
 		return;
 	}
@@ -494,57 +493,79 @@ void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 				port_addr->toOctetArray(port_mac);
 				
 				if (memcmp(port_mac, pCurrAddresses->PhysicalAddress, ETHER_ADDR_OCTETS) == 0) {
-					// Found our interface, check its operational status
-					bool interface_up = false;
+					// Found our interface - start event-driven monitoring
 					
-					switch (pCurrAddresses->OperStatus) {
-					case IfOperStatusUp:
-						interface_up = true;
-						GPTP_LOG_VERBOSE("Interface %s is UP", pCurrAddresses->AdapterName);
-						break;
-					case IfOperStatusDown:
-						interface_up = false;
-						GPTP_LOG_INFO("Interface %s is DOWN", pCurrAddresses->AdapterName);
-						break;
-					case IfOperStatusTesting:
-					case IfOperStatusUnknown:
-					case IfOperStatusDormant:
-					case IfOperStatusNotPresent:
-					case IfOperStatusLowerLayerDown:
-					default:
-						interface_up = false;
-						GPTP_LOG_WARNING("Interface %s has status %d (treated as DOWN)", 
-							pCurrAddresses->AdapterName, pCurrAddresses->OperStatus);
-						break;
-					}
-
-					// Check for disconnected IP addresses (MIB_IPADDR_DISCONNECTED equivalent)
-					PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress;
-					bool has_connected_ip = false;
+					// Convert interface description for monitoring
+					char desc_narrow[256] = {0};
+					WideCharToMultiByte(CP_UTF8, 0, pCurrAddresses->Description, -1, 
+									   desc_narrow, sizeof(desc_narrow), NULL, NULL);
 					
-					while (pUnicast) {
-						// In newer Windows versions, check DadState for address validity
-						if (pUnicast->DadState == IpDadStatePreferred || 
-							pUnicast->DadState == IpDadStateDeprecated) {
-							has_connected_ip = true;
+					// Start event-driven link monitoring
+					LinkMonitorContext* pLinkContext = startLinkMonitoring(pPort, desc_narrow, port_mac);
+					if (pLinkContext) {
+						GPTP_LOG_STATUS("Event-driven link monitoring started for interface %s", desc_narrow);
+						
+						// Store context in the network interface for later cleanup (if needed)
+						// Note: The monitoring will continue until stopped explicitly or application exit
+						
+						// Perform initial link status check and notify port
+						bool initial_link_status = checkLinkStatus(desc_narrow, port_mac);
+						pPort->setAsCapable(initial_link_status);
+						
+						GPTP_LOG_STATUS("Initial link status for %s: %s", 
+										desc_narrow, initial_link_status ? "UP" : "DOWN");
+					} else {
+						GPTP_LOG_ERROR("Failed to start event-driven link monitoring for interface %s", desc_narrow);
+						
+						// Fallback to one-time status check
+						bool interface_up = false;
+						
+						switch (pCurrAddresses->OperStatus) {
+						case IfOperStatusUp:
+							interface_up = true;
+							GPTP_LOG_VERBOSE("Interface %s is UP (fallback check)", pCurrAddresses->AdapterName);
+							break;
+						case IfOperStatusDown:
+							interface_up = false;
+							GPTP_LOG_INFO("Interface %s is DOWN (fallback check)", pCurrAddresses->AdapterName);
+							break;
+						case IfOperStatusTesting:
+						case IfOperStatusUnknown:
+						case IfOperStatusDormant:
+						case IfOperStatusNotPresent:
+						case IfOperStatusLowerLayerDown:
+						default:
+							interface_up = false;
+							GPTP_LOG_WARNING("Interface %s has status %d (treated as DOWN, fallback check)", 
+								pCurrAddresses->AdapterName, pCurrAddresses->OperStatus);
 							break;
 						}
-						pUnicast = pUnicast->Next;
-					}
-
-					// Overall interface status considers both operational state and IP connectivity
-					bool link_status = interface_up && (has_connected_ip || pCurrAddresses->FirstUnicastAddress == NULL);
-					
-					// Notify port of link status change
-					// Note: This is a simplified implementation. In a full implementation,
-					// you would maintain previous state and only notify on changes
-					if (!link_status) {
-						GPTP_LOG_WARNING("Link down detected for interface %s", pCurrAddresses->AdapterName);
-						// In a complete implementation, call port notification method:
-						// pPort->processEvent(LINKDOWN);
-					} else {
-						GPTP_LOG_VERBOSE("Link up confirmed for interface %s", pCurrAddresses->AdapterName);
-						// pPort->processEvent(LINKUP);
+						
+						// Check for disconnected IP addresses (MIB_IPADDR_DISCONNECTED equivalent)
+						PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress;
+						bool has_connected_ip = false;
+						
+						while (pUnicast) {
+							// In newer Windows versions, check DadState for address validity
+							if (pUnicast->DadState == IpDadStatePreferred || 
+								pUnicast->DadState == IpDadStateDeprecated) {
+								has_connected_ip = true;
+								break;
+							}
+							pUnicast = pUnicast->Next;
+						}
+						
+						// Overall interface status considers both operational state and IP connectivity
+						bool link_status = interface_up && (has_connected_ip || pCurrAddresses->FirstUnicastAddress == NULL);
+						
+						// Notify port of current link status
+						pPort->setAsCapable(link_status);
+						
+						if (!link_status) {
+							GPTP_LOG_WARNING("Link down detected for interface %s (fallback check)", pCurrAddresses->AdapterName);
+						} else {
+							GPTP_LOG_VERBOSE("Link up confirmed for interface %s (fallback check)", pCurrAddresses->AdapterName);
+						}
 					}
 					
 					break; // Found our interface, no need to continue
@@ -574,4 +595,268 @@ void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 	// - Background thread to handle notifications and update port state
 	//
 	// For now, the polling approach is sufficient and working well
+}
+
+// ✅ IMPLEMENTING: Event-Driven Link Monitoring Implementation
+// Replaces polling-based approach with real-time Windows notifications
+
+#include <process.h>  // For _beginthreadex
+
+// Global link monitoring context list for cleanup
+static std::list<LinkMonitorContext*> g_linkMonitors;
+static CRITICAL_SECTION g_linkMonitorLock;
+static bool g_linkMonitorInitialized = false;
+
+/**
+ * @brief Initialize link monitoring subsystem
+ */
+static void initializeLinkMonitoring() {
+    if (!g_linkMonitorInitialized) {
+        InitializeCriticalSection(&g_linkMonitorLock);
+        g_linkMonitorInitialized = true;
+    }
+}
+
+/**
+ * @brief Cleanup link monitoring subsystem
+ */
+void cleanupLinkMonitoring() {
+    if (g_linkMonitorInitialized) {
+        EnterCriticalSection(&g_linkMonitorLock);
+        // Stop all active monitors
+        for (auto it = g_linkMonitors.begin(); it != g_linkMonitors.end(); ++it) {
+            stopLinkMonitoring(*it);
+        }
+        g_linkMonitors.clear();
+        LeaveCriticalSection(&g_linkMonitorLock);
+        DeleteCriticalSection(&g_linkMonitorLock);
+        g_linkMonitorInitialized = false;
+    }
+}
+
+bool checkLinkStatus(const char* interfaceDesc, const BYTE* macAddress) {
+    if (!interfaceDesc || !macAddress) {
+        return false;
+    }
+
+    PIP_ADAPTER_ADDRESSES pAddresses = NULL;
+    PIP_ADAPTER_ADDRESSES pCurrAddresses = NULL;
+    ULONG outBufLen = 0;
+    DWORD dwRetVal = 0;
+    bool linkUp = false;
+
+    // Get adapter information
+    dwRetVal = GetAdaptersAddresses(AF_UNSPEC, 
+        GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+        NULL, pAddresses, &outBufLen);
+
+    if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+        pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
+        if (pAddresses == NULL) {
+            return false;
+        }
+    } else if (dwRetVal != ERROR_SUCCESS) {
+        return false;
+    }
+
+    // Get the actual adapter information
+    dwRetVal = GetAdaptersAddresses(AF_UNSPEC,
+        GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+        NULL, pAddresses, &outBufLen);
+
+    if (dwRetVal == NO_ERROR) {
+        pCurrAddresses = pAddresses;
+        while (pCurrAddresses) {
+            // Convert wide string to narrow string for comparison
+            char desc_narrow[256] = {0};
+            WideCharToMultiByte(CP_UTF8, 0, pCurrAddresses->Description, -1, 
+                               desc_narrow, sizeof(desc_narrow), NULL, NULL);
+            
+            // Check if this is our target interface
+            if (strstr(interfaceDesc, desc_narrow) != NULL && 
+                pCurrAddresses->PhysicalAddressLength == 6) {
+                
+                // Verify MAC address match
+                bool macMatch = true;
+                for (int i = 0; i < 6; i++) {
+                    if (pCurrAddresses->PhysicalAddress[i] != macAddress[i]) {
+                        macMatch = false;
+                        break;
+                    }
+                }
+                
+                if (macMatch) {
+                    // Check interface operational status
+                    linkUp = (pCurrAddresses->OperStatus == IfOperStatusUp);
+                    break;
+                }
+            }
+            pCurrAddresses = pCurrAddresses->Next;
+        }
+    }
+
+    if (pAddresses) {
+        free(pAddresses);
+    }
+
+    return linkUp;
+}
+
+DWORD WINAPI linkMonitorThreadProc(LPVOID lpParam) {
+    LinkMonitorContext* pContext = (LinkMonitorContext*)lpParam;
+    if (!pContext) {
+        return 1;
+    }
+
+    GPTP_LOG_STATUS("Event-driven link monitoring started for interface: %s", pContext->interfaceDesc);
+
+    HANDLE hEvents[2] = { pContext->hAddrChange, pContext->hRouteChange };
+    bool lastLinkState = checkLinkStatus(pContext->interfaceDesc, pContext->macAddress);
+    
+    while (!pContext->bStopMonitoring) {
+        // Wait for network change events or timeout
+        DWORD dwResult = WaitForMultipleObjects(2, hEvents, FALSE, 5000); // 5 second timeout
+        
+        if (dwResult == WAIT_OBJECT_0 || dwResult == WAIT_OBJECT_0 + 1 || dwResult == WAIT_TIMEOUT) {
+            // Check current link status
+            bool currentLinkState = checkLinkStatus(pContext->interfaceDesc, pContext->macAddress);
+            
+            // Notify port of state change
+            if (currentLinkState != lastLinkState) {
+                GPTP_LOG_STATUS("Link state changed for %s: %s -> %s", 
+                               pContext->interfaceDesc,
+                               lastLinkState ? "UP" : "DOWN",
+                               currentLinkState ? "UP" : "DOWN");
+                
+                if (pContext->pPort) {
+                    pContext->pPort->setAsCapable(currentLinkState);
+                }
+                lastLinkState = currentLinkState;
+            }
+            
+            // Reset event notifications for next iteration
+            if (dwResult == WAIT_OBJECT_0) {
+                // Address change notification
+                DWORD dwError = NotifyAddrChange(&pContext->hAddrChange, NULL);
+                if (dwError != ERROR_SUCCESS && dwError != ERROR_IO_PENDING) {
+                    GPTP_LOG_ERROR("Failed to reset address change notification: %d", dwError);
+                }
+            }
+            
+            if (dwResult == WAIT_OBJECT_0 + 1) {
+                // Route change notification  
+                DWORD dwError = NotifyRouteChange(&pContext->hRouteChange, NULL);
+                if (dwError != ERROR_SUCCESS && dwError != ERROR_IO_PENDING) {
+                    GPTP_LOG_ERROR("Failed to reset route change notification: %d", dwError);
+                }
+            }
+        } else if (dwResult == WAIT_FAILED) {
+            GPTP_LOG_ERROR("WaitForMultipleObjects failed in link monitor: %d", GetLastError());
+            break;
+        }
+    }
+
+    GPTP_LOG_STATUS("Event-driven link monitoring stopped for interface: %s", pContext->interfaceDesc);
+    return 0;
+}
+
+LinkMonitorContext* startLinkMonitoring(CommonPort* pPort, const char* interfaceDesc, const BYTE* macAddress) {
+    if (!pPort || !interfaceDesc || !macAddress) {
+        return NULL;
+    }
+
+    initializeLinkMonitoring();
+
+    LinkMonitorContext* pContext = new LinkMonitorContext();
+    if (!pContext) {
+        return NULL;
+    }
+
+    // Initialize context
+    memset(pContext, 0, sizeof(LinkMonitorContext));
+    pContext->pPort = pPort;
+    pContext->bStopMonitoring = false;
+    strncpy_s(pContext->interfaceDesc, sizeof(pContext->interfaceDesc), interfaceDesc, _TRUNCATE);
+    memcpy(pContext->macAddress, macAddress, 6);
+
+    // Set up address change notification
+    DWORD dwError = NotifyAddrChange(&pContext->hAddrChange, NULL);
+    if (dwError != ERROR_SUCCESS && dwError != ERROR_IO_PENDING) {
+        GPTP_LOG_ERROR("Failed to setup address change notification: %d", dwError);
+        delete pContext;
+        return NULL;
+    }
+
+    // Set up route change notification
+    dwError = NotifyRouteChange(&pContext->hRouteChange, NULL);
+    if (dwError != ERROR_SUCCESS && dwError != ERROR_IO_PENDING) {
+        GPTP_LOG_ERROR("Failed to setup route change notification: %d", dwError);
+        if (pContext->hAddrChange) {
+            CloseHandle(pContext->hAddrChange);
+        }
+        delete pContext;
+        return NULL;
+    }
+
+    // Create monitoring thread
+    pContext->hMonitorThread = (HANDLE)_beginthreadex(
+        NULL,                           // Security attributes
+        0,                              // Stack size (default)
+        (unsigned (__stdcall *)(void*))linkMonitorThreadProc, // Thread function
+        pContext,                       // Thread parameter
+        0,                              // Creation flags
+        (unsigned*)&pContext->dwThreadId // Thread ID
+    );
+
+    if (!pContext->hMonitorThread) {
+        GPTP_LOG_ERROR("Failed to create link monitoring thread: %d", GetLastError());
+        if (pContext->hAddrChange) {
+            CloseHandle(pContext->hAddrChange);
+        }
+        if (pContext->hRouteChange) {
+            CloseHandle(pContext->hRouteChange);
+        }
+        delete pContext;
+        return NULL;
+    }
+
+    // Add to global list for cleanup
+    EnterCriticalSection(&g_linkMonitorLock);
+    g_linkMonitors.push_back(pContext);
+    LeaveCriticalSection(&g_linkMonitorLock);
+
+    GPTP_LOG_STATUS("Event-driven link monitoring enabled for interface: %s", interfaceDesc);
+    return pContext;
+}
+
+void stopLinkMonitoring(LinkMonitorContext* pContext) {
+    if (!pContext) {
+        return;
+    }
+
+    // Signal thread to stop
+    pContext->bStopMonitoring = true;
+
+    // Wait for thread to complete
+    if (pContext->hMonitorThread) {
+        WaitForSingleObject(pContext->hMonitorThread, 10000); // 10 second timeout
+        CloseHandle(pContext->hMonitorThread);
+    }
+
+    // Clean up notification handles
+    if (pContext->hAddrChange) {
+        CloseHandle(pContext->hAddrChange);
+    }
+    if (pContext->hRouteChange) {
+        CloseHandle(pContext->hRouteChange);
+    }
+
+    // Remove from global list
+    if (g_linkMonitorInitialized) {
+        EnterCriticalSection(&g_linkMonitorLock);
+        g_linkMonitors.remove(pContext);
+        LeaveCriticalSection(&g_linkMonitorLock);
+    }
+
+    delete pContext;
 }
