@@ -36,6 +36,9 @@
 
 /**@file*/
 
+#include "packet.hpp"
+#include "ether_tstamper.hpp"
+#include "common_tstamper.hpp"
 #include "IPCListener.hpp"
 #include "avbts_osnet.hpp"
 #include "avbts_oslock.hpp"
@@ -43,15 +46,15 @@
 #include "avbts_ostimerq.hpp"
 #include "avbts_ostimer.hpp"
 #include "avbts_osthread.hpp"
-#include "packet.hpp"
-#include "ieee1588.hpp"
-#include "ether_tstamper.hpp"
+#include "avbts_osipc.hpp"
 #include "wireless_tstamper.hpp"
+#include "windows_crosststamp.hpp"
+#include "ether_tstamper.hpp"
+#include "packet.hpp"
+
 #include "iphlpapi.h"
 #include "windows_ipc.hpp"
 #include "tsc.hpp"
-
-#include "avbts_osipc.hpp"
 
 #include <ntddndis.h>
 
@@ -61,7 +64,6 @@
 // Include modular Windows HAL components for enhanced functionality  
 #include "windows_hal_iphlpapi.hpp"
 #include "windows_hal_ndis.hpp"
-#include <list>
 
 /**
  * @brief WindowsPCAPNetworkInterface implements an interface to the network adapter
@@ -746,6 +748,7 @@ private:
 	HANDLE miniport;
 	LARGE_INTEGER tsc_hz;
 	LARGE_INTEGER netclock_hz;
+	bool cross_timestamping_initialized; //!< Flag to track cross-timestamping initialization
 	DWORD readOID( NDIS_OID oid, void *output_buffer, DWORD size, DWORD *size_returned ) const {
 		NDIS_OID oid_l = oid;
 		DWORD rc = DeviceIoControl(
@@ -794,6 +797,15 @@ private:
 	}
 public:
 	/**
+	 * @brief Default constructor
+	 */
+	WindowsEtherTimestamper() : cross_timestamping_initialized(false) {
+		miniport = INVALID_HANDLE_VALUE;
+		tsc_hz.QuadPart = 0;
+		netclock_hz.QuadPart = 0;
+	}
+	
+	/**
 	 * @brief  Initializes the network adaptor and the hw timestamper interface
 	 * @param  iface_label InterfaceLabel
 	 * @param  net_iface Network interface
@@ -815,6 +827,21 @@ public:
 	 */
 	virtual bool HWTimestamper_gettime( Timestamp *system_time, Timestamp *device_time, uint32_t *local_clock,
 					    uint32_t *nominal_clock_rate ) const {
+		// Use the new Windows cross-timestamping functionality for improved precision
+		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+		
+		if (crossTimestamp.isPreciseTimestampingSupported()) {
+			// Use precise cross-timestamping if available
+			if (crossTimestamp.getCrossTimestamp(system_time, device_time, local_clock, nominal_clock_rate)) {
+				// Set version for both timestamps
+				if (system_time) system_time->_version = version;
+				if (device_time) device_time->_version = version;
+				return true;
+			}
+			// Fall through to legacy method if cross-timestamping fails
+		}
+		
+		// Legacy method using OID_INTEL_GET_SYSTIM
 		DWORD buf[6];
 		DWORD returned;
 		uint64_t now_net, now_tsc;

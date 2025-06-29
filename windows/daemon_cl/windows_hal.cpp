@@ -37,6 +37,7 @@
 #include <IPCListener.hpp>
 #include <PeerList.hpp>
 #include <gptp_log.hpp>
+#include "windows_crosststamp.hpp"
 
 inline uint64_t scale64(uint64_t i, uint32_t m, uint32_t n)
 {
@@ -345,6 +346,19 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 	tsc_hz.QuadPart = getTSCFrequency( true );
 	if( tsc_hz.QuadPart == 0 ) {
 		return false;
+	}
+
+	// Initialize cross-timestamping functionality for this interface
+	WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+	if (!crossTimestamp.initialize(pAdapterInfo->Description)) {
+		GPTP_LOG_WARNING("Failed to initialize cross-timestamping for interface %s, using legacy timestamps", 
+			pAdapterInfo->Description);
+		cross_timestamping_initialized = false;
+		// Continue without cross-timestamping - legacy method will be used
+	} else {
+		GPTP_LOG_STATUS("Cross-timestamping initialized for interface %s with quality %d%%", 
+			pAdapterInfo->Description, crossTimestamp.getTimestampQuality());
+		cross_timestamping_initialized = true;
 	}
 
 	return true;
