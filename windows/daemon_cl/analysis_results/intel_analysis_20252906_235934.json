@@ -1,0 +1,2369 @@
+﻿{
+    "capabilities":  {
+                         "signature_issuer":  "CN=Intel Corporation, O=Intel Corporation, S=California, C=US, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=California, OID.1.3.6.1.4.1.311.60.2.1.3=US, SERIALNUMBER=1636032",
+                         "driver_version":  "14.1.22.0",
+                         "file_description":  "Intel(R) Gigabit Adapter NDIS 6.x driver",
+                         "signature_status":  "Valid",
+                         "file_version":  "14.1.22.0",
+                         "company_name":  "Intel Corporation"
+                     },
+    "timestamp":  "2025-06-29 23:59:35",
+    "registry_parameters":  [
+                                {
+                                    "parameter_name":  "*PtpHardwareTimestamp",
+                                    "registry_path":  "Ndi\\\\params\\\\*PtpHardwareTimestamp",
+                                    "description":  "PtpHardwareTimestamp"
+                                },
+                                {
+                                    "parameter_name":  "*SoftwareTimestamp",
+                                    "registry_path":  "Ndi\\\\params\\\\*SoftwareTimestamp",
+                                    "description":  "SoftwareTimestamp"
+                                },
+                                {
+                                    "parameter_name":  "*PtpHardwareTimestamp",
+                                    "registry_path":  "Ndi\\\\params\\\\*PtpHardwareTimestamp",
+                                    "description":  "PtpHardwareTimestamp"
+                                },
+                                {
+                                    "parameter_name":  "*SoftwareTimestamp",
+                                    "registry_path":  "Ndi\\\\params\\\\*SoftwareTimestamp",
+                                    "description":  "SoftwareTimestamp"
+                                }
+                            ],
+    "errors":  [
+
+               ],
+    "driver_path":  "..\\Release_30.1.1\\PRO1000\\Winx64\\W11",
+    "device_mappings":  [
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A\u0026SUBSYS_00008086",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153B",
+                                "device_name":  "E153BNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153B\u0026SUBSYS_00008086",
+                                "device_name":  "E153BNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A\u0026SUBSYS_00008086",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1559",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1559",
+                                "device_name":  "E1559NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1559",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1559\u0026SUBSYS_00008086",
+                                "device_name":  "E1559NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0\u0026SUBSYS_00008086",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A1",
+                                "device_name":  "E15A1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A1\u0026SUBSYS_00008086",
+                                "device_name":  "E15A1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2\u0026SUBSYS_00008086",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A3",
+                                "device_name":  "E15A3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A3\u0026SUBSYS_00008086",
+                                "device_name":  "E15A3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F\u0026SUBSYS_00008086",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1570",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1570",
+                                "device_name":  "E1570NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1570",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1570\u0026SUBSYS_00008086",
+                                "device_name":  "E1570NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7\u0026SUBSYS_00008086",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B8",
+                                "device_name":  "E15B8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B8\u0026SUBSYS_00008086",
+                                "device_name":  "E15B8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9\u0026SUBSYS_00008086",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7\u0026SUBSYS_00008086",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D8",
+                                "device_name":  "E15D8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D8\u0026SUBSYS_00008086",
+                                "device_name":  "E15D8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3\u0026SUBSYS_00008086",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D6",
+                                "device_name":  "E15D6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D6\u0026SUBSYS_00008086",
+                                "device_name":  "E15D6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB\u0026SUBSYS_00008086",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BC",
+                                "device_name":  "E15BCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BC\u0026SUBSYS_00008086",
+                                "device_name":  "E15BCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD\u0026SUBSYS_00008086",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BE",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BE",
+                                "device_name":  "E15BENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BE",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BE\u0026SUBSYS_00008086",
+                                "device_name":  "E15BENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF\u0026SUBSYS_00008086",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E0",
+                                "device_name":  "E15E0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E0\u0026SUBSYS_00008086",
+                                "device_name":  "E15E0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1\u0026SUBSYS_00008086",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E2",
+                                "device_name":  "E15E2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E2\u0026SUBSYS_00008086",
+                                "device_name":  "E15E2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4F",
+                                "device_name":  "E0D4FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4F\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4D",
+                                "device_name":  "E0D4DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4D\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53\u0026SUBSYS_00008086",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D55",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D55",
+                                "device_name":  "E0D55NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D55",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D55\u0026SUBSYS_00008086",
+                                "device_name":  "E0D55NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9\u0026SUBSYS_00008086",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FA",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FA",
+                                "device_name":  "E15FANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FA",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FA\u0026SUBSYS_00008086",
+                                "device_name":  "E15FANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB\u0026SUBSYS_00008086",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FC",
+                                "device_name":  "E15FCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FC\u0026SUBSYS_00008086",
+                                "device_name":  "E15FCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4\u0026SUBSYS_00008086",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1F",
+                                "device_name":  "E1A1FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1F\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1D",
+                                "device_name":  "E1A1DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1D\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC6",
+                                "device_name":  "E0DC6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC6\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC8",
+                                "device_name":  "E0DC8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC8\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A\u0026SUBSYS_00008086",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153B",
+                                "device_name":  "E153BNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153B\u0026SUBSYS_00008086",
+                                "device_name":  "E153BNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A\u0026SUBSYS_00008086",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1559",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1559",
+                                "device_name":  "E1559NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1559",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1559\u0026SUBSYS_00008086",
+                                "device_name":  "E1559NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0\u0026SUBSYS_00008086",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A1",
+                                "device_name":  "E15A1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A1\u0026SUBSYS_00008086",
+                                "device_name":  "E15A1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2\u0026SUBSYS_00008086",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A3",
+                                "device_name":  "E15A3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A3\u0026SUBSYS_00008086",
+                                "device_name":  "E15A3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F\u0026SUBSYS_00008086",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1570",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1570",
+                                "device_name":  "E1570NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1570",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1570\u0026SUBSYS_00008086",
+                                "device_name":  "E1570NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7\u0026SUBSYS_00008086",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B8",
+                                "device_name":  "E15B8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B8\u0026SUBSYS_00008086",
+                                "device_name":  "E15B8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9\u0026SUBSYS_00008086",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7\u0026SUBSYS_00008086",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D8",
+                                "device_name":  "E15D8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D8\u0026SUBSYS_00008086",
+                                "device_name":  "E15D8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3\u0026SUBSYS_00008086",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D6",
+                                "device_name":  "E15D6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D6\u0026SUBSYS_00008086",
+                                "device_name":  "E15D6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB\u0026SUBSYS_00008086",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BC",
+                                "device_name":  "E15BCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BC\u0026SUBSYS_00008086",
+                                "device_name":  "E15BCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD\u0026SUBSYS_00008086",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BE",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BE",
+                                "device_name":  "E15BENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BE",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BE\u0026SUBSYS_00008086",
+                                "device_name":  "E15BENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF\u0026SUBSYS_00008086",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E0",
+                                "device_name":  "E15E0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E0\u0026SUBSYS_00008086",
+                                "device_name":  "E15E0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1\u0026SUBSYS_00008086",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E2",
+                                "device_name":  "E15E2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E2\u0026SUBSYS_00008086",
+                                "device_name":  "E15E2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4F",
+                                "device_name":  "E0D4FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4F\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4D",
+                                "device_name":  "E0D4DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4D\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53\u0026SUBSYS_00008086",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D55",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D55",
+                                "device_name":  "E0D55NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D55",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D55\u0026SUBSYS_00008086",
+                                "device_name":  "E0D55NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9\u0026SUBSYS_00008086",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FA",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FA",
+                                "device_name":  "E15FANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FA",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FA\u0026SUBSYS_00008086",
+                                "device_name":  "E15FANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB\u0026SUBSYS_00008086",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FC",
+                                "device_name":  "E15FCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FC",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FC\u0026SUBSYS_00008086",
+                                "device_name":  "E15FCNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4\u0026SUBSYS_00008086",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1F",
+                                "device_name":  "E1A1FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1F\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1D",
+                                "device_name":  "E1A1DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1D\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC6",
+                                "device_name":  "E0DC6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC6\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC8",
+                                "device_name":  "E0DC8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC8\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A\u0026SUBSYS_00008086",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A\u0026SUBSYS_00008086",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0\u0026SUBSYS_00008086",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2\u0026SUBSYS_00008086",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F\u0026SUBSYS_00008086",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7\u0026SUBSYS_00008086",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9\u0026SUBSYS_00008086",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7\u0026SUBSYS_00008086",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3\u0026SUBSYS_00008086",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB\u0026SUBSYS_00008086",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD\u0026SUBSYS_00008086",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF\u0026SUBSYS_00008086",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1\u0026SUBSYS_00008086",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53\u0026SUBSYS_00008086",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9\u0026SUBSYS_00008086",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB\u0026SUBSYS_00008086",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4\u0026SUBSYS_00008086",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x153A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_153A\u0026SUBSYS_00008086",
+                                "device_name":  "E153ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x155A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_155A\u0026SUBSYS_00008086",
+                                "device_name":  "E155ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A0\u0026SUBSYS_00008086",
+                                "device_name":  "E15A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15A2",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15A2\u0026SUBSYS_00008086",
+                                "device_name":  "E15A2NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x156F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_156F\u0026SUBSYS_00008086",
+                                "device_name":  "E156FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B7\u0026SUBSYS_00008086",
+                                "device_name":  "E15B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15B9\u0026SUBSYS_00008086",
+                                "device_name":  "E15B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15D7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15D7\u0026SUBSYS_00008086",
+                                "device_name":  "E15D7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E3\u0026SUBSYS_00008086",
+                                "device_name":  "E15E3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BB\u0026SUBSYS_00008086",
+                                "device_name":  "E15BBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15BD",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15BD\u0026SUBSYS_00008086",
+                                "device_name":  "E15BDNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15DF",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15DF\u0026SUBSYS_00008086",
+                                "device_name":  "E15DFNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15E1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15E1\u0026SUBSYS_00008086",
+                                "device_name":  "E15E1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4E\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D4C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D4C\u0026SUBSYS_00008086",
+                                "device_name":  "E0D4CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0D53",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0D53\u0026SUBSYS_00008086",
+                                "device_name":  "E0D53NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F9\u0026SUBSYS_00008086",
+                                "device_name":  "E15F9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15FB",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15FB\u0026SUBSYS_00008086",
+                                "device_name":  "E15FBNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x15F4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_15F4\u0026SUBSYS_00008086",
+                                "device_name":  "E15F4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1E\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1A1C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1A1C\u0026SUBSYS_00008086",
+                                "device_name":  "E1A1CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC5\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x0DC7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_0DC7\u0026SUBSYS_00008086",
+                                "device_name":  "E0DC7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550A",
+                                "device_name":  "E550ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550A\u0026SUBSYS_00008086",
+                                "device_name":  "E550ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550B",
+                                "device_name":  "E550BNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550B\u0026SUBSYS_00008086",
+                                "device_name":  "E550BNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550C",
+                                "device_name":  "E550CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550C\u0026SUBSYS_00008086",
+                                "device_name":  "E550CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550D",
+                                "device_name":  "E550DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550D",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550D\u0026SUBSYS_00008086",
+                                "device_name":  "E550DNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57A0",
+                                "device_name":  "E57A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57A0\u0026SUBSYS_00008086",
+                                "device_name":  "E57A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57A1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57A1",
+                                "device_name":  "E57A1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57A1",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57A1\u0026SUBSYS_00008086",
+                                "device_name":  "E57A1NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550E",
+                                "device_name":  "E550ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550E\u0026SUBSYS_00008086",
+                                "device_name":  "E550ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550F",
+                                "device_name":  "E550FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550F",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550F\u0026SUBSYS_00008086",
+                                "device_name":  "E550FNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B3",
+                                "device_name":  "E57B3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B3\u0026SUBSYS_00008086",
+                                "device_name":  "E57B3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B4",
+                                "device_name":  "E57B4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B4",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B4\u0026SUBSYS_00008086",
+                                "device_name":  "E57B4NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B5",
+                                "device_name":  "E57B5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B5\u0026SUBSYS_00008086",
+                                "device_name":  "E57B5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B6",
+                                "device_name":  "E57B6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B6",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B6\u0026SUBSYS_00008086",
+                                "device_name":  "E57B6NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B7",
+                                "device_name":  "E57B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B7\u0026SUBSYS_00008086",
+                                "device_name":  "E57B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B8",
+                                "device_name":  "E57B8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B8",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B8\u0026SUBSYS_00008086",
+                                "device_name":  "E57B8NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x5510",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_5510",
+                                "device_name":  "E5510NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x5510",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_5510\u0026SUBSYS_00008086",
+                                "device_name":  "E5510NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x5511",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_5511",
+                                "device_name":  "E5511NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x5511",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_5511\u0026SUBSYS_00008086",
+                                "device_name":  "E5511NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B9",
+                                "device_name":  "E57B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B9\u0026SUBSYS_00008086",
+                                "device_name":  "E57B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57BA",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57BA",
+                                "device_name":  "E57BANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57BA",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57BA\u0026SUBSYS_00008086",
+                                "device_name":  "E57BANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550A",
+                                "device_name":  "E550ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550A",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550A\u0026SUBSYS_00008086",
+                                "device_name":  "E550ANC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550C",
+                                "device_name":  "E550CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550C\u0026SUBSYS_00008086",
+                                "device_name":  "E550CNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57A0",
+                                "device_name":  "E57A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57A0",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57A0\u0026SUBSYS_00008086",
+                                "device_name":  "E57A0NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550E",
+                                "device_name":  "E550ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x550E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_550E\u0026SUBSYS_00008086",
+                                "device_name":  "E550ENC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B3",
+                                "device_name":  "E57B3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B3",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B3\u0026SUBSYS_00008086",
+                                "device_name":  "E57B3NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B5",
+                                "device_name":  "E57B5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B5",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B5\u0026SUBSYS_00008086",
+                                "device_name":  "E57B5NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B7",
+                                "device_name":  "E57B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B7",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B7\u0026SUBSYS_00008086",
+                                "device_name":  "E57B7NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x5510",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_5510",
+                                "device_name":  "E5510NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x5510",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_5510\u0026SUBSYS_00008086",
+                                "device_name":  "E5510NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B9",
+                                "device_name":  "E57B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x57B9",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_57B9\u0026SUBSYS_00008086",
+                                "device_name":  "E57B9NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521",
+                                "device_name":  "E1521NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_3380103C",
+                                "device_name":  "E1521HPNCI4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_337F103C",
+                                "device_name":  "E1521HPNCI2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_339E103C",
+                                "device_name":  "E1521HPNCT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_18D1103C",
+                                "device_name":  "E1523HPNCB2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_339F103C",
+                                "device_name":  "E1523HPNCM4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00A38086",
+                                "device_name":  "E1521NCOCP4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00038086",
+                                "device_name":  "E1521NCOCP4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00AA8086",
+                                "device_name":  "E1521NCOCP4PLN.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_40178086",
+                                "device_name":  "E1521OCP4PINTL.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_17D1103C",
+                                "device_name":  "E1521HPNCR4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_1989103C",
+                                "device_name":  "E1523HPNC3I.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_2003103C",
+                                "device_name":  "E1521HPNC7I.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_2226103C",
+                                "device_name":  "E1521HPNC4I.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_8157103C",
+                                "device_name":  "E1521HPNC6T.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00FF1590",
+                                "device_name":  "E1521HPECB4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F731028",
+                                "device_name":  "E1521NCELKF.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_008A1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_008B1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_008E1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_023E1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522",
+                                "device_name":  "E1522NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00018086",
+                                "device_name":  "E1521NCT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00A18086",
+                                "device_name":  "E1521NCT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00028086",
+                                "device_name":  "E1521NCT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00A28086",
+                                "device_name":  "E1521NCT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00038086",
+                                "device_name":  "E1522NCF4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00A38086",
+                                "device_name":  "E1522NCF4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00048086",
+                                "device_name":  "E1522NCF2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00A48086",
+                                "device_name":  "E1522NCF2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00058086",
+                                "device_name":  "E1522NCF1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_50018086",
+                                "device_name":  "E1521NC4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_50028086",
+                                "device_name":  "E1521NC2P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F601028",
+                                "device_name":  "E1521NCNDC4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F621028",
+                                "device_name":  "E1521NCNDC2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_1F528086",
+                                "device_name":  "E1523NC4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_04CF1028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_06021028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F9A1028",
+                                "device_name":  "E1521NCX7NDC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_1F9B1028",
+                                "device_name":  "E1523NCBNDC4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_06601028",
+                                "device_name":  "E1523NC2P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_06931028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_06E21028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_07571028",
+                                "device_name":  "E1521NCLT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_075A1028",
+                                "device_name":  "E1521NCLT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1FAA1028",
+                                "device_name":  "E1521NCNDC2.WF.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_50038086",
+                                "device_name":  "E1521NC4POCP.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_7B16108E",
+                                "device_name":  "E1521SEMT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_7B18108E",
+                                "device_name":  "E1521SLPT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_7B17108E",
+                                "device_name":  "E1522SENF4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_7B19108E",
+                                "device_name":  "E1522SLPF2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523",
+                                "device_name":  "E1523NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1524",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1524",
+                                "device_name":  "E1524NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x150E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_150E\u0026SUBSYS_11A81734",
+                                "device_name":  "E150ELNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_153315D9",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1536",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1536",
+                                "device_name":  "E1536NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1537",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1537",
+                                "device_name":  "E1537NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1538",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1538",
+                                "device_name":  "E1538NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x157B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_157B",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x157C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_157C",
+                                "device_name":  "E1537NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_07581028",
+                                "device_name":  "E1533DELL.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_07591028",
+                                "device_name":  "E1533DELL.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_103617AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_103717AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_103817AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_105917AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_404D17AA",
+                                "device_name":  "E1533LNV.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_00018086",
+                                "device_name":  "E1533NCT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_00028086",
+                                "device_name":  "E1533NCT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_0003103C",
+                                "device_name":  "E1533HPNCT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1539",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1539",
+                                "device_name":  "E1539NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521",
+                                "device_name":  "E1521NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_3380103C",
+                                "device_name":  "E1521HPNCI4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_337F103C",
+                                "device_name":  "E1521HPNCI2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_339E103C",
+                                "device_name":  "E1521HPNCT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_18D1103C",
+                                "device_name":  "E1523HPNCB2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_339F103C",
+                                "device_name":  "E1523HPNCM4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00A38086",
+                                "device_name":  "E1521NCOCP4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00038086",
+                                "device_name":  "E1521NCOCP4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00AA8086",
+                                "device_name":  "E1521NCOCP4PLN.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_40178086",
+                                "device_name":  "E1521OCP4PINTL.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_17D1103C",
+                                "device_name":  "E1521HPNCR4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_1989103C",
+                                "device_name":  "E1523HPNC3I.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_2003103C",
+                                "device_name":  "E1521HPNC7I.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_2226103C",
+                                "device_name":  "E1521HPNC4I.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_8157103C",
+                                "device_name":  "E1521HPNC6T.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00FF1590",
+                                "device_name":  "E1521HPECB4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F731028",
+                                "device_name":  "E1521NCELKF.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_008A1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_008B1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_008E1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_023E1137",
+                                "device_name":  "E1521NCC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522",
+                                "device_name":  "E1522NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00018086",
+                                "device_name":  "E1521NCT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00A18086",
+                                "device_name":  "E1521NCT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00028086",
+                                "device_name":  "E1521NCT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_00A28086",
+                                "device_name":  "E1521NCT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00038086",
+                                "device_name":  "E1522NCF4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00A38086",
+                                "device_name":  "E1522NCF4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00048086",
+                                "device_name":  "E1522NCF2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00A48086",
+                                "device_name":  "E1522NCF2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_00058086",
+                                "device_name":  "E1522NCF1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_50018086",
+                                "device_name":  "E1521NC4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_50028086",
+                                "device_name":  "E1521NC2P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F601028",
+                                "device_name":  "E1521NCNDC4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F621028",
+                                "device_name":  "E1521NCNDC2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_1F528086",
+                                "device_name":  "E1523NC4P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_04CF1028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_06021028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1F9A1028",
+                                "device_name":  "E1521NCX7NDC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_1F9B1028",
+                                "device_name":  "E1523NCBNDC4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523\u0026SUBSYS_06601028",
+                                "device_name":  "E1523NC2P.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_06931028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_06E21028",
+                                "device_name":  "E1521NCLT2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_07571028",
+                                "device_name":  "E1521NCLT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_075A1028",
+                                "device_name":  "E1521NCLT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_1FAA1028",
+                                "device_name":  "E1521NCNDC2.WF.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_50038086",
+                                "device_name":  "E1521NC4POCP.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_7B16108E",
+                                "device_name":  "E1521SEMT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1521",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1521\u0026SUBSYS_7B18108E",
+                                "device_name":  "E1521SLPT4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_7B17108E",
+                                "device_name":  "E1522SENF4.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1522",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1522\u0026SUBSYS_7B19108E",
+                                "device_name":  "E1522SLPF2.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1523",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1523",
+                                "device_name":  "E1523NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1524",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1524",
+                                "device_name":  "E1524NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x150E",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_150E\u0026SUBSYS_11A81734",
+                                "device_name":  "E150ELNC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_153315D9",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1536",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1536",
+                                "device_name":  "E1536NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1537",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1537",
+                                "device_name":  "E1537NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1538",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1538",
+                                "device_name":  "E1538NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x157B",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_157B",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x157C",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_157C",
+                                "device_name":  "E1537NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_07581028",
+                                "device_name":  "E1533DELL.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_07591028",
+                                "device_name":  "E1533DELL.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_103617AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_103717AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_103817AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_105917AA",
+                                "device_name":  "E1533NC.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_404D17AA",
+                                "device_name":  "E1533LNV.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_00018086",
+                                "device_name":  "E1533NCT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_00028086",
+                                "device_name":  "E1533NCT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1533",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1533\u0026SUBSYS_0003103C",
+                                "device_name":  "E1533HPNCT1.DeviceDesc"
+                            },
+                            {
+                                "device_id":  "0x1539",
+                                "pci_string":  "PCI\\VEN_8086\u0026DEV_1539",
+                                "device_name":  "E1539NC.DeviceDesc"
+                            }
+                        ]
+}
