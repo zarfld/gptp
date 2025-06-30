@@ -1085,6 +1085,58 @@ public:
 		
 		return hw_timestamp_enabled;
 	}
+
+	/**
+	 * @brief Configure Intel PTP settings automatically if needed
+	 * @param adapter_name Name of the network adapter
+	 * @return true if configuration was successful or not needed
+	 */
+	bool configureIntelPTPSettings(const char* adapter_name) const {
+		if (!adapter_name) return false;
+		
+		// Check if Intel device and if PTP settings need configuration
+		if (strstr(adapter_name, "Intel") == NULL) {
+			GPTP_LOG_VERBOSE("Non-Intel adapter - PTP configuration not applicable");
+			return true; // Not an error for non-Intel adapters
+		}
+		
+		// Check current PTP hardware timestamp setting
+		bool hw_ts_enabled = isPtpHardwareTimestampEnabled(adapter_name);
+		
+		if (hw_ts_enabled) {
+			GPTP_LOG_STATUS("Intel PTP hardware timestamp already enabled for %s", adapter_name);
+			return true;
+		}
+		
+		// Attempt to configure PTP settings programmatically
+		GPTP_LOG_INFO("Attempting to configure Intel PTP settings for %s", adapter_name);
+		
+		// Try PowerShell command approach (for Windows 10 with Intel PROSet)
+		char powershell_cmd[1024];
+		snprintf(powershell_cmd, sizeof(powershell_cmd),
+			"powershell.exe -Command \"try { "
+			"Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1; "
+			"Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*SoftwareTimestamp' -RegistryValue 3; "
+			"Write-Host 'PTP configuration successful' } catch { exit 1 }\"",
+			adapter_name, adapter_name);
+		
+		GPTP_LOG_VERBOSE("Executing PTP configuration command");
+		int result = system(powershell_cmd);
+		
+		if (result == 0) {
+			GPTP_LOG_STATUS("Successfully configured Intel PTP settings for %s", adapter_name);
+			GPTP_LOG_INFO("Hardware timestamp enabled, software timestamp set to RxAll & TxAll");
+			return true;
+		} else {
+			GPTP_LOG_WARNING("Automatic PTP configuration failed (exit code: %d)", result);
+			GPTP_LOG_INFO("Manual configuration may be required:");
+			GPTP_LOG_INFO("1. Run as administrator: Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1", adapter_name);
+			GPTP_LOG_INFO("2. Set software timestamp: Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*SoftwareTimestamp' -RegistryValue 3", adapter_name);
+			GPTP_LOG_INFO("3. Or use the provided script: scripts\\configure_intel_ptp.ps1");
+		}
+		
+		return false; // Configuration needed but failed
+	}
 };
 
 

@@ -382,6 +382,21 @@ skip_timestamp_config:
 		// Enhanced Intel device detection with specific I219 support
 		const char* adapter_desc = pAdapterInfo->Description;
 		
+		// First, attempt to configure Intel PTP settings if this is an Intel device
+		if (strstr(adapter_desc, "Intel") != NULL) {
+			is_intel_device = true;
+			
+			// Try to configure Intel PTP settings automatically
+			// This implements the Intel community forum recommendations
+			bool config_success = configureIntelPTPSettings(adapter_desc);
+			if (config_success) {
+				GPTP_LOG_STATUS("Intel PTP configuration verified for %s", adapter_desc);
+			} else {
+				GPTP_LOG_WARNING("Intel PTP configuration may need manual setup for %s", adapter_desc);
+				GPTP_LOG_INFO("See Intel community forum: https://community.intel.com/t5/Ethernet-Products/Hardware-Timestamp-on-windows/m-p/1496441#M33563");
+			}
+		}
+		
 		// Check for Intel devices with known timestamping support
 		if (strstr(adapter_desc, "Intel") != NULL) {
 			is_intel_device = true;

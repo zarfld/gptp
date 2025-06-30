@@ -1,0 +1,135 @@
+# Intel PTP Hardware Timestamp CI/Pipeline Configuration
+# This should be run during system setup or CI pipeline execution
+# Based on Intel community support instructions
+
+name: Configure Intel PTP Hardware Timestamping
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    paths:
+      - 'scripts/configure_intel_ptp.ps1'
+      - '.github/workflows/configure-intel-ptp.yml'
+
+jobs:
+  configure-intel-ptp:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Check Intel Network Adapters
+      shell: powershell
+      run: |
+        Write-Host "Scanning for Intel network adapters..."
+        $intelAdapters = Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*Intel*" }
+        
+        if ($intelAdapters) {
+          Write-Host "Found Intel adapters:"
+          $intelAdapters | Format-Table Name, InterfaceDescription, Status
+        } else {
+          Write-Host "No Intel adapters found - skipping PTP configuration"
+          exit 0
+        }
+    
+    - name: Configure Intel PTP Settings
+      shell: powershell
+      run: |
+        # Run with elevated privileges if possible
+        if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+          Write-Warning "This script should be run as Administrator for best results"
+        }
+        
+        # Execute the configuration script
+        & .\scripts\configure_intel_ptp.ps1 -AdapterName "AVB" -SoftwareTimestampMode "RxAll & TxAll"
+    
+    - name: Verify PTP Configuration
+      shell: powershell
+      run: |
+        Write-Host "Verifying PTP configuration..."
+        
+        $intelAdapters = Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*Intel*I210*" -or $_.InterfaceDescription -like "*Intel*I211*" }
+        
+        foreach ($adapter in $intelAdapters) {
+          Write-Host "`nAdapter: $($adapter.Name) - $($adapter.InterfaceDescription)"
+          
+          try {
+            $ptpProps = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object { 
+              $_.RegistryKeyword -eq "*PtpHardwareTimestamp" -or $_.RegistryKeyword -eq "*SoftwareTimestamp" 
+            }
+            
+            foreach ($prop in $ptpProps) {
+              Write-Host "  $($prop.RegistryKeyword): $($prop.RegistryValue)"
+            }
+          } catch {
+            Write-Warning "  Could not read advanced properties: $($_.Exception.Message)"
+          }
+        }
+    
+    - name: Generate Configuration Report
+      shell: powershell
+      run: |
+        $report = @{
+          Timestamp = Get-Date
+          WindowsVersion = (Get-WmiObject -Class Win32_OperatingSystem).Caption
+          IntelAdapters = @()
+          ConfigurationStatus = "Unknown"
+        }
+        
+        $intelAdapters = Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*Intel*" }
+        
+        foreach ($adapter in $intelAdapters) {
+          $adapterInfo = @{
+            Name = $adapter.Name
+            Description = $adapter.InterfaceDescription
+            MacAddress = $adapter.MacAddress
+            Status = $adapter.Status
+            PtpHardwareTimestamp = "Unknown"
+            SoftwareTimestamp = "Unknown"
+          }
+          
+          try {
+            $ptpHw = Get-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*PtpHardwareTimestamp" -ErrorAction SilentlyContinue
+            if ($ptpHw) {
+              $adapterInfo.PtpHardwareTimestamp = if ($ptpHw.RegistryValue -eq "1") { "Enabled" } else { "Disabled" }
+            }
+            
+            $ptpSw = Get-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword "*SoftwareTimestamp" -ErrorAction SilentlyContinue
+            if ($ptpSw) {
+              $timestampModes = @("Disabled", "RxAll", "TxAll", "RxAll & TxAll", "TaggedTx", "RxAll & TaggedTx")
+              $mode = [int]$ptpSw.RegistryValue
+              $adapterInfo.SoftwareTimestamp = if ($mode -lt $timestampModes.Length) { $timestampModes[$mode] } else { "Unknown($mode)" }
+            }
+          } catch {
+            Write-Warning "Failed to read PTP settings for $($adapter.Name): $($_.Exception.Message)"
+          }
+          
+          $report.IntelAdapters += $adapterInfo
+        }
+        
+        # Determine overall configuration status
+        $configuredAdapters = $report.IntelAdapters | Where-Object { $_.PtpHardwareTimestamp -eq "Enabled" }
+        if ($configuredAdapters) {
+          $report.ConfigurationStatus = "Success"
+        } elseif ($report.IntelAdapters) {
+          $report.ConfigurationStatus = "Needs Configuration"
+        } else {
+          $report.ConfigurationStatus = "No Intel Adapters"
+        }
+        
+        # Output report
+        $report | ConvertTo-Json -Depth 3 | Out-File -FilePath "intel_ptp_config_report.json"
+        Write-Host "Configuration report saved to intel_ptp_config_report.json"
+        
+        # Summary
+        Write-Host "`n=== CONFIGURATION SUMMARY ===" -ForegroundColor Green
+        Write-Host "Status: $($report.ConfigurationStatus)" -ForegroundColor $(if ($report.ConfigurationStatus -eq "Success") { "Green" } else { "Yellow" })
+        Write-Host "Intel Adapters Found: $($report.IntelAdapters.Count)"
+        Write-Host "PTP Enabled Adapters: $($configuredAdapters.Count)"
+    
+    - name: Upload Configuration Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: intel-ptp-config-report
+        path: intel_ptp_config_report.json
