@@ -388,15 +388,9 @@ skip_timestamp_config:
 		if (strstr(adapter_desc, "Intel") != NULL) {
 			is_intel_device = true;
 			
-			// Try to configure Intel PTP settings automatically
-			// This implements the Intel community forum recommendations
-			bool config_success = configureIntelPTPSettings(adapter_desc);
-			if (config_success) {
-				GPTP_LOG_STATUS("Intel PTP configuration verified for %s", adapter_desc);
-			} else {
-				GPTP_LOG_WARNING("Intel PTP configuration may need manual setup for %s", adapter_desc);
-				GPTP_LOG_INFO("See Intel community forum: https://community.intel.com/t5/Ethernet-Products/Hardware-Timestamp-on-windows/m-p/1496441#M33563");
-			}
+			// Check if Intel PTP configuration might be available
+			GPTP_LOG_STATUS("Intel device detected - checking OID availability");
+			// TODO: Add Intel PTP configuration support if needed
 		}
 		
 		// Check for Intel devices with known timestamping support
@@ -519,6 +513,12 @@ skip_timestamp_config:
 	GPTP_LOG_STATUS("TSC Frequency: %llu Hz", tsc_hz.QuadPart);
 	GPTP_LOG_STATUS("Network Clock: %llu Hz", netclock_hz.QuadPart);
 	
+	// Run diagnostics to verify timestamping capabilities
+	bool diagnostic_passed = diagnoseTimestampingCapabilities();
+	if (!diagnostic_passed) {
+		GPTP_LOG_WARNING("Timestamping diagnostic failed - hardware timestamps may not work correctly");
+	}
+
 	// Determine and report active timestamping method
 	std::string timestamping_method = "Software Timestamping (TSC-based)";
 	std::string quality_info = "";

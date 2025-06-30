@@ -851,8 +851,25 @@ public:
 		uint64_t now_net, now_tsc;
 		DWORD result;
 
-		memset( buf, 0xFF, sizeof( buf ));
-		if(( result = readOID( OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned )) != ERROR_SUCCESS ) return false;
+		// Initialize buffer to avoid uninitialized memory issues
+		memset( buf, 0, sizeof( buf ));
+		
+		// Check if miniport handle is valid before attempting to read
+		if (miniport == INVALID_HANDLE_VALUE) {
+			GPTP_LOG_WARNING("Cannot read system time: miniport handle is invalid");
+			return false;
+		}
+
+		if(( result = readOID( OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned )) != ERROR_SUCCESS ) {
+			GPTP_LOG_WARNING("Failed to read Intel system time OID: error %d (0x%08X)", result, result);
+			return false;
+		}
+		
+		if( returned != sizeof(buf) ) {
+			GPTP_LOG_WARNING("Intel system time OID returned insufficient data: %d bytes, expected %d", 
+				returned, sizeof(buf));
+			return false;
+		}
 
 		now_net = (((uint64_t)buf[1]) << 32) | buf[0];
 		now_net = scaleNativeClockToNanoseconds( now_net );
@@ -883,15 +900,29 @@ public:
 		uint64_t tx_r,tx_s;
 		DWORD result;
 
+		// Initialize buffers to avoid uninitialized memory issues
+		memset(buf, 0, sizeof(buf));
+		memset(buf_tmp, 0, sizeof(buf_tmp));
+
+		// Check if miniport handle is valid before attempting to read
+		if (miniport == INVALID_HANDLE_VALUE) {
+			GPTP_LOG_WARNING("Cannot read TX timestamp: miniport handle is invalid");
+			return GPTP_EC_FAILURE;
+		}
+
 		while(( result = readOID( OID_INTEL_GET_TXSTAMP, buf_tmp, sizeof(buf_tmp), &returned )) == ERROR_SUCCESS ) {
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
 		if( result != ERROR_GEN_FAILURE ) {
-			GPTP_LOG_WARNING("Error (TX) timestamping PDelay request, error=%d. Intel OID may not be supported or accessible", result);
+			GPTP_LOG_WARNING("Error (TX) timestamping PDelay request, error=%d (0x%08X). Intel OID may not be supported or accessible", result, result);
 			if (result == ERROR_NOT_SUPPORTED) {
 				GPTP_LOG_INFO("Driver does not support Intel TX timestamping OID - falling back to software timestamps");
 			} else if (result == ERROR_ACCESS_DENIED) {
 				GPTP_LOG_WARNING("Access denied to Intel TX timestamp OID - ensure running as administrator");
+			} else if (result == ERROR_INVALID_HANDLE || result == ERROR_FILE_NOT_FOUND) {
+				GPTP_LOG_WARNING("Invalid adapter handle for Intel TX timestamp OID - adapter may not support timestamping");
+			} else {
+				GPTP_LOG_WARNING("Unknown error 0x%08X when reading Intel TX timestamp OID", result);
 			}
 			return GPTP_EC_FAILURE;
 		}
@@ -930,29 +961,53 @@ public:
 		DWORD result;
 		uint16_t packet_sequence_id;
 
+		// Initialize buffers to avoid uninitialized memory issues
+		memset(buf, 0, sizeof(buf));
+		memset(buf_tmp, 0, sizeof(buf_tmp));
+
 		// Debug: Track timestamp retrieval attempts
 		static uint32_t timestamp_attempts = 0;
 		static uint32_t timestamp_successes = 0;
 		static uint32_t timestamp_failures = 0;
 		timestamp_attempts++;
 
+		// Check if miniport handle is valid before attempting to read
+		if (miniport == INVALID_HANDLE_VALUE) {
+			timestamp_failures++;
+			GPTP_LOG_WARNING("Cannot read RX timestamp: miniport handle is invalid (Attempt %u, Failures: %u)", 
+				timestamp_attempts, timestamp_failures);
+			return GPTP_EC_FAILURE;
+		}
+
 		while(( result = readOID( OID_INTEL_GET_RXSTAMP, buf_tmp, sizeof(buf_tmp), &returned )) == ERROR_SUCCESS ) {
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
 		if( result != ERROR_GEN_FAILURE ) {
 			timestamp_failures++;
-			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d (Attempt %u, Failures: %u)", 
-				messageId.getMessageType(), result, timestamp_attempts, timestamp_failures);
+			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d (0x%08X) (Attempt %u, Failures: %u)", 
+				messageId.getMessageType(), result, result, timestamp_attempts, timestamp_failures);
 			if (result == ERROR_NOT_SUPPORTED) {
 				GPTP_LOG_INFO("Driver does not support Intel RX timestamping OID - falling back to software timestamps");
 			} else if (result == ERROR_ACCESS_DENIED) {
 				GPTP_LOG_WARNING("Access denied to Intel RX timestamp OID - ensure running as administrator");
+			} else if (result == ERROR_INVALID_HANDLE || result == ERROR_FILE_NOT_FOUND) {
+				GPTP_LOG_WARNING("Invalid adapter handle for Intel RX timestamp OID - adapter may not support timestamping");
+			} else {
+				GPTP_LOG_WARNING("Unknown error 0x%08X when reading Intel RX timestamp OID", result);
 			}
 			return GPTP_EC_FAILURE;
 		}
 		if( returned != sizeof(buf_tmp) ) {
-			GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d (Attempt %u)", 
-				returned, sizeof(buf_tmp), timestamp_attempts);
+			timestamp_failures++;
+			GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d (Attempt %u, Failures: %u)", 
+				returned, sizeof(buf_tmp), timestamp_attempts, timestamp_failures);
+			
+			// Log buffer contents for debugging (first few bytes)
+			if (returned > 0 && returned < 16) {
+				GPTP_LOG_WARNING("Partial data received: %02X %02X %02X %02X", 
+					((uint8_t*)buf_tmp)[0], ((uint8_t*)buf_tmp)[1], 
+					((uint8_t*)buf_tmp)[2], ((uint8_t*)buf_tmp)[3]);
+			}
 			return GPTP_EC_EAGAIN;
 		}
 		packet_sequence_id = *((uint32_t *) buf+3) >> 16;
@@ -995,13 +1050,8 @@ public:
 		DWORD returned = 0;
 		DWORD result;
 		
-		// First check registry settings for hardware timestamping capability
-		bool registry_hw_ts_enabled = isPtpHardwareTimestampEnabled(adapter_description);
-		if (registry_hw_ts_enabled) {
-			GPTP_LOG_STATUS("Registry shows PTP hardware timestamping is ENABLED for %s", adapter_description);
-		} else {
-			GPTP_LOG_INFO("Registry shows PTP hardware timestamping is disabled or not found for %s", adapter_description);
-		}
+		// First check if basic OID functionality is working
+		GPTP_LOG_STATUS("Testing basic Intel OID functionality for %s", adapter_description);
 		
 		// Test OID_INTEL_GET_SYSTIM first as it's the most basic
 		memset(buf, 0xFF, sizeof(buf));
@@ -1026,12 +1076,32 @@ public:
 				uint64_t tsc_time = (((uint64_t)buf[3]) << 32) | buf[2];
 				
 				if (net_time > 0 && tsc_time > 0) {
-					GPTP_LOG_STATUS("Intel OID timestamp validation passed: net=%llu, tsc=%llu (registry HW TS: %s)", 
-						net_time, tsc_time, registry_hw_ts_enabled ? "enabled" : "disabled");
+					GPTP_LOG_STATUS("Intel OID timestamp validation passed: net=%llu, tsc=%llu", 
+						net_time, tsc_time);
 					return true;
+				} else if (net_time == 0 && tsc_time > 0) {
+					GPTP_LOG_WARNING("Intel PTP network clock is not running (net_time=0) - attempting to start it");
+					
+					// Try to start the Intel PTP clock
+					if (startIntelPTPClock()) {
+						// Verify the clock is now running
+						memset(buf, 0, sizeof(buf));
+						result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
+						if (result == ERROR_SUCCESS && returned == sizeof(buf)) {
+							net_time = (((uint64_t)buf[1]) << 32) | buf[0];
+							tsc_time = (((uint64_t)buf[3]) << 32) | buf[2];
+							
+							if (net_time > 0 && tsc_time > 0) {
+								GPTP_LOG_STATUS("Intel PTP clock successfully started: net=%llu, tsc=%llu", 
+									net_time, tsc_time);
+								return true;
+							}
+						}
+					}
+					
+					GPTP_LOG_WARNING("Failed to start Intel PTP network clock - falling back to software timestamping");
 				} else {
-					GPTP_LOG_WARNING("Intel OID returned zero timestamps on first attempt - retrying after 100ms (registry HW TS: %s)", 
-						registry_hw_ts_enabled ? "enabled" : "disabled");
+					GPTP_LOG_WARNING("Intel OID returned zero timestamps on first attempt - retrying after 100ms");
 					
 					// 💡 RETRY LOGIC: Wait 100ms and try again as suggested
 					Sleep(100);
@@ -1066,144 +1136,162 @@ public:
 					GPTP_LOG_WARNING("Intel OID read failed after retry - timestamps still zero or invalid");
 					GPTP_LOG_STATUS("Intel OID read failed, defaulting to RDTSC method for timestamping");
 					
-					// Do NOT return true even if registry shows HW timestamping enabled
-					// since the actual OID reads are failing - fall back to cross-timestamping
-					if (registry_hw_ts_enabled) {
-						GPTP_LOG_INFO("Registry indicates HW timestamping enabled, but OID reads fail - using software fallback");
-					}
+					// Do NOT return true - actual OID reads are failing  
+					// fall back to cross-timestamping
+					GPTP_LOG_INFO("OID reads fail - using software fallback");
 					
 					return false; // Force fallback to cross-timestamping/RDTSC method
 				}
 			} else {
-				GPTP_LOG_WARNING("Intel OID returned invalid data (all 0xFF) for %s (registry HW TS: %s)", 
-					adapter_description, registry_hw_ts_enabled ? "enabled" : "disabled");
+				GPTP_LOG_WARNING("Intel OID returned invalid data (all 0xFF) for %s", 
+					adapter_description);
 			}
 		} else {
-			GPTP_LOG_VERBOSE("Intel OID test failed for %s: error=%d, returned=%d/%d (registry HW TS: %s)", 
-				adapter_description, result, returned, sizeof(buf), registry_hw_ts_enabled ? "enabled" : "disabled");
+			GPTP_LOG_VERBOSE("Intel OID test failed for %s: error=%d, returned=%d/%d", 
+				adapter_description, result, returned, sizeof(buf));
 		}
 		
-		// If registry shows hardware timestamping is enabled, consider Intel OIDs "available"
-		// even if they're not returning valid timestamps (driver/initialization issue)
-		if (registry_hw_ts_enabled) {
-			GPTP_LOG_STATUS("Intel OIDs considered available based on registry settings, despite initialization issues");
-			return true;
-		}
-		
+		// Intel OIDs not available or not functional
 		return false;
 	}
 
 	/**
-	 * @brief Check if PTP hardware timestamping is enabled in adapter registry
-	 * @param adapter_name Adapter name/GUID for registry lookup
-	 * @return true if PTP hardware timestamping is enabled in registry
+	 * @brief Diagnostic function to check Intel OID support and adapter status
+	 * @return true if basic OID functionality is working
 	 */
-	bool isPtpHardwareTimestampEnabled(const char* adapter_name) const {
-		if (!adapter_name) return false;
+	bool diagnoseTimestampingCapabilities() const {
+		GPTP_LOG_STATUS("=== Diagnosing Hardware Timestamping Capabilities ===");
 		
-		// Try direct adapter lookup via network adapter name
-		// Get all network adapters and find the one matching our description
-		PIP_ADAPTER_ADDRESSES pAddresses = NULL;
-		ULONG outBufLen = 0;
-		DWORD dwRetVal = GetAdaptersAddresses(AF_UNSPEC, 
-			GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
-			NULL, pAddresses, &outBufLen);
-
-		if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
-			pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
-			if (pAddresses) {
-				dwRetVal = GetAdaptersAddresses(AF_UNSPEC,
-					GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
-					NULL, pAddresses, &outBufLen);
-			}
+		if (miniport == INVALID_HANDLE_VALUE) {
+			GPTP_LOG_ERROR("CRITICAL: Miniport handle is INVALID - cannot access adapter");
+			return false;
+		} else {
+			GPTP_LOG_STATUS("Miniport handle is valid (0x%p)", miniport);
 		}
-
-		bool hw_timestamp_enabled = false;
-		if (dwRetVal == NO_ERROR && pAddresses) {
-			PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses;
-			while (pCurrAddresses) {
-				char desc_narrow[256] = {0};
-				WideCharToMultiByte(CP_UTF8, 0, pCurrAddresses->Description, -1, 
-								   desc_narrow, sizeof(desc_narrow), NULL, NULL);
+		
+		// Test basic Intel OID availability
+		DWORD buf[6];
+		DWORD returned = 0;
+		DWORD result;
+		
+		// Initialize buffer
+		memset(buf, 0, sizeof(buf));
+		
+		// Test OID_INTEL_GET_SYSTIM
+		GPTP_LOG_STATUS("Testing OID_INTEL_GET_SYSTIM...");
+		result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
+		
+		if (result == ERROR_SUCCESS) {
+			if (returned == sizeof(buf)) {
+				uint64_t net_time = (((uint64_t)buf[1]) << 32) | buf[0];
+				uint64_t tsc_time = (((uint64_t)buf[3]) << 32) | buf[2];
+				GPTP_LOG_STATUS("✓ OID_INTEL_GET_SYSTIM: SUCCESS - net_time=%llu, tsc_time=%llu", net_time, tsc_time);
 				
-				if (strstr(adapter_name, desc_narrow) || strstr(desc_narrow, adapter_name)) {
-					// Found our adapter, try to check via PowerShell/WMI approach
-					// For Intel adapters, check if "*PtpHardwareTimestamp" is enabled
-					
-					// Use a simplified approach - check if it's an Intel I210/I211/I219 adapter
-					if (strstr(desc_narrow, "I210") || strstr(desc_narrow, "I211") || 
-						strstr(desc_narrow, "I217") || strstr(desc_narrow, "I219") ||
-						strstr(desc_narrow, "Intel") || strstr(desc_narrow, "Ethernet")) {
-						
-						// For Intel adapters that support PTP, assume hardware timestamping
-						// This is a reasonable assumption for I210/I211 and newer Intel adapters
-						hw_timestamp_enabled = true;
-						GPTP_LOG_INFO("Intel adapter detected: %s - assuming PTP hardware timestamp capability", desc_narrow);
-					}
-					break;
+				if (net_time == 0 && tsc_time == 0) {
+					GPTP_LOG_WARNING("WARNING: Both timestamps are zero - adapter may not be properly initialized");
 				}
-				pCurrAddresses = pCurrAddresses->Next;
+			} else {
+				GPTP_LOG_WARNING("⚠ OID_INTEL_GET_SYSTIM: Partial data - got %d bytes, expected %d", returned, sizeof(buf));
+			}
+		} else {
+			GPTP_LOG_ERROR("✗ OID_INTEL_GET_SYSTIM: FAILED - error %d (0x%08X)", result, result);
+			
+			if (result == ERROR_NOT_SUPPORTED || result == ERROR_INVALID_FUNCTION) {
+				GPTP_LOG_ERROR("  Adapter does not support Intel timestamping OIDs");
+			} else if (result == ERROR_ACCESS_DENIED) {
+				GPTP_LOG_ERROR("  Access denied - run as administrator or check driver permissions");
+			} else if (result == ERROR_INVALID_HANDLE || result == ERROR_FILE_NOT_FOUND) {
+				GPTP_LOG_ERROR("  Invalid adapter handle - adapter may be disconnected or driver issue");
 			}
 		}
 		
-		if (pAddresses) {
-			free(pAddresses);
+		// Test OID_INTEL_GET_RXSTAMP (just structure check, not expecting data)
+		GPTP_LOG_STATUS("Testing OID_INTEL_GET_RXSTAMP availability...");
+		memset(buf, 0, sizeof(buf));
+		returned = 0;
+		result = readOID(OID_INTEL_GET_RXSTAMP, buf, 16, &returned);
+		
+		if (result == ERROR_SUCCESS || result == ERROR_GEN_FAILURE) {
+			GPTP_LOG_STATUS("✓ OID_INTEL_GET_RXSTAMP: Available (result=%d)", result);
+		} else {
+			GPTP_LOG_WARNING("⚠ OID_INTEL_GET_RXSTAMP: May not be supported (result=%d)", result);
 		}
 		
-		return hw_timestamp_enabled;
+		// Test OID_INTEL_GET_TXSTAMP (just structure check, not expecting data)
+		GPTP_LOG_STATUS("Testing OID_INTEL_GET_TXSTAMP availability...");
+		memset(buf, 0, sizeof(buf));
+		returned = 0;
+		result = readOID(OID_INTEL_GET_TXSTAMP, buf, 16, &returned);
+		
+		if (result == ERROR_SUCCESS || result == ERROR_GEN_FAILURE) {
+			GPTP_LOG_STATUS("✓ OID_INTEL_GET_TXSTAMP: Available (result=%d)", result);
+		} else {
+			GPTP_LOG_WARNING("⚠ OID_INTEL_GET_TXSTAMP: May not be supported (result=%d)", result);
+		}
+		
+		GPTP_LOG_STATUS("Clock frequencies: TSC=%lld Hz, Network=%lld Hz", 
+			tsc_hz.QuadPart, netclock_hz.QuadPart);
+		
+		bool basic_support = (result == ERROR_SUCCESS && returned > 0);
+		GPTP_LOG_STATUS("=== Diagnosis complete - Basic Intel OID support: %s ===", 
+			basic_support ? "AVAILABLE" : "UNAVAILABLE");
+		
+		return basic_support;
 	}
 
 	/**
-	 * @brief Configure Intel PTP settings automatically if needed
-	 * @param adapter_name Name of the network adapter
-	 * @return true if configuration was successful or not needed
+	 * @brief Attempt to start the Intel PTP hardware clock
+	 * @return true if clock was started successfully
 	 */
-	bool configureIntelPTPSettings(const char* adapter_name) const {
-		if (!adapter_name) return false;
-		
-		// Check if Intel device and if PTP settings need configuration
-		if (strstr(adapter_name, "Intel") == NULL) {
-			GPTP_LOG_VERBOSE("Non-Intel adapter - PTP configuration not applicable");
-			return true; // Not an error for non-Intel adapters
+	bool startIntelPTPClock() const {
+		if (miniport == INVALID_HANDLE_VALUE) {
+			GPTP_LOG_WARNING("Cannot start Intel PTP clock: miniport handle is invalid");
+			return false;
 		}
+
+		// Try to enable the PTP clock using Intel-specific OIDs
+		DWORD enable_clock = 1;
+		DWORD result;
 		
-		// Check current PTP hardware timestamp setting
-		bool hw_ts_enabled = isPtpHardwareTimestampEnabled(adapter_name);
+		// Try OID_INTEL_SET_PTP_ENABLE (if available)
+		// This OID may not be documented but is sometimes present
+		const NDIS_OID OID_INTEL_SET_PTP_ENABLE = 0xFF020204;
 		
-		if (hw_ts_enabled) {
-			GPTP_LOG_STATUS("Intel PTP hardware timestamp already enabled for %s", adapter_name);
+		result = setOID(OID_INTEL_SET_PTP_ENABLE, &enable_clock, sizeof(enable_clock));
+		if (result == ERROR_SUCCESS) {
+			GPTP_LOG_STATUS("Intel PTP clock enabled via OID_INTEL_SET_PTP_ENABLE");
 			return true;
+		} else if (result != ERROR_NOT_SUPPORTED && result != ERROR_INVALID_FUNCTION) {
+			GPTP_LOG_WARNING("Failed to enable Intel PTP clock via OID: error %d (0x%08X)", result, result);
+		}
+
+		// Alternative approach: Try to trigger clock start by reading system time repeatedly
+		GPTP_LOG_STATUS("Attempting to trigger Intel PTP clock start via repeated OID reads");
+		DWORD buf[6];
+		DWORD returned;
+		
+		for (int attempt = 0; attempt < 10; attempt++) {
+			memset(buf, 0, sizeof(buf));
+			result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
+			
+			if (result == ERROR_SUCCESS && returned == sizeof(buf)) {
+				uint64_t net_time = (((uint64_t)buf[1]) << 32) | buf[0];
+				if (net_time > 0) {
+					GPTP_LOG_STATUS("Intel PTP clock started after %d attempts - net_time=%llu", 
+						attempt + 1, net_time);
+					return true;
+				}
+			}
+			
+			Sleep(50); // Wait 50ms between attempts
 		}
 		
-		// Attempt to configure PTP settings programmatically
-		GPTP_LOG_INFO("Attempting to configure Intel PTP settings for %s", adapter_name);
-		
-		// Try PowerShell command approach (for Windows 10 with Intel PROSet)
-		char powershell_cmd[1024];
-		snprintf(powershell_cmd, sizeof(powershell_cmd),
-			"powershell.exe -Command \"try { "
-			"Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1; "
-			"Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*SoftwareTimestamp' -RegistryValue 3; "
-			"Write-Host 'PTP configuration successful' } catch { exit 1 }\"",
-			adapter_name, adapter_name);
-		
-		GPTP_LOG_VERBOSE("Executing PTP configuration command");
-		int result = system(powershell_cmd);
-		
-		if (result == 0) {
-			GPTP_LOG_STATUS("Successfully configured Intel PTP settings for %s", adapter_name);
-			GPTP_LOG_INFO("Hardware timestamp enabled, software timestamp set to RxAll & TxAll");
-			return true;
-		} else {
-			GPTP_LOG_WARNING("Automatic PTP configuration failed (exit code: %d)", result);
-			GPTP_LOG_INFO("Manual configuration may be required:");
-			GPTP_LOG_INFO("1. Run as administrator: Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1", adapter_name);
-			GPTP_LOG_INFO("2. Set software timestamp: Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*SoftwareTimestamp' -RegistryValue 3", adapter_name);
-			GPTP_LOG_INFO("3. Or use the provided script: scripts\\configure_intel_ptp.ps1");
-		}
-		
-		return false; // Configuration needed but failed
+		GPTP_LOG_WARNING("Unable to start Intel PTP clock - network time counter remains at zero");
+		GPTP_LOG_INFO("This may require manual driver configuration or the adapter may not support hardware PTP");
+		return false;
 	}
+
+	// ...existing code...
 };
 
 
