@@ -789,6 +789,9 @@ void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 	
 	if (link_up) {
 		GPTP_LOG_STATUS("*** ANNOUNCE MESSAGES SHOULD NOW START ***");
+		GPTP_LOG_STATUS("*** TRIGGERING LINKUP EVENT FOR BMCA ***");
+		// Trigger the LINKUP event to start BMCA (Best Master Clock Algorithm)
+		pPort->processEvent(LINKUP);
 	}
 
 	// TODO: Implement proper link monitoring in future

@@ -416,17 +416,21 @@ bool EtherPort::_processEvent( Event e )
 			GPTP_LOG_STATUS("LINKUP");
 		}
 
+		GPTP_LOG_STATUS("*** LINKUP BMCA DECISION: Priority1=%d, PortState=%d ***", 
+			clock->getPriority1(), getPortState());
 		if( clock->getPriority1() == 255 || getPortState() == PTP_SLAVE ) {
+			GPTP_LOG_STATUS("*** BECOMING SLAVE (Priority1=255 or PTP_SLAVE) ***");
 			becomeSlave( true );
 		} else if( getPortState() == PTP_MASTER ) {
+			GPTP_LOG_STATUS("*** BECOMING MASTER (Already PTP_MASTER) ***");
 			becomeMaster( true );
 		} else {
+			uint64_t timeout_ns = (uint64_t)( ANNOUNCE_RECEIPT_TIMEOUT_MULTIPLIER * 
+				pow( 2.0, getAnnounceInterval( )) * 1000000000.0 );
+			GPTP_LOG_STATUS("*** STARTING ANNOUNCE RECEIPT TIMEOUT: %llu ns (%.1f seconds) ***", 
+				timeout_ns, timeout_ns / 1000000000.0);
 			clock->addEventTimerLocked
-				( this, ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES,
-				  (uint64_t)
-				  ( ANNOUNCE_RECEIPT_TIMEOUT_MULTIPLIER *
-				    pow( 2.0, getAnnounceInterval( )) *
-				    1000000000.0 ));
+				( this, ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES, timeout_ns );
 		}
 
 		if( getAutomotiveProfile( ))
