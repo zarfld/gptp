@@ -1235,10 +1235,10 @@ void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_
         "powershell.exe -Command \"try { "
         "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceGuid -eq '%s'}; "
         "if ($adapter) { "
-        "    $ptpHw = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object DisplayName -match 'PTP Hardware'; "
-        "    $softTs = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object DisplayName -match 'Software Timestamp'; "
-        "    if ($ptpHw) { Write-Host 'PTP_HW:' $ptpHw.DisplayValue; } else { Write-Host 'PTP_HW: Not Found'; } "
-        "    if ($softTs) { Write-Host 'SW_TS:' $softTs.DisplayValue; } else { Write-Host 'SW_TS: Not Found'; } "
+        "    $ptpHw = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object RegistryKeyword -eq '*PtpHardwareTimestamp'; "
+        "    $softTs = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object RegistryKeyword -eq '*SoftwareTimestamp'; "
+        "    if ($ptpHw) { Write-Host 'PTP_HW:' $ptpHw.DisplayValue '(keyword:' $ptpHw.RegistryKeyword ')'; } else { Write-Host 'PTP_HW: Not Found'; } "
+        "    if ($softTs) { Write-Host 'SW_TS:' $softTs.DisplayValue '(keyword:' $softTs.RegistryKeyword ')'; } else { Write-Host 'SW_TS: Not Found'; } "
         "} else { Write-Host 'ADAPTER: Not Found'; } "
         "} catch { Write-Host 'ERROR:' $_.Exception.Message; }\"",
         adapter_guid);
@@ -1261,11 +1261,11 @@ void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_
         
         if (line.find("PTP_HW:") != std::string::npos) {
             ptp_hw_found = true;
-            if (line.find("Enabled") != std::string::npos) {
+            if (line.find("Aktiviert") != std::string::npos || line.find("Enabled") != std::string::npos || line.find("1") != std::string::npos) {
                 ptp_hw_enabled = true;
-                ptp_hw_status = "Enabled";
-            } else if (line.find("Disabled") != std::string::npos) {
-                ptp_hw_status = "Disabled";
+                ptp_hw_status = "Enabled/Aktiviert";
+            } else if (line.find("Deaktiviert") != std::string::npos || line.find("Disabled") != std::string::npos || line.find("0") != std::string::npos) {
+                ptp_hw_status = "Disabled/Deaktiviert";
             } else {
                 ptp_hw_status = "Unknown";
             }
@@ -1294,6 +1294,7 @@ void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_
             GPTP_LOG_STATUS("   5. Optionally set 'Software Timestamp' to appropriate value");
             GPTP_LOG_STATUS("   6. Click OK and restart gPTP");
             GPTP_LOG_STATUS("   Or use PowerShell: Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1", actual_adapter_name.c_str());
+            GPTP_LOG_STATUS("   Alternative: Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*SoftwareTimestamp' -RegistryValue 3", actual_adapter_name.c_str());
         }
     } else {
         GPTP_LOG_INFO("PTP Hardware Timestamp setting not found - may not be supported by this adapter/driver version");
