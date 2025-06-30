@@ -72,6 +72,21 @@ elseif(WIN32)
   add_executable (gptp ${GPTP_COMMON} ${GPTP_OS})
   target_link_libraries(gptp ${PCAP_LIBRARY_NAME} Iphlpapi Ws2_32)
 
+  # Copy configuration files to output directory for deployment
+  add_custom_command(TARGET gptp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_SOURCE_DIR}/gptp_cfg.ini"
+      "$<TARGET_FILE_DIR:gptp>/gptp_cfg.ini"
+    COMMENT "Copying gptp_cfg.ini to output directory"
+  )
+  
+  add_custom_command(TARGET gptp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_SOURCE_DIR}/test_milan_config.ini"
+      "$<TARGET_FILE_DIR:gptp>/test_milan_config.ini"
+    COMMENT "Copying test_milan_config.ini to output directory"
+  )
+
   add_subdirectory("windows/named_pipe_test")
 
 endif()
