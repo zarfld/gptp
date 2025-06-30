@@ -441,7 +441,8 @@ skip_timestamp_config:
 			}
 		} else if (is_intel_device) {
 			GPTP_LOG_WARNING("Intel device detected but custom OIDs not available - using software timestamping");
-			GPTP_LOG_INFO("This may indicate: 1) Driver doesn't support PTP OIDs, 2) Administrator privileges required, 3) Device doesn't support hardware timestamping");
+			GPTP_LOG_INFO("This may indicate: 1) Intel OID reads return zero timestamps, 2) Driver doesn't support PTP OIDs, 3) Administrator privileges required, 4) Device doesn't support hardware timestamping");
+			GPTP_LOG_STATUS("Falling back to RDTSC method for timestamping on Intel device");
 			
 			// Check registry parameters for Intel PTP settings
 			checkIntelPTPRegistrySettings(pAdapterInfo->AdapterName, adapter_desc);
@@ -538,13 +539,28 @@ skip_timestamp_config:
 			}
 		}
 	} else {
-		// Check if Intel OIDs are available
+		// Check if Intel OIDs are available and actually working
 		if (miniport != INVALID_HANDLE_VALUE) {
-			DWORD buf[2];
+			DWORD buf[6];  // Use full buffer like in testIntelOIDAvailability
 			DWORD returned;
-			if (readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned) == ERROR_SUCCESS) {
-				timestamping_method = "Intel OID Hardware Timestamping";
-				quality_info = " - Hardware-assisted";
+			DWORD result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
+			
+			if (result == ERROR_SUCCESS && returned == sizeof(buf)) {
+				// Extract and validate timestamp data
+				uint64_t net_time = (((uint64_t)buf[1]) << 32) | buf[0];
+				uint64_t tsc_time = (((uint64_t)buf[3]) << 32) | buf[2];
+				
+				if (net_time > 0 && tsc_time > 0) {
+					timestamping_method = "Intel OID Hardware Timestamping";
+					quality_info = " - Hardware-assisted";
+				} else {
+					timestamping_method = "Software Timestamping (Intel OID failed)";
+					quality_info = " - Fallback to RDTSC method";
+					GPTP_LOG_STATUS("Intel OID returned zero timestamps in status check - using RDTSC fallback");
+				}
+			} else {
+				timestamping_method = "Software Timestamping (TSC-based)";
+				quality_info = " - Intel OID unavailable";
 			}
 		}
 	}

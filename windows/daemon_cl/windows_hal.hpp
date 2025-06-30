@@ -1004,15 +1004,49 @@ public:
 						net_time, tsc_time, registry_hw_ts_enabled ? "enabled" : "disabled");
 					return true;
 				} else {
-					GPTP_LOG_WARNING("Intel OID returned zero timestamps - may not be properly initialized (registry HW TS: %s)", 
+					GPTP_LOG_WARNING("Intel OID returned zero timestamps on first attempt - retrying after 100ms (registry HW TS: %s)", 
 						registry_hw_ts_enabled ? "enabled" : "disabled");
 					
-					// Even with zero timestamps, if registry shows HW timestamping enabled,
-					// we should report that Intel OIDs are available (just not initialized)
-					if (registry_hw_ts_enabled) {
-						GPTP_LOG_STATUS("Intel OIDs available but timestamps not initialized - hardware capability confirmed by registry");
-						return true;
+					// 💡 RETRY LOGIC: Wait 100ms and try again as suggested
+					Sleep(100);
+					
+					// Retry the OID read
+					memset(buf, 0xFF, sizeof(buf));
+					result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
+					
+					if (result == ERROR_SUCCESS && returned == sizeof(buf)) {
+						// Re-validate the data
+						valid_data = false;
+						for (int i = 0; i < 6; i++) {
+							if (buf[i] != 0xFFFFFFFF) {
+								valid_data = true;
+								break;
+							}
+						}
+						
+						if (valid_data) {
+							net_time = (((uint64_t)buf[1]) << 32) | buf[0];
+							tsc_time = (((uint64_t)buf[3]) << 32) | buf[2];
+							
+							if (net_time > 0 && tsc_time > 0) {
+								GPTP_LOG_STATUS("Intel OID retry successful: net=%llu, tsc=%llu - hardware timestamping available", 
+									net_time, tsc_time);
+								return true;
+							}
+						}
 					}
+					
+					// Retry failed - Intel OID read failed, defaulting to RDTSC method
+					GPTP_LOG_WARNING("Intel OID read failed after retry - timestamps still zero or invalid");
+					GPTP_LOG_STATUS("Intel OID read failed, defaulting to RDTSC method for timestamping");
+					
+					// Do NOT return true even if registry shows HW timestamping enabled
+					// since the actual OID reads are failing - fall back to cross-timestamping
+					if (registry_hw_ts_enabled) {
+						GPTP_LOG_INFO("Registry indicates HW timestamping enabled, but OID reads fail - using software fallback");
+					}
+					
+					return false; // Force fallback to cross-timestamping/RDTSC method
 				}
 			} else {
 				GPTP_LOG_WARNING("Intel OID returned invalid data (all 0xFF) for %s (registry HW TS: %s)", 
