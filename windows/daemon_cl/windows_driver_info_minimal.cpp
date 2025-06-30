@@ -6,6 +6,7 @@
 
 #include "windows_driver_info.hpp"
 #include <iphlpapi.h>
+#include <iostream>
 
 #pragma comment(lib, "iphlpapi.lib")
 
@@ -122,8 +123,7 @@ bool WindowsDriverInfoCollector::isIntelDevice(const std::string& device_descrip
 void WindowsDriverInfoCollector::calculateQualityMetrics(DriverInfo& info) {
     // Basic quality calculation
     if (info.vendor == VendorType::INTEL) {
-        uint32_t new_score = info.timestamp_quality_score + 20;
-        info.timestamp_quality_score = (new_score > 100) ? 100 : new_score;
+        info.timestamp_quality_score = std::min(info.timestamp_quality_score + 20, 100u);
     }
 }
 

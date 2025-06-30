@@ -45,7 +45,7 @@ elseif(WIN32)
   if(DEFINED ENV{NPCAP_DIR})
     # Modern Npcap SDK (preferred for Windows 10/11)
     set(PCAP_ROOT_DIR $ENV{NPCAP_DIR})
-    set(PCAP_LIBRARY_NAME "Packet")  # Npcap uses Packet.lib
+    set(PCAP_LIBRARY_NAME "wpcap")  # Both Npcap and WinPcap use wpcap.lib for pcap API
     message(STATUS "✅ Using Npcap SDK from: ${PCAP_ROOT_DIR}")
     add_definitions(-DUSING_NPCAP)
   elseif(DEFINED ENV{WPCAP_DIR})

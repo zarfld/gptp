@@ -27,21 +27,21 @@
 /**
  * @brief Hardware timestamping capabilities flags
  */
-enum class TimestampCapabilities : uint32_t {
-    NONE = 0x00000000,
-    TX_SOFTWARE = 0x00000001,
-    TX_HARDWARE = 0x00000002,
-    RX_SOFTWARE = 0x00000004,
-    RX_HARDWARE = 0x00000008,
-    CROSS_TIMESTAMP = 0x00000010,
-    ONE_STEP_TX = 0x00000020,
-    ONE_STEP_RX = 0x00000040,
-    ONE_STEP_SYNC = 0x00000080,
-    ONE_STEP_P2P = 0x00000100,
-    PPS_OUTPUT = 0x00000200,
-    PPS_INPUT = 0x00000400,
-    FREQ_ADJUSTMENT = 0x00000800,
-    PHASE_ADJUSTMENT = 0x00001000
+enum TimestampCapabilities : uint32_t {
+    TIMESTAMP_CAP_NONE = 0x00000000,
+    TIMESTAMP_CAP_TX_SOFTWARE = 0x00000001,
+    TIMESTAMP_CAP_TX_HARDWARE = 0x00000002,
+    TIMESTAMP_CAP_RX_SOFTWARE = 0x00000004,
+    TIMESTAMP_CAP_RX_HARDWARE = 0x00000008,
+    TIMESTAMP_CAP_CROSS_TIMESTAMP = 0x00000010,
+    TIMESTAMP_CAP_ONE_STEP_TX = 0x00000020,
+    TIMESTAMP_CAP_ONE_STEP_RX = 0x00000040,
+    TIMESTAMP_CAP_ONE_STEP_SYNC = 0x00000080,
+    TIMESTAMP_CAP_ONE_STEP_P2P = 0x00000100,
+    TIMESTAMP_CAP_PPS_OUTPUT = 0x00000200,
+    TIMESTAMP_CAP_PPS_INPUT = 0x00000400,
+    TIMESTAMP_CAP_FREQ_ADJUSTMENT = 0x00000800,
+    TIMESTAMP_CAP_PHASE_ADJUSTMENT = 0x00001000
 };
 
 /**
@@ -251,10 +251,5 @@ struct AnalysisBasedDeviceInfo {
     std::string source_version;    ///< Driver version this analysis is based on
     std::string analysis_date;     ///< When this analysis was performed
 };
-
-// Define capability constants for bitwise operations
-constexpr uint32_t TIMESTAMP_CAP_TX_HARDWARE = 0x00000002;
-constexpr uint32_t TIMESTAMP_CAP_RX_HARDWARE = 0x00000008;
-constexpr uint32_t TIMESTAMP_CAP_CROSS_TIMESTAMP = 0x00000010;
 
 #endif // WINDOWS_DRIVER_INFO_HPP
