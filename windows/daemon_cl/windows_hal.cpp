@@ -442,8 +442,16 @@ skip_timestamp_config:
 		} else if (is_intel_device) {
 			GPTP_LOG_WARNING("Intel device detected but custom OIDs not available - using software timestamping");
 			GPTP_LOG_INFO("This may indicate: 1) Driver doesn't support PTP OIDs, 2) Administrator privileges required, 3) Device doesn't support hardware timestamping");
+			
+			// Check registry parameters for Intel PTP settings
+			checkIntelPTPRegistrySettings(pAdapterInfo->AdapterName, adapter_desc);
 		} else {
 			GPTP_LOG_INFO("Non-Intel device - confirmed software timestamping");
+		}
+		
+		// For Intel devices, always check PTP registry settings regardless of OID availability
+		if (is_intel_device) {
+			checkIntelPTPRegistrySettings(pAdapterInfo->AdapterName, adapter_desc);
 		}
 	}
 	
@@ -1164,4 +1172,102 @@ void stopLinkMonitoring(LinkMonitorContext* pContext) {
     }
 
     delete pContext;
+}
+
+void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_guid, const char* adapter_description) const
+{
+    if (!adapter_guid || !adapter_description) {
+        return;
+    }
+
+    GPTP_LOG_INFO("Checking Intel PTP registry settings for adapter: %s", adapter_description);
+
+    // Use PowerShell to check current PTP settings (this is the most reliable method on Windows 10+)
+    char powershell_cmd[1024];
+    snprintf(powershell_cmd, sizeof(powershell_cmd),
+        "powershell.exe -Command \"try { "
+        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceGuid -eq '%s' -or $_.Name -match 'Ethernet'}; "
+        "if ($adapter) { "
+        "    $ptpHw = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object DisplayName -match 'PTP Hardware'; "
+        "    $softTs = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object DisplayName -match 'Software Timestamp'; "
+        "    if ($ptpHw) { Write-Host 'PTP_HW:' $ptpHw.DisplayValue; } else { Write-Host 'PTP_HW: Not Found'; } "
+        "    if ($softTs) { Write-Host 'SW_TS:' $softTs.DisplayValue; } else { Write-Host 'SW_TS: Not Found'; } "
+        "} else { Write-Host 'ADAPTER: Not Found'; } "
+        "} catch { Write-Host 'ERROR:' $_.Exception.Message; }\"",
+        adapter_guid);
+
+    // Execute PowerShell command and capture output
+    FILE* pipe = _popen(powershell_cmd, "r");
+    if (!pipe) {
+        GPTP_LOG_WARNING("Failed to execute PowerShell command to check PTP settings");
+        return;
+    }
+
+    char buffer[256];
+    bool ptp_hw_found = false;
+    bool ptp_hw_enabled = false;
+    bool sw_ts_found = false;
+    std::string ptp_hw_status, sw_ts_status;
+
+    while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+        std::string line(buffer);
+        
+        if (line.find("PTP_HW:") != std::string::npos) {
+            ptp_hw_found = true;
+            if (line.find("Enabled") != std::string::npos) {
+                ptp_hw_enabled = true;
+                ptp_hw_status = "Enabled";
+            } else if (line.find("Disabled") != std::string::npos) {
+                ptp_hw_status = "Disabled";
+            } else {
+                ptp_hw_status = "Unknown";
+            }
+        } else if (line.find("SW_TS:") != std::string::npos) {
+            sw_ts_found = true;
+            size_t pos = line.find("SW_TS:") + 7;
+            sw_ts_status = line.substr(pos);
+            // Remove whitespace and newlines
+            sw_ts_status.erase(sw_ts_status.find_last_not_of(" \t\r\n") + 1);
+        }
+    }
+
+    _pclose(pipe);
+
+    // Report findings and provide guidance
+    if (ptp_hw_found) {
+        if (ptp_hw_enabled) {
+            GPTP_LOG_STATUS("✅ Intel PTP Hardware Timestamp: %s", ptp_hw_status.c_str());
+        } else {
+            GPTP_LOG_WARNING("❌ Intel PTP Hardware Timestamp: %s", ptp_hw_status.c_str());
+            GPTP_LOG_STATUS("💡 To enable hardware timestamping for better precision:");
+            GPTP_LOG_STATUS("   1. Open Device Manager → Network adapters");
+            GPTP_LOG_STATUS("   2. Right-click '%s' → Properties", adapter_description);
+            GPTP_LOG_STATUS("   3. Go to Advanced tab");
+            GPTP_LOG_STATUS("   4. Set 'PTP Hardware Timestamp' to 'Enabled'");
+            GPTP_LOG_STATUS("   5. Optionally set 'Software Timestamp' to appropriate value");
+            GPTP_LOG_STATUS("   6. Click OK and restart gPTP");
+            GPTP_LOG_STATUS("   Or use PowerShell: Set-NetAdapterAdvancedProperty -Name 'Ethernet' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1");
+        }
+    } else {
+        GPTP_LOG_INFO("PTP Hardware Timestamp setting not found - may not be supported by this adapter/driver version");
+    }
+
+    if (sw_ts_found) {
+        GPTP_LOG_INFO("Software Timestamp setting: %s", sw_ts_status.c_str());
+    }
+
+    // Additional guidance for Intel I219 specifically
+    if (strstr(adapter_description, "I219") != NULL) {
+        if (!ptp_hw_enabled && ptp_hw_found) {
+            GPTP_LOG_STATUS("📋 Intel I219 PTP Configuration Guide:");
+            GPTP_LOG_STATUS("   • I219 supports hardware PTP timestamping");
+            GPTP_LOG_STATUS("   • Current setting prevents optimal precision");
+            GPTP_LOG_STATUS("   • Enabling hardware timestamps can improve precision from ~1000ns to ~100ns");
+            GPTP_LOG_STATUS("   • Some I219 variants may require specific driver versions");
+        } else if (ptp_hw_enabled) {
+            GPTP_LOG_STATUS("✅ Intel I219 PTP hardware timestamping is properly configured");
+        }
+    }
+
+    GPTP_LOG_INFO("PTP registry settings check completed for %s", adapter_description);
 }

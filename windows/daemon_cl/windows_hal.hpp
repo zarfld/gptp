@@ -953,6 +953,13 @@ public:
 	}
 
 	/**
+	 * @brief Check and report Intel PTP registry settings with user guidance
+	 * @param adapter_guid Adapter GUID for registry lookup
+	 * @param adapter_description Adapter description for logging
+	 */
+	void checkIntelPTPRegistrySettings(const char* adapter_guid, const char* adapter_description) const;
+
+	/**
 	 * @brief Test Intel custom OID availability and functionality
 	 * @param adapter_description Description of the network adapter for logging
 	 * @return true if Intel OIDs are available and functional, false otherwise
