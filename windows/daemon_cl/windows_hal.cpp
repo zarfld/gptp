@@ -1198,11 +1198,42 @@ void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_
 
     GPTP_LOG_INFO("Checking Intel PTP registry settings for adapter: %s", adapter_description);
 
+    // First, get the actual adapter name dynamically to use in PowerShell commands
+    std::string actual_adapter_name = "Ethernet"; // Default fallback
+    char get_name_cmd[512];
+    snprintf(get_name_cmd, sizeof(get_name_cmd),
+        "powershell.exe -Command \"try { "
+        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceGuid -eq '%s'}; "
+        "if ($adapter) { Write-Host 'ADAPTER_NAME:' $adapter.Name; } else { Write-Host 'ADAPTER_NAME: Not Found'; } "
+        "} catch { Write-Host 'ADAPTER_NAME: Error'; }\"",
+        adapter_guid);
+
+    FILE* name_pipe = _popen(get_name_cmd, "r");
+    if (name_pipe) {
+        char name_buffer[256];
+        while (fgets(name_buffer, sizeof(name_buffer), name_pipe) != NULL) {
+            std::string line(name_buffer);
+            if (line.find("ADAPTER_NAME:") != std::string::npos) {
+                size_t pos = line.find("ADAPTER_NAME:") + 14;
+                actual_adapter_name = line.substr(pos);
+                // Remove whitespace and newlines
+                actual_adapter_name.erase(actual_adapter_name.find_last_not_of(" \t\r\n") + 1);
+                if (actual_adapter_name != "Not Found" && actual_adapter_name != "Error") {
+                    GPTP_LOG_VERBOSE("Found actual adapter name: '%s'", actual_adapter_name.c_str());
+                } else {
+                    actual_adapter_name = "Ethernet"; // Keep default
+                }
+                break;
+            }
+        }
+        _pclose(name_pipe);
+    }
+
     // Use PowerShell to check current PTP settings (this is the most reliable method on Windows 10+)
     char powershell_cmd[1024];
     snprintf(powershell_cmd, sizeof(powershell_cmd),
         "powershell.exe -Command \"try { "
-        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceGuid -eq '%s' -or $_.Name -match 'Ethernet'}; "
+        "$adapter = Get-NetAdapter | Where-Object {$_.InterfaceGuid -eq '%s'}; "
         "if ($adapter) { "
         "    $ptpHw = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object DisplayName -match 'PTP Hardware'; "
         "    $softTs = Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object DisplayName -match 'Software Timestamp'; "
@@ -1262,7 +1293,7 @@ void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_
             GPTP_LOG_STATUS("   4. Set 'PTP Hardware Timestamp' to 'Enabled'");
             GPTP_LOG_STATUS("   5. Optionally set 'Software Timestamp' to appropriate value");
             GPTP_LOG_STATUS("   6. Click OK and restart gPTP");
-            GPTP_LOG_STATUS("   Or use PowerShell: Set-NetAdapterAdvancedProperty -Name 'Ethernet' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1");
+            GPTP_LOG_STATUS("   Or use PowerShell: Set-NetAdapterAdvancedProperty -Name '%s' -RegistryKeyword '*PtpHardwareTimestamp' -RegistryValue 1", actual_adapter_name.c_str());
         }
     } else {
         GPTP_LOG_INFO("PTP Hardware Timestamp setting not found - may not be supported by this adapter/driver version");
