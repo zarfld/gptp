@@ -129,7 +129,7 @@ jobs:
         Write-Host "PTP Enabled Adapters: $($configuredAdapters.Count)"
     
     - name: Upload Configuration Report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: intel-ptp-config-report
         path: intel_ptp_config_report.json
