@@ -915,6 +915,12 @@ public:
 	 * @param  clock_value [out] Not used
 	 * @param  last Not used
 	 * @return GPTP_EC_SUCCESS if no error, GPTP_EC_FAILURE if error and GPTP_EC_EAGAIN to try again.
+	 * 
+	 * @note IMPORTANT: This function is only called for EVENT messages (Sync, Follow_Up, some PDelay).
+	 *       GENERAL messages (Announce, Signaling) do NOT require hardware timestamps and use
+	 *       sendGeneralPort() which bypasses this timestamping entirely. This is why BMCA
+	 *       (Best Master Clock Algorithm) works even when hardware timestamping fails - 
+	 *       Announce messages don't need precise timestamps, only message content for comparison.
 	 */
 	virtual int HWTimestamper_rxtimestamp(PortIdentity *identity, PTPMessageId messageId, Timestamp &timestamp, unsigned &clock_value, bool last)
 	{
@@ -924,12 +930,19 @@ public:
 		DWORD result;
 		uint16_t packet_sequence_id;
 
+		// Debug: Track timestamp retrieval attempts
+		static uint32_t timestamp_attempts = 0;
+		static uint32_t timestamp_successes = 0;
+		static uint32_t timestamp_failures = 0;
+		timestamp_attempts++;
+
 		while(( result = readOID( OID_INTEL_GET_RXSTAMP, buf_tmp, sizeof(buf_tmp), &returned )) == ERROR_SUCCESS ) {
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
 		if( result != ERROR_GEN_FAILURE ) {
-			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d", 
-				messageId.getMessageType(), result);
+			timestamp_failures++;
+			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d (Attempt %u, Failures: %u)", 
+				messageId.getMessageType(), result, timestamp_attempts, timestamp_failures);
 			if (result == ERROR_NOT_SUPPORTED) {
 				GPTP_LOG_INFO("Driver does not support Intel RX timestamping OID - falling back to software timestamps");
 			} else if (result == ERROR_ACCESS_DENIED) {
@@ -938,15 +951,28 @@ public:
 			return GPTP_EC_FAILURE;
 		}
 		if( returned != sizeof(buf_tmp) ) {
-			GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d", 
-				returned, sizeof(buf_tmp));
+			GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d (Attempt %u)", 
+				returned, sizeof(buf_tmp), timestamp_attempts);
 			return GPTP_EC_EAGAIN;
 		}
 		packet_sequence_id = *((uint32_t *) buf+3) >> 16;
-		if (PLAT_ntohs(packet_sequence_id) != messageId.getSequenceId()) return GPTP_EC_EAGAIN;
+		if (PLAT_ntohs(packet_sequence_id) != messageId.getSequenceId()) {
+			GPTP_LOG_VERBOSE("RX timestamp sequence ID mismatch: got %u, expected %u (Attempt %u)", 
+				PLAT_ntohs(packet_sequence_id), messageId.getSequenceId(), timestamp_attempts);
+			return GPTP_EC_EAGAIN;
+		}
+		
+		timestamp_successes++;
 		rx_r = (((uint64_t)buf[1]) << 32) | buf[0];
 		rx_s = scaleNativeClockToNanoseconds( rx_r );
 		timestamp = nanoseconds64ToTimestamp( rx_s );
+		timestamp._version = version;
+		
+		// Debug: Log successful timestamp retrieval periodically
+		if (timestamp_successes % 100 == 1) {
+			GPTP_LOG_STATUS("RX timestamp SUCCESS #%u: messageType=%d, seq=%u, ts=%llu ns (Successes: %u/%u attempts)",
+				timestamp_successes, messageId.getMessageType(), messageId.getSequenceId(), rx_s, timestamp_successes, timestamp_attempts);
+		}
 		timestamp._version = version;
 
 		return GPTP_EC_SUCCESS;

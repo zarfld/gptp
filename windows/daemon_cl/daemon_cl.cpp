@@ -49,6 +49,15 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <wireless_port.hpp>
 #include <intel_wireless.hpp>
 
+#include <avbts_osthread.hpp>
+#include <avbts_oscondition.hpp>
+#include <avbts_ostimer.hpp>
+
+#include "windows_hal.hpp"
+#include "IPCListener.hpp"
+#include "tsc.hpp"
+#include "packet.hpp"
+
 /* Generic PCH delays */
 #define PHY_DELAY_GB_TX_PCH 7750  //1G delay
 #define PHY_DELAY_GB_RX_PCH 7750  //1G delay
@@ -67,11 +76,18 @@ uint32_t findLinkSpeed(LinkLayerAddress *local_addr);
 
 static bool exit_flag;
 
+// Enhanced debugging support
+extern void enablePacketReceptionDebug(bool enable);
+static bool debug_packet_reception = false;
+
 void print_usage( char *arg0 ) {
 	fprintf( stderr,
 		"%s "
-		"[-R <priority 1>] <network interface>\n"
-		"where <network interface> is a MAC address entered as xx-xx-xx-xx-xx-xx\n",
+		"[-R <priority 1>] [-debug-packets] <network interface>\n"
+		"where <network interface> is a MAC address entered as xx-xx-xx-xx-xx-xx\n"
+		"Options:\n"
+		"  -R <priority>     Set priority1 value\n"
+		"  -debug-packets    Enable enhanced packet reception debugging\n",
 		arg0 );
 }
 
@@ -196,7 +212,12 @@ int _tmain(int argc, _TCHAR* argv[])
 				print_usage(argv[0]);
 				return -1;
 			}
-			if (toupper(argv[i][1]) == 'W')
+			if (strcmp(argv[i], "-debug-packets") == 0) {
+				debug_packet_reception = true;
+				enablePacketReceptionDebug(true);
+				printf("Enhanced packet reception debugging enabled\n");
+			}
+			else if (toupper(argv[i][1]) == 'W')
 			{
 				wireless = true;
 			}

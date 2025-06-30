@@ -129,4 +129,18 @@ packet_error_t recvFrame( pfhandle_t pfhandle, packet_addr_t *addr,             
  */
 packet_error_t packetBind( struct packet_handle *handle, uint16_t ethertype );
 
+/**
+ * @brief  Enables enhanced debug logging for packet reception
+ * @param  enable [in] true to enable debug mode, false to disable
+ * @return void
+ */
+void enablePacketReceptionDebug(bool enable);
+
+/**
+ * @brief  Runs comprehensive packet reception test for debugging
+ * @param  interface_name [in] Interface name to test
+ * @return true if packets received successfully
+ */
+bool runPacketReceptionTest(const char* interface_name);
+
 #endif /* PACKET_H */

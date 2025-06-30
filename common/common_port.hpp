@@ -911,8 +911,9 @@ public:
 	{
 		if ( ascap != asCapable ) {
 			GPTP_LOG_STATUS
-				("AsCapable: %s", ascap == true
-				 ? "Enabled" : "Disabled");
+				("*** AsCapable STATE CHANGE: %s *** (Announce messages will %s be sent)", 
+				 ascap == true ? "ENABLED" : "DISABLED",
+				 ascap == true ? "NOW" : "NO LONGER");
 		}
 		if( !ascap )
 		{

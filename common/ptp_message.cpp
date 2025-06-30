@@ -428,6 +428,11 @@ PTPMessageCommon *buildPTPMessage
 		GPTP_LOG_VERBOSE("*** Received Announce message");
 
 		{
+			static uint32_t announce_recv_count = 0;
+			announce_recv_count++;
+			
+			GPTP_LOG_STATUS("*** RECEIVED ANNOUNCE MESSAGE #%u *** (size=%d bytes)", announce_recv_count, size);
+			
 			PTPMessageAnnounce *annc = new PTPMessageAnnounce();
 			annc->messageType = messageType;
 			int tlv_length = size - PTP_COMMON_HDR_LENGTH + PTP_ANNOUNCE_LENGTH;

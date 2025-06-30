@@ -1,0 +1,43 @@
+cmake_minimum_required(VERSION 3.10)
+project(test_packet_reception)
+
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Find required packages
+find_path(PCAP_INCLUDE_DIR pcap.h
+    HINTS "C:/Program Files/Npcap/SDK/Include"
+    PATH_SUFFIXES pcap)
+
+find_library(PCAP_LIBRARY
+    NAMES wpcap
+    HINTS "C:/Program Files/Npcap/SDK/Lib/x64")
+
+find_library(PACKET_LIBRARY
+    NAMES Packet
+    HINTS "C:/Program Files/Npcap/SDK/Lib/x64")
+
+# Include directories
+include_directories(${PCAP_INCLUDE_DIR})
+include_directories(common)
+include_directories(windows/daemon_cl)
+
+# Create the test executable
+add_executable(test_packet_reception
+    test_packet_reception.cpp
+    debug_packet_reception.cpp
+)
+
+# Link libraries
+target_link_libraries(test_packet_reception
+    ${PCAP_LIBRARY}
+    ${PACKET_LIBRARY}
+    ws2_32
+    iphlpapi
+)
+
+# Set output directory
+set_target_properties(test_packet_reception PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Debug"
+)

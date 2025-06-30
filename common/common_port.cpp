@@ -610,6 +610,12 @@ bool CommonPort::processEvent( Event e )
 		// Send an announce message
 		if ( asCapable)
 		{
+			static uint32_t announce_count = 0;
+			announce_count++;
+			
+			GPTP_LOG_STATUS("*** SENDING ANNOUNCE MESSAGE #%u *** (asCapable=true, interval=%d)", 
+				announce_count, getAnnounceInterval());
+			
 			PTPMessageAnnounce *annc =
 				new PTPMessageAnnounce(this);
 			PortIdentity dest_id;
@@ -618,8 +624,24 @@ bool CommonPort::processEvent( Event e )
 			gmId.setClockIdentity(clock_id);
 			getPortIdentity( dest_id );
 			annc->setPortIdentity( &dest_id );
-			annc->sendPort( this, NULL );
+			
+			// Enhanced debug logging for announce message details
+			GPTP_LOG_VERBOSE("Announce message details: clockId=%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X, interval=%d", 
+				clock_id.getIdentity()[0], clock_id.getIdentity()[1], clock_id.getIdentity()[2], clock_id.getIdentity()[3],
+				clock_id.getIdentity()[4], clock_id.getIdentity()[5], clock_id.getIdentity()[6], clock_id.getIdentity()[7],
+				getAnnounceInterval());
+			
+			bool send_result = annc->sendPort( this, NULL );
+			if (send_result) {
+				GPTP_LOG_STATUS("Announce message #%u sent successfully", announce_count);
+			} else {
+				GPTP_LOG_WARNING("Announce message #%u FAILED to send", announce_count);
+			}
 			delete annc;
+		} else {
+			static uint32_t announce_blocked_count = 0;
+			announce_blocked_count++;
+			GPTP_LOG_WARNING("*** ANNOUNCE MESSAGE BLOCKED #%u *** (asCapable=false - not ready to send)", announce_blocked_count);
 		}
 
 		startAnnounceIntervalTimer

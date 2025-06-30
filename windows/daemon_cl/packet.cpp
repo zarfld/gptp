@@ -38,7 +38,33 @@
 #include <pcap.h>
 #include "iphlpapi.h"
 
+// Enhanced debugging support
+#ifdef DEBUG_PACKET_RECEPTION
+#include "debug_packet_reception.hpp"
+#endif
+
 #define MAX_FRAME_SIZE 96
+
+// Enhanced timeout configuration for direct NIC-to-NIC debugging
+#define OPTIMIZED_TIMEOUT_MS 1      // 1ms for near real-time response
+#define STANDARD_TIMEOUT_MS 100     // 100ms for normal operation
+#define DEBUG_TIMEOUT_MS 10         // 10ms for debugging
+
+// Global debug flag and packet tracking
+static bool g_debug_mode = false;
+static uint32_t total_packet_count = 0;
+static uint32_t ptp_packet_count = 0;
+static uint32_t timeout_count = 0;
+static uint32_t last_debug_report = 0;
+
+void enablePacketReceptionDebug(bool enable) {
+    g_debug_mode = enable;
+    if (enable) {
+        printf("DEBUG: Enhanced packet reception debugging enabled\n");
+        printf("DEBUG: Packet tracking initialized - total=%u, ptp=%u, timeouts=%u\n", 
+               total_packet_count, ptp_packet_count, timeout_count);
+    }
+}
 
 // ✅ IMPLEMENTING: WinPcap to Npcap Migration - Runtime Backend Detection
 // Support both modern Npcap and legacy WinPcap with proper identification
@@ -127,8 +153,20 @@ packet_error_t openInterfaceByAddr( struct packet_handle *handle, packet_addr_t 
                PCAP_BACKEND_MODERN ? "yes" : "no");
         printf( "Opening: %s\n", name );
         
-        handle->iface = pcap_open(  name, MAX_FRAME_SIZE, PCAP_OPENFLAG_MAX_RESPONSIVENESS | PCAP_OPENFLAG_PROMISCUOUS | PCAP_OPENFLAG_NOCAPTURE_LOCAL,
-                                    timeout, NULL, handle->errbuf );
+        // Enhanced timeout configuration for better packet arrival detection
+        int optimized_timeout = timeout;
+        if (g_debug_mode) {
+            optimized_timeout = DEBUG_TIMEOUT_MS;
+            printf("DEBUG: Using debug timeout %dms for enhanced packet detection\n", optimized_timeout);
+        } else if (timeout > STANDARD_TIMEOUT_MS) {
+            // For direct NIC-to-NIC scenarios, use optimized timeout
+            optimized_timeout = OPTIMIZED_TIMEOUT_MS;
+            printf("INFO: Using optimized timeout %dms for direct connection\n", optimized_timeout);
+        }
+        
+        handle->iface = pcap_open(  name, MAX_FRAME_SIZE, 
+                                   PCAP_OPENFLAG_MAX_RESPONSIVENESS | PCAP_OPENFLAG_PROMISCUOUS | PCAP_OPENFLAG_NOCAPTURE_LOCAL,
+                                   optimized_timeout, NULL, handle->errbuf );
         if( handle->iface == NULL ) {
             ret = PACKET_IFLOOKUP_ERROR;
             goto fnexit;
@@ -202,6 +240,9 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
 
     int pcap_result;
     DWORD wait_result;
+    
+    static int timeout_count = 0;
+    static int packet_count = 0;
 
     wait_result = WaitForSingleObject( handle->capture_lock, 1000 );
     if( wait_result != WAIT_OBJECT_0 ) {
@@ -212,9 +253,43 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     pcap_result = pcap_next_ex( handle->iface, &hdr_r, (const u_char **) &data );
     if( pcap_result == 0 ) {
         ret = PACKET_RECVTIMEOUT_ERROR;
+        if (g_debug_mode) {
+            timeout_count++;
+            // Report periodically to show the system is actively polling and any packet stats
+            if (timeout_count % 5000 == 0) {  // Every 5000 timeouts (~5 seconds at 1ms)
+                printf("DEBUG: PACKET STATS - Total: %u, PTP: %u, Timeouts: %u (Polling active)\n", 
+                       total_packet_count, ptp_packet_count, timeout_count);
+            }
+        }
     } else if( pcap_result < 0 ) {
         ret = PACKET_RECVFAILED_ERROR;
+        if (g_debug_mode) {
+            printf("DEBUG: pcap_next_ex failed with result %d\n", pcap_result);
+        }
     } else {
+        packet_count++;
+        total_packet_count++;
+        if (g_debug_mode) {
+            printf("DEBUG: Packet #%d received, size=%d bytes\n", total_packet_count, hdr_r->len);
+            
+            // Check if it's a PTP packet
+            if (hdr_r->len >= 14 && data) {
+                uint16_t ethertype = (data[12] << 8) | data[13];
+                if (ethertype == 0x88F7) {
+                    ptp_packet_count++;
+                    printf("DEBUG: *** PTP PACKET #%d DETECTED *** Type=0x88F7, Size=%d\n", ptp_packet_count, hdr_r->len);
+                    if (hdr_r->len >= 15) {
+                        uint8_t messageType = data[14] & 0x0F;
+                        uint8_t transportSpecific = (data[14] & 0xF0) >> 4;
+                        printf("DEBUG: PTP Message Type=%d, Transport=%d, Total PTP: %u of %u packets\n", 
+                               messageType, transportSpecific, ptp_packet_count, total_packet_count);
+                    }
+                } else if (total_packet_count % 50 == 1) {
+                    printf("DEBUG: Non-PTP packet #%d, EtherType=0x%04X\n", total_packet_count, ethertype);
+                }
+            }
+        }
+        
         length = hdr_r->len-PACKET_HDR_LENGTH >= length ? length : hdr_r->len-PACKET_HDR_LENGTH;
         memcpy( payload, data+PACKET_HDR_LENGTH, length );
         memcpy( addr->addr, data+ETHER_ADDR_OCTETS, ETHER_ADDR_OCTETS );
