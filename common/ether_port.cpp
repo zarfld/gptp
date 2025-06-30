@@ -60,7 +60,9 @@ OSThreadExitCode watchNetLinkWrapper(void *arg)
 {
 	EtherPort *port;
 
+	GPTP_LOG_STATUS("*** watchNetLinkWrapper() called ***");
 	port = (EtherPort *) arg;
+	GPTP_LOG_STATUS("*** Calling port->watchNetLink() ***");
 	if (port->watchNetLink() == NULL)
 		return osthread_ok;
 	else
@@ -345,13 +347,16 @@ bool EtherPort::_processEvent( Event e )
 
 		port_ready_condition->wait_prelock();
 
+		GPTP_LOG_STATUS("*** ATTEMPTING TO START LINK WATCH THREAD ***");
 		if( !linkWatch(watchNetLinkWrapper, (void *)this) )
 		{
-			GPTP_LOG_ERROR("Error creating port link thread");
+			GPTP_LOG_ERROR("*** FAILED TO CREATE LINK WATCH THREAD ***");
 			ret = false;
 			break;
 		}
+		GPTP_LOG_STATUS("*** LINK WATCH THREAD STARTED SUCCESSFULLY ***");
 
+		GPTP_LOG_STATUS("*** ATTEMPTING TO START LISTENING THREAD ***");
 		if( !linkOpen(openPortWrapper, (void *)this) )
 		{
 			GPTP_LOG_ERROR("Error creating port thread");

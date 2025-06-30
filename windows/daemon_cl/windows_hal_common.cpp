@@ -32,13 +32,18 @@
 ******************************************************************************/
 
 #include "windows_hal_common.hpp"
+#include "windows_hal.hpp"
 #include "windows_hal_iphlpapi.hpp"
 #include "windows_hal_ndis.hpp"
 
 // Thread callback implementation
 DWORD WINAPI OSThreadCallback( LPVOID input ) {
-    // Implementation would need to be moved from the original windows_hal.cpp
-    // For now, this is a placeholder structure
+    OSThreadArg *arg = (OSThreadArg*) input;
+    
+    if (arg) {
+        arg->ret = arg->func( arg->arg );
+    }
+    
     return 0;
 }
 

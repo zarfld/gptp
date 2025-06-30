@@ -40,7 +40,7 @@ public:
     /**
      * @brief Check link state and interface status
      */
-    static bool checkLinkStatus(const uint8_t* mac_addr);
+    static    bool checkAdapterLinkStatus(const uint8_t* mac_addr);
     
 private:
     static LARGE_INTEGER freq_;

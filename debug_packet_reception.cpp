@@ -145,7 +145,7 @@ void PacketReceptionDebugger::logPacketEvent(const char* event, const char* deta
     std::cout << std::endl;
 }
 
-bool PacketReceptionDebugger::checkLinkStatus(const uint8_t* mac_addr) {
+bool PacketReceptionDebugger::checkAdapterLinkStatus(const uint8_t* mac_addr) {
     std::cout << "\n=== Link Status Check ===" << std::endl;
     
     IP_ADAPTER_ADDRESSES adapters[32];
