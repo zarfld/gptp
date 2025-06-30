@@ -34,6 +34,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #ifndef INTEL_WIRELESS_HPP
 #define INTEL_WIRELESS_HPP
 
+#include <WinSock2.h>  // Must be included before windows.h to avoid conflicts
 #include <windows_hal.hpp>
 #include <Windows.h>
 #include <stdint.h>

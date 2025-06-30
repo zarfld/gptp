@@ -111,7 +111,11 @@ public:
 	 * @brief  Gets a string with the error from the hardware timestamp block
 	 * @param  msg [out] String error
 	 * @return void
-	 * @todo There is no current implementation for this method.
+	 * @note Implementation should use comprehensive driver information framework.
+	 * See windows_driver_info.hpp for complete driver-specific information
+	 * organization that goes beyond INF files to include runtime capabilities,
+	 * performance characteristics, and quality metrics needed for optimal
+	 * timestamping performance.
 	 */
 	virtual void HWTimestamper_get_extderror(char *msg) const
 	{

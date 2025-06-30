@@ -36,27 +36,34 @@
 
 /**@file*/
 
-#include <IPCListener.hpp>
+#include "packet.hpp"
+#include "ether_tstamper.hpp"
+#include "common_tstamper.hpp"
+#include "IPCListener.hpp"
 #include "avbts_osnet.hpp"
 #include "avbts_oslock.hpp"
 #include "avbts_oscondition.hpp"
 #include "avbts_ostimerq.hpp"
 #include "avbts_ostimer.hpp"
 #include "avbts_osthread.hpp"
-#include "packet.hpp"
-#include "ieee1588.hpp"
-#include "ether_tstamper.hpp"
+#include "avbts_osipc.hpp"
 #include "wireless_tstamper.hpp"
+#include "windows_crosststamp.hpp"
+#include "ether_tstamper.hpp"
+#include "packet.hpp"
+
 #include "iphlpapi.h"
 #include "windows_ipc.hpp"
 #include "tsc.hpp"
-
-#include "avbts_osipc.hpp"
 
 #include <ntddndis.h>
 
 #include <map>
 #include <list>
+
+// Include modular Windows HAL components for enhanced functionality  
+#include "windows_hal_iphlpapi.hpp"
+#include "windows_hal_ndis.hpp"
 
 /**
  * @brief WindowsPCAPNetworkInterface implements an interface to the network adapter
@@ -699,7 +706,7 @@ public:
 };
 
 #define I217_DESC "I217-LM"
-#define I219_DESC "I219-V"
+#define I219_DESC "I219" // Intel I219-V and I219-LM
 #define I210_DESC "I210"
 
 #define NETWORK_CARD_ID_PREFIX "\\\\.\\"			/*!< Network adapter prefix */
@@ -741,6 +748,7 @@ private:
 	HANDLE miniport;
 	LARGE_INTEGER tsc_hz;
 	LARGE_INTEGER netclock_hz;
+	bool cross_timestamping_initialized; //!< Flag to track cross-timestamping initialization
 	DWORD readOID( NDIS_OID oid, void *output_buffer, DWORD size, DWORD *size_returned ) const {
 		NDIS_OID oid_l = oid;
 		DWORD rc = DeviceIoControl(
@@ -789,6 +797,15 @@ private:
 	}
 public:
 	/**
+	 * @brief Default constructor
+	 */
+	WindowsEtherTimestamper() : cross_timestamping_initialized(false) {
+		miniport = INVALID_HANDLE_VALUE;
+		tsc_hz.QuadPart = 0;
+		netclock_hz.QuadPart = 0;
+	}
+	
+	/**
 	 * @brief  Initializes the network adaptor and the hw timestamper interface
 	 * @param  iface_label InterfaceLabel
 	 * @param  net_iface Network interface
@@ -810,6 +827,21 @@ public:
 	 */
 	virtual bool HWTimestamper_gettime( Timestamp *system_time, Timestamp *device_time, uint32_t *local_clock,
 					    uint32_t *nominal_clock_rate ) const {
+		// Use the new Windows cross-timestamping functionality for improved precision
+		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+		
+		if (crossTimestamp.isPreciseTimestampingSupported()) {
+			// Use precise cross-timestamping if available
+			if (crossTimestamp.getCrossTimestamp(system_time, device_time, local_clock, nominal_clock_rate)) {
+				// Set version for both timestamps
+				if (system_time) system_time->_version = version;
+				if (device_time) device_time->_version = version;
+				return true;
+			}
+			// Fall through to legacy method if cross-timestamping fails
+		}
+		
+		// Legacy method using OID_INTEL_GET_SYSTIM
 		DWORD buf[6];
 		DWORD returned;
 		uint64_t now_net, now_tsc;
@@ -997,5 +1029,65 @@ public:
 		int8_t   log_pdelay_interval,
 		uint16_t port_number );
 };
+
+// Forward declarations for event-driven link monitoring
+class CommonPort;
+
+/**
+ * @brief Event-driven link monitoring structures and functions
+ * 
+ * Provides real-time network interface state change notifications
+ * using Windows NotifyAddrChange and NotifyRouteChange APIs
+ */
+
+/**
+ * @brief Link monitoring context for event-driven notifications
+ */
+struct LinkMonitorContext {
+    CommonPort* pPort;              // Associated port for notifications
+    HANDLE hAddrChange;             // Handle for address change notifications
+    HANDLE hRouteChange;            // Handle for route change notifications
+    HANDLE hMonitorThread;          // Background monitoring thread handle
+    DWORD dwThreadId;               // Monitoring thread ID
+    volatile bool bStopMonitoring;  // Flag to stop monitoring
+    char interfaceDesc[256];        // Interface description for matching
+    BYTE macAddress[6];             // MAC address for interface matching
+};
+
+/**
+ * @brief Start event-driven link monitoring for a network interface
+ * @param pPort Pointer to the CommonPort to monitor
+ * @param interfaceDesc Interface description string
+ * @param macAddress MAC address of interface (6 bytes)
+ * @return Pointer to LinkMonitorContext, or NULL on failure
+ */
+LinkMonitorContext* startLinkMonitoring(CommonPort* pPort, const char* interfaceDesc, const BYTE* macAddress);
+
+/**
+ * @brief Stop event-driven link monitoring
+ * @param pContext Pointer to LinkMonitorContext from startLinkMonitoring
+ */
+void stopLinkMonitoring(LinkMonitorContext* pContext);
+
+/**
+ * @brief Background thread function for event-driven link monitoring
+ * @param lpParam Pointer to LinkMonitorContext
+ * @return Thread exit code
+ */
+DWORD WINAPI linkMonitorThreadProc(LPVOID lpParam);
+
+/**
+ * @brief Check current link status for an interface
+ * @param interfaceDesc Interface description string
+ * @param macAddress MAC address of interface (6 bytes)
+ * @return true if link is up, false if down or error
+ */
+bool checkLinkStatus(const char* interfaceDesc, const BYTE* macAddress);
+
+/**
+ * @brief Cleanup link monitoring subsystem
+ * Call this during application shutdown to properly clean up all monitoring threads
+ */
+void cleanupLinkMonitoring();
 
 #endif

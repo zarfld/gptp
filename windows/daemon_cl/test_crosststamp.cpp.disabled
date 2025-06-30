@@ -1,0 +1,105 @@
+/******************************************************************************
+
+  Copyright (c) 2024, Intel Corporation
+  All rights reserved.
+
+  Test program for Windows cross-timestamping functionality
+
+******************************************************************************/
+
+#include "windows_crosststamp.hpp"
+#include "windows_crosststamp_simple.hpp"
+#include <iostream>
+#include <iomanip>
+#include <chrono>
+
+int main()
+{
+    std::cout << "Windows Cross-Timestamping Test Program" << std::endl;
+    std::cout << "=======================================" << std::endl;
+    
+    // Test 1: Simple cross-timestamping
+    std::cout << "\n1. Testing Simple Cross-Timestamping:" << std::endl;
+    try {
+        uint64_t system_time_ns, device_time_ns;
+        uint32_t quality_percent;
+        if (WindowsSimpleCrossTimestamp::getCrossTimestamp(&system_time_ns, &device_time_ns, &quality_percent)) {
+            std::cout << "   SUCCESS: Simple cross-timestamp obtained" << std::endl;
+            std::cout << "   System time:  " << (system_time_ns / 1000000000ULL) << "." 
+                      << std::setfill('0') << std::setw(9) << (system_time_ns % 1000000000ULL) << std::endl;
+            std::cout << "   Device time:  " << (device_time_ns / 1000000000ULL) << "." 
+                      << std::setfill('0') << std::setw(9) << (device_time_ns % 1000000000ULL) << std::endl;
+            std::cout << "   Quality:      " << quality_percent << "%" << std::endl;
+        } else {
+            std::cout << "   FAILED: Could not obtain simple cross-timestamp" << std::endl;
+        }
+    } catch (...) {
+        std::cout << "   ERROR: Exception in simple cross-timestamping" << std::endl;
+    }
+    
+    // Test 2: Advanced cross-timestamping
+    std::cout << "\n2. Testing Advanced Cross-Timestamping:" << std::endl;
+    try {
+        WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+        
+        std::cout << "   Initializing cross-timestamping..." << std::endl;
+        if (crossTimestamp.initialize("Test Interface")) {
+            std::cout << "   SUCCESS: Cross-timestamping initialized" << std::endl;
+            
+            // Check capabilities
+            if (crossTimestamp.isPreciseTimestampingSupported()) {
+                std::cout << "   SUCCESS: Precise timestamping is supported" << std::endl;
+                std::cout << "   Quality:  " << crossTimestamp.getTimestampQuality() << "%" << std::endl;
+                std::cout << "   Error:    " << crossTimestamp.getEstimatedError() << " ns" << std::endl;
+            } else {
+                std::cout << "   WARNING: Precise timestamping not supported" << std::endl;
+            }
+            
+            // Get cross-timestamp
+            Timestamp system_time, device_time;
+            uint32_t local_clock, nominal_clock_rate;
+            if (crossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
+                std::cout << "   SUCCESS: Advanced cross-timestamp obtained" << std::endl;
+                std::cout << "   System time:      " << system_time.seconds_ls << "." 
+                          << std::setfill('0') << std::setw(9) << system_time.nanoseconds << std::endl;
+                std::cout << "   Device time:      " << device_time.seconds_ls << "." 
+                          << std::setfill('0') << std::setw(9) << device_time.nanoseconds << std::endl;
+                std::cout << "   Local clock:      " << local_clock << std::endl;
+                std::cout << "   Nominal rate:     " << nominal_clock_rate << " Hz" << std::endl;
+            } else {
+                std::cout << "   FAILED: Could not obtain advanced cross-timestamp" << std::endl;
+            }
+        } else {
+            std::cout << "   FAILED: Could not initialize cross-timestamping" << std::endl;
+        }
+    } catch (...) {
+        std::cout << "   ERROR: Exception in advanced cross-timestamping" << std::endl;
+    }
+    
+    // Test 3: Performance test
+    std::cout << "\n3. Performance Test (1000 timestamps):" << std::endl;
+    try {
+        const int iterations = 1000;
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        int success_count = 0;
+        for (int i = 0; i < iterations; i++) {
+            uint64_t system_time_ns, device_time_ns;
+            if (WindowsSimpleCrossTimestamp::getCrossTimestamp(&system_time_ns, &device_time_ns)) {
+                success_count++;
+            }
+        }
+        
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        
+        std::cout << "   SUCCESS: " << success_count << "/" << iterations << " timestamps obtained" << std::endl;
+        std::cout << "   Time:    " << duration.count() << " microseconds" << std::endl;
+        std::cout << "   Average: " << (double)duration.count() / iterations << " microseconds per timestamp" << std::endl;
+    } catch (...) {
+        std::cout << "   ERROR: Exception in performance test" << std::endl;
+    }
+    
+    std::cout << "\nTest completed." << std::endl;
+    return 0;
+}
