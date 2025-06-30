@@ -38,6 +38,8 @@
 #include <PeerList.hpp>
 #include <gptp_log.hpp>
 #include "windows_crosststamp.hpp"
+#include <string>
+#include <sstream>
 
 inline uint64_t scale64(uint64_t i, uint32_t m, uint32_t n)
 {
@@ -275,7 +277,7 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 	PLAT_strncpy( network_card_id, NETWORK_CARD_ID_PREFIX, 63 );
 	PLAT_strncpy( network_card_id+strlen(network_card_id), pAdapterInfo->AdapterName, 63-strlen(network_card_id) );
 
-        miniport = CreateFile( network_card_id,
+        miniport = CreateFileA( network_card_id,
                 GENERIC_READ | GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
                 NULL, OPEN_EXISTING, 0, NULL );
@@ -500,6 +502,155 @@ skip_timestamp_config:
 			GPTP_LOG_WARNING("Cross-timestamping initialized but quality assessment failed");
 		}
 	}
+
+	// ========== RUNTIME STATUS REPORT ==========
+	GPTP_LOG_STATUS("=== gPTP Runtime Configuration Summary ===");
+	GPTP_LOG_STATUS("Interface: %s", pAdapterInfo->Description);
+	GPTP_LOG_STATUS("Adapter UID: %s", pAdapterInfo->AdapterName);
+	GPTP_LOG_STATUS("TSC Frequency: %llu Hz", tsc_hz.QuadPart);
+	GPTP_LOG_STATUS("Network Clock: %llu Hz", netclock_hz.QuadPart);
+	
+	// Determine and report active timestamping method
+	std::string timestamping_method = "Software Timestamping (TSC-based)";
+	std::string quality_info = "";
+	
+	if (cross_timestamping_initialized) {
+		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+		if (crossTimestamp.isPreciseTimestampingSupported()) {
+			int quality = crossTimestamp.getTimestampQuality();
+			if (quality >= 80) {
+				timestamping_method = "Hardware Cross-Timestamping (High Precision)";
+				quality_info = " - Excellent performance";
+			} else if (quality >= 50) {
+				timestamping_method = "Hybrid Cross-Timestamping (Medium Precision)";
+				quality_info = " - Good performance";
+			} else {
+				timestamping_method = "Software Cross-Timestamping (Basic Precision)";
+				quality_info = " - Limited precision";
+			}
+		}
+	} else {
+		// Check if Intel OIDs are available
+		if (miniport != INVALID_HANDLE_VALUE) {
+			DWORD buf[2];
+			DWORD returned;
+			if (readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned) == ERROR_SUCCESS) {
+				timestamping_method = "Intel OID Hardware Timestamping";
+				quality_info = " - Hardware-assisted";
+			}
+		}
+	}
+	
+	GPTP_LOG_STATUS("Timestamping Method: %s%s", timestamping_method.c_str(), quality_info.c_str());
+	
+	// Calculate and report system health score
+	int health_score = 0;
+	std::stringstream health_details;
+	
+	// Basic functionality checks (25 points each)
+	if (miniport != INVALID_HANDLE_VALUE) {
+		health_score += 25;
+		health_details << "✓ Adapter access ";
+	} else {
+		health_details << "✗ Adapter access ";
+	}
+	
+	if (tsc_hz.QuadPart > 0) {
+		health_score += 25;
+		health_details << "✓ TSC available ";
+	} else {
+		health_details << "✗ TSC unavailable ";
+	}
+	
+	if (netclock_hz.QuadPart > 0) {
+		health_score += 25;
+		health_details << "✓ Network clock ";
+	} else {
+		health_details << "✗ Network clock ";
+	}
+	
+	// Cross-timestamping bonus
+	if (cross_timestamping_initialized) {
+		health_score += 25;
+		health_details << "✓ Cross-timestamping ";
+		
+		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+		if (crossTimestamp.isPreciseTimestampingSupported()) {
+			int quality = crossTimestamp.getTimestampQuality();
+			if (quality >= 80) {
+				health_score += 10; // Excellent quality bonus
+			} else if (quality >= 50) {
+				health_score += 5;  // Good quality bonus
+			}
+		}
+	} else {
+		health_details << "✗ Cross-timestamping ";
+	}
+	
+	GPTP_LOG_STATUS("System Health Score: %d/100", health_score);
+	GPTP_LOG_STATUS("Health Details: %s", health_details.str().c_str());
+	
+	// Overall status assessment
+	if (health_score >= 90) {
+		GPTP_LOG_STATUS("Overall Status: ✅ EXCELLENT - Optimal PTP performance");
+		GPTP_LOG_STATUS("Recommendation: System is optimally configured for high-precision timing");
+	} else if (health_score >= 75) {
+		GPTP_LOG_STATUS("Overall Status: ✅ GOOD - Suitable for most applications");
+		GPTP_LOG_STATUS("Recommendation: System is well-configured for PTP operations");
+	} else if (health_score >= 50) {
+		GPTP_LOG_STATUS("Overall Status: ⚠️  FAIR - Consider optimization");
+		GPTP_LOG_STATUS("Recommendation: Some improvements possible for better precision");
+	} else {
+		GPTP_LOG_STATUS("Overall Status: ❌ POOR - Review configuration");
+		GPTP_LOG_STATUS("Recommendation: System needs attention for optimal PTP performance");
+	}
+	
+	// Platform and environment information
+	OSVERSIONINFO osvi;
+	ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
+	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+	
+	if (GetVersionEx(&osvi)) {
+		GPTP_LOG_STATUS("Platform: Windows %d.%d", osvi.dwMajorVersion, osvi.dwMinorVersion);
+		if (osvi.dwMajorVersion >= 10) {
+			GPTP_LOG_STATUS("Platform Note: Modern Windows - advanced PTP APIs potentially available");
+		} else {
+			GPTP_LOG_STATUS("Platform Note: Legacy Windows - using compatibility methods");
+		}
+	}
+	
+	// Check administrator privileges
+	BOOL isAdmin = FALSE;
+	PSID administratorsGroup = NULL;
+	SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
+	
+	if (AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+								DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &administratorsGroup)) {
+		if (CheckTokenMembership(NULL, administratorsGroup, &isAdmin)) {
+			GPTP_LOG_STATUS("Privileges: %s", isAdmin ? "Administrator ✅" : "Standard User ⚠️");
+			if (!isAdmin) {
+				GPTP_LOG_STATUS("Privilege Note: Run as Administrator for full hardware access");
+			}
+		}
+		FreeSid(administratorsGroup);
+	}
+	
+	// Additional diagnostics for poor health scores
+	if (health_score < 75) {
+		GPTP_LOG_STATUS("--- Diagnostic Suggestions ---");
+		if (miniport == INVALID_HANDLE_VALUE) {
+			GPTP_LOG_STATUS("• Ensure administrator privileges and adapter compatibility");
+		}
+		if (!cross_timestamping_initialized) {
+			GPTP_LOG_STATUS("• Cross-timestamping disabled - check hardware support");
+		}
+		if (netclock_hz.QuadPart == 0) {
+			GPTP_LOG_STATUS("• Network clock detection failed - verify adapter configuration");
+		}
+		GPTP_LOG_STATUS("• Consider Windows/driver updates for better PTP support");
+	}
+	
+	GPTP_LOG_STATUS("==========================================");
 
 	return true;
 }
