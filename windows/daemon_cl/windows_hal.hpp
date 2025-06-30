@@ -706,8 +706,10 @@ public:
 };
 
 #define I217_DESC "I217-LM"
-#define I219_DESC "I219" // Intel I219-V and I219-LM
+#define I219_DESC "I219" // Intel I219-V and I219-LM  
 #define I210_DESC "I210"
+#define I211_DESC "I211"
+#define I350_DESC "I350"
 
 #define NETWORK_CARD_ID_PREFIX "\\\\.\\"			/*!< Network adapter prefix */
 #define OID_INTEL_GET_RXSTAMP 0xFF020264			/*!< Get RX timestamp code*/
@@ -729,13 +731,15 @@ typedef struct
 } DeviceClockRateMapping;
 
 /**
-* @brief Maps network device type to device clock rate
+* @brief Maps network device type to device clock rate for Intel adapters supporting custom OIDs
 */
 static DeviceClockRateMapping DeviceClockRateMap[] =
 {
 	{ 1000000000, I217_DESC	},
 	{ 1008000000, I219_DESC	},
 	{ 1250000000, I210_DESC	},
+	{ 1250000000, I211_DESC	},
+	{ 1250000000, I350_DESC	},
 	{ 0, NULL },
 };
 
@@ -883,11 +887,16 @@ public:
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
 		if( result != ERROR_GEN_FAILURE ) {
-			fprintf( stderr, "readOID failed,  Error is: %d\n", result );
+			GPTP_LOG_WARNING("Error (TX) timestamping PDelay request, error=%d. Intel OID may not be supported or accessible", result);
+			if (result == ERROR_NOT_SUPPORTED) {
+				GPTP_LOG_INFO("Driver does not support Intel TX timestamping OID - falling back to software timestamps");
+			} else if (result == ERROR_ACCESS_DENIED) {
+				GPTP_LOG_WARNING("Access denied to Intel TX timestamp OID - ensure running as administrator");
+			}
 			return GPTP_EC_FAILURE;
 		}
 		if( returned != sizeof(buf_tmp) ){
-			fprintf( stderr, "Error reading TX timestamp: %d\n", result );
+			GPTP_LOG_WARNING("Error reading TX timestamp: returned %d, expected %d", returned, sizeof(buf_tmp));
 			return GPTP_EC_EAGAIN;
 		} 
 		tx_r = (((uint64_t)buf[1]) << 32) | buf[0];
@@ -918,8 +927,21 @@ public:
 		while(( result = readOID( OID_INTEL_GET_RXSTAMP, buf_tmp, sizeof(buf_tmp), &returned )) == ERROR_SUCCESS ) {
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
-		if( result != ERROR_GEN_FAILURE ) return GPTP_EC_FAILURE;
-		if( returned != sizeof(buf_tmp) ) return GPTP_EC_EAGAIN;
+		if( result != ERROR_GEN_FAILURE ) {
+			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d", 
+				messageId.getMessageType(), result);
+			if (result == ERROR_NOT_SUPPORTED) {
+				GPTP_LOG_INFO("Driver does not support Intel RX timestamping OID - falling back to software timestamps");
+			} else if (result == ERROR_ACCESS_DENIED) {
+				GPTP_LOG_WARNING("Access denied to Intel RX timestamp OID - ensure running as administrator");
+			}
+			return GPTP_EC_FAILURE;
+		}
+		if( returned != sizeof(buf_tmp) ) {
+			GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d", 
+				returned, sizeof(buf_tmp));
+			return GPTP_EC_EAGAIN;
+		}
 		packet_sequence_id = *((uint32_t *) buf+3) >> 16;
 		if (PLAT_ntohs(packet_sequence_id) != messageId.getSequenceId()) return GPTP_EC_EAGAIN;
 		rx_r = (((uint64_t)buf[1]) << 32) | buf[0];
@@ -928,6 +950,56 @@ public:
 		timestamp._version = version;
 
 		return GPTP_EC_SUCCESS;
+	}
+
+	/**
+	 * @brief Test Intel custom OID availability and functionality
+	 * @param adapter_description Description of the network adapter for logging
+	 * @return true if Intel OIDs are available and functional, false otherwise
+	 */
+	bool testIntelOIDAvailability(const char* adapter_description) const {
+		DWORD buf[6];
+		DWORD returned = 0;
+		DWORD result;
+		
+		// Test OID_INTEL_GET_SYSTIM first as it's the most basic
+		memset(buf, 0xFF, sizeof(buf));
+		result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
+		
+		if (result == ERROR_SUCCESS && returned == sizeof(buf)) {
+			// Validate that we got reasonable data (not all 0xFF)
+			bool valid_data = false;
+			for (int i = 0; i < 6; i++) {
+				if (buf[i] != 0xFFFFFFFF) {
+					valid_data = true;
+					break;
+				}
+			}
+			
+			if (valid_data) {
+				GPTP_LOG_VERBOSE("Intel OID test successful for %s: returned %d bytes with valid data", 
+					adapter_description, returned);
+				
+				// Extract and validate timestamp data for additional verification
+				uint64_t net_time = (((uint64_t)buf[1]) << 32) | buf[0];
+				uint64_t tsc_time = (((uint64_t)buf[3]) << 32) | buf[2];
+				
+				if (net_time > 0 && tsc_time > 0) {
+					GPTP_LOG_VERBOSE("Intel OID timestamp validation passed: net=%llu, tsc=%llu", 
+						net_time, tsc_time);
+					return true;
+				} else {
+					GPTP_LOG_WARNING("Intel OID returned zero timestamps - may not be properly initialized");
+				}
+			} else {
+				GPTP_LOG_WARNING("Intel OID returned invalid data (all 0xFF) for %s", adapter_description);
+			}
+		} else {
+			GPTP_LOG_VERBOSE("Intel OID test failed for %s: error=%d, returned=%d/%d", 
+				adapter_description, result, returned, sizeof(buf));
+		}
+		
+		return false;
 	}
 };
 

@@ -279,7 +279,12 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
                 GENERIC_READ | GENERIC_WRITE,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
                 NULL, OPEN_EXISTING, 0, NULL );
-        if( miniport == INVALID_HANDLE_VALUE ) return false;
+        if( miniport == INVALID_HANDLE_VALUE ) {
+		DWORD error = GetLastError();
+		GPTP_LOG_ERROR("Failed to open network adapter %s (error: %d). Ensure adapter supports direct access and application has administrator privileges", 
+			network_card_id, error);
+		return false;
+	}
 
 	// Verify timestamp capabilities and configure if needed
 #ifdef OID_TIMESTAMP_CAPABILITY
@@ -300,14 +305,29 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 		memset(&caps, 0, sizeof(caps));
 		result = readOID(OID_TIMESTAMP_CAPABILITY, &caps, sizeof(caps), &returned);
 		if(result != ERROR_SUCCESS || returned < sizeof(caps)) {
-			GPTP_LOG_ERROR("Failed to query timestamp capability");
-			return false;
+			GPTP_LOG_WARNING("Failed to query timestamp capability (error: %d, returned: %d/%d), attempting fallback", 
+				result, returned, sizeof(caps));
+			
+			// Log more detailed error information
+			if (result == ERROR_NOT_SUPPORTED || result == ERROR_INVALID_FUNCTION) {
+				GPTP_LOG_INFO("Driver does not support timestamp capability queries, using software timestamping");
+			} else if (result == ERROR_ACCESS_DENIED) {
+				GPTP_LOG_ERROR("Access denied when querying timestamp capability. Run as administrator or check driver permissions");
+			} else {
+				GPTP_LOG_WARNING("Unknown error %d when querying timestamp capability", result);
+			}
+			
+			// Continue without hardware timestamping but log the limitation
+			GPTP_LOG_STATUS("Falling back to software timestamping for interface %s", pAdapterInfo->Description);
+			goto skip_timestamp_config;
 		}
 
 #if defined(NDIS_TIMESTAMP_CAPABILITIES_REVISION_1) && defined(NDIS_TIMESTAMP_CAPABILITY_FLAGS)
 		if(caps.TimestampFlags == 0) {
-			GPTP_LOG_ERROR("Adapter lacks timestamping capability");
-			return false;
+			GPTP_LOG_WARNING("Adapter reports no timestamping capabilities, using software timestamping");
+			goto skip_timestamp_config;
+		} else {
+			GPTP_LOG_INFO("Adapter timestamp capabilities: 0x%x", caps.TimestampFlags);
 		}
 #else
 		/* INTERFACE_TIMESTAMP_CAPABILITIES does not expose a single
@@ -317,8 +337,10 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 		INTERFACE_TIMESTAMP_CAPABILITIES zeroCaps;
 		memset(&zeroCaps, 0, sizeof(zeroCaps));
 		if(!memcmp(&caps, &zeroCaps, sizeof(caps))) {
-			GPTP_LOG_ERROR("Adapter lacks timestamping capability");
-			return false;
+			GPTP_LOG_WARNING("Adapter reports no timestamping capabilities, using software timestamping");
+			goto skip_timestamp_config;
+		} else {
+			GPTP_LOG_INFO("Adapter supports hardware timestamping");
 		}
 #endif
 
@@ -337,16 +359,59 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 			 * capability and configuration. */
 			memcpy(&cfg, &caps, sizeof(cfg));
 #endif
-			setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg));
+			if (setOID(OID_TIMESTAMP_CURRENT_CONFIG, &cfg, sizeof(cfg)) == ERROR_SUCCESS) {
+				GPTP_LOG_INFO("Successfully configured hardware timestamping");
+			} else {
+				GPTP_LOG_WARNING("Failed to configure hardware timestamping, using software fallback");
+			}
+		} else {
+			GPTP_LOG_WARNING("Failed to read current timestamp configuration, using software fallback");
 		}
 #endif
 	}
+skip_timestamp_config:
+#else
+	GPTP_LOG_INFO("OID_TIMESTAMP_CAPABILITY not available, trying legacy Intel OIDs");
 #endif
+
+	// Try Intel-specific OIDs as fallback for hardware timestamping
+	// This implements Option 2 from the Intel community thread discussion
+	bool intel_oids_available = false;
+	{
+		intel_oids_available = testIntelOIDAvailability(pAdapterInfo->Description);
+		
+		if (intel_oids_available) {
+			GPTP_LOG_STATUS("Intel custom OIDs are available - hardware timestamping enabled via legacy path");
+			GPTP_LOG_INFO("Using Intel-specific OID timestamping for interface %s", pAdapterInfo->Description);
+			
+			// Log which Intel adapter we detected
+			DeviceClockRateMapping *rate_map = DeviceClockRateMap;
+			while (rate_map->device_desc != NULL) {
+				if (strstr(pAdapterInfo->Description, rate_map->device_desc) != NULL) {
+					GPTP_LOG_INFO("Detected Intel adapter type: %s with clock rate %u Hz", 
+						rate_map->device_desc, rate_map->clock_rate);
+					break;
+				}
+				++rate_map;
+			}
+		} else {
+			GPTP_LOG_INFO("Intel custom OIDs not available - confirmed software timestamping");
+		}
+	}
+	
+	// If Intel OIDs are available, we can potentially use hardware timestamping
+	if (intel_oids_available) {
+		GPTP_LOG_STATUS("Hardware timestamping available via Intel custom OIDs for %s", pAdapterInfo->Description);
+	} else {
+		GPTP_LOG_STATUS("Using software timestamping for interface %s", pAdapterInfo->Description);
+	}
 
 	tsc_hz.QuadPart = getTSCFrequency( true );
 	if( tsc_hz.QuadPart == 0 ) {
+		GPTP_LOG_ERROR("Failed to determine TSC frequency. This is required for timestamping. Check CPU support and system configuration");
 		return false;
 	}
+	GPTP_LOG_INFO("TSC frequency: %llu Hz", tsc_hz.QuadPart);
 
 	// Initialize cross-timestamping functionality for this interface
 	WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
