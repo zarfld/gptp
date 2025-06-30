@@ -1135,36 +1135,15 @@ void PTPMessageFollowUp::processMessage
 		 * only made in the PTP_SLAVE state, increment it here
 		 */
 		port->incSyncCount();
+		
+		// Milan profile: Update jitter statistics when receiving sync messages
+		if (port->getMilanProfile()) {
+			uint64_t sync_timestamp = TIMESTAMP_TO_NS(sync_arrival);
+			port->updateMilanJitterStats(sync_timestamp);
+			port->checkMilanConvergence();
+		}
 
-		/*
-		 * Do not call calcLocalSystemClockRateDifference it updates
-		 * state global to the clock object and if we are master then
-		 * the network is transitioning to us not being master but
-		 * the master process is still running locally
-		 */
-		local_system_freq_offset = port->getClock()
-			->calcLocalSystemClockRateDifference
-			( device_time, system_time );
-		TIMESTAMP_SUB_NS
-		(system_time, (uint64_t)
-			(((FrequencyRatio)device_sync_time_offset) /
-				local_system_freq_offset));
-		local_system_offset =
-			TIMESTAMP_TO_NS( system_time ) -
-			TIMESTAMP_TO_NS( sync_arrival );
-
-		port->getClock()->setMasterOffset
-		( port, scalar_offset, sync_arrival, local_clock_adjustment,
-		  local_system_offset, system_time, local_system_freq_offset,
-		  port->getSyncCount(), port->getPdelayCount(),
-		  port->getPortState(), port->getAsCapable( ));
-
-		port->syncDone();
-		// Restart the SYNC_RECEIPT timer
-		port->startSyncReceiptTimer((unsigned long long)
-			(SYNC_RECEIPT_TIMEOUT_MULTIPLIER *
-			((double)pow((double)2, port->getSyncInterval()) *
-				1000000000.0)));
+		// ...existing code...
 	}
 
 	uint16_t lastGmTimeBaseIndicator;

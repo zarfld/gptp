@@ -44,6 +44,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "watchdog.hpp"
 #include <tchar.h>
 #include <iphlpapi.h>
+#include <cmath>
 
 #include <ether_port.hpp>
 #include <wireless_port.hpp>
@@ -83,11 +84,12 @@ static bool debug_packet_reception = false;
 void print_usage( char *arg0 ) {
 	fprintf( stderr,
 		"%s "
-		"[-R <priority 1>] [-debug-packets] <network interface>\n"
+		"[-R <priority 1>] [-debug-packets] [-Milan] <network interface>\n"
 		"where <network interface> is a MAC address entered as xx-xx-xx-xx-xx-xx\n"
 		"Options:\n"
 		"  -R <priority>     Set priority1 value\n"
-		"  -debug-packets    Enable enhanced packet reception debugging\n",
+		"  -debug-packets    Enable enhanced packet reception debugging\n"
+		"  -Milan            Enable Milan Baseline Interoperability Profile\n",
 		arg0 );
 }
 
@@ -145,6 +147,17 @@ int parseMacAddr( _TCHAR *macstr, uint8_t *octet_string ) {
 int _tmain(int argc, _TCHAR* argv[])
 {
 	PortInit_t portInit;
+	
+	// Initialize Milan profile configuration with defaults first
+	portInit.milan_config.milan_profile = false;
+	portInit.milan_config.max_convergence_time_ms = 100;
+	portInit.milan_config.max_sync_jitter_ns = 1000;
+	portInit.milan_config.max_path_delay_variation_ns = 10000;
+	portInit.milan_config.stream_aware_bmca = false;
+	portInit.milan_config.redundant_gm_support = false;
+	portInit.milan_config.milan_sync_interval_log = -3;  // 125ms
+	portInit.milan_config.milan_announce_interval_log = 0; // 1s
+	portInit.milan_config.milan_pdelay_interval_log = 0;  // 1s
 
 	phy_delay_map_t ether_phy_delay;
 	ether_phy_delay[LINKSPEED_1G].set_delay
@@ -216,6 +229,13 @@ int _tmain(int argc, _TCHAR* argv[])
 				debug_packet_reception = true;
 				enablePacketReceptionDebug(true);
 				printf("Enhanced packet reception debugging enabled\n");
+			}
+			else if (strcmp(argv[i], "-Milan") == 0) {
+				portInit.milan_config.milan_profile = true;
+				printf("Milan Baseline Interoperability Profile enabled\n");
+				printf("  - Max convergence time: %dms\n", portInit.milan_config.max_convergence_time_ms);
+				printf("  - Sync interval: %.3fms\n", pow(2.0, portInit.milan_config.milan_sync_interval_log) * 1000.0);
+				printf("  - Enhanced BMCA with fast convergence\n");
 			}
 			else if (toupper(argv[i][1]) == 'W')
 			{

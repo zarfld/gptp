@@ -36,6 +36,7 @@
 #include <avbts_clock.hpp>
 #include <common_tstamper.hpp>
 #include <gptp_cfg.hpp>
+#include <cmath>
 
 CommonPort::CommonPort( PortInit_t *portInit ) :
 	thread_factory( portInit->thread_factory ),
@@ -62,6 +63,15 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	clock->registerPort(this, ifindex);
 	qualified_announce = NULL;
 	automotive_profile = portInit->automotive_profile;
+	milan_profile = portInit->milan_config.milan_profile;
+	milan_config = portInit->milan_config;
+	
+	// Initialize Milan profile statistics
+	memset(&milan_stats, 0, sizeof(milan_stats));
+	if (milan_profile) {
+		milan_stats.convergence_start_time = clock->getTime();
+	}
+	
 	announce_sequence_id = 0;
 	signal_sequence_id = 0;
 	sync_sequence_id = 0;
@@ -78,6 +88,58 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 CommonPort::~CommonPort()
 {
 	delete qualified_announce;
+}
+
+void CommonPort::updateMilanJitterStats(uint64_t sync_timestamp)
+{
+	if (!milan_profile) return;
+	
+	if (milan_stats.last_sync_time != 0) {
+		uint64_t interval = sync_timestamp - milan_stats.last_sync_time;
+		uint64_t expected_interval = (uint64_t)(pow(2.0, milan_config.milan_sync_interval_log) * 1000000000.0);
+		uint32_t jitter = (interval > expected_interval) ? 
+			(uint32_t)(interval - expected_interval) : 
+			(uint32_t)(expected_interval - interval);
+		
+		milan_stats.sync_jitter_sum += jitter;
+		milan_stats.sync_jitter_count++;
+		if (jitter > milan_stats.max_observed_jitter_ns) {
+			milan_stats.max_observed_jitter_ns = jitter;
+		}
+		
+		// Check compliance with Milan jitter requirements
+		if (jitter > milan_config.max_sync_jitter_ns) {
+			GPTP_LOG_ERROR("MILAN COMPLIANCE: Sync jitter %u ns exceeds limit %u ns", 
+				jitter, milan_config.max_sync_jitter_ns);
+		}
+	}
+	milan_stats.last_sync_time = sync_timestamp;
+}
+
+bool CommonPort::checkMilanConvergence()
+{
+	if (!milan_profile) return false;
+	
+	uint64_t current_time = clock->getTime();
+	uint64_t convergence_time = current_time - milan_stats.convergence_start_time;
+	
+	// Check if we've exceeded the convergence time limit
+	if (convergence_time > (milan_config.max_convergence_time_ms * 1000000ULL)) {
+		if (!milan_stats.convergence_achieved) {
+			GPTP_LOG_ERROR("MILAN COMPLIANCE: Convergence time %llu ms exceeds target %u ms", 
+				convergence_time / 1000000ULL, milan_config.max_convergence_time_ms);
+		}
+		return false;
+	}
+	
+	// Mark convergence achieved if we have sync within the time limit
+	if (milan_stats.last_sync_time != 0 && !milan_stats.convergence_achieved) {
+		milan_stats.convergence_achieved = true;
+		GPTP_LOG_STATUS("MILAN COMPLIANCE: Convergence achieved in %llu ms (target: %u ms)", 
+			convergence_time / 1000000ULL, milan_config.max_convergence_time_ms);
+	}
+	
+	return milan_stats.convergence_achieved;
 }
 
 bool CommonPort::init_port( void )

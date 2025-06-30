@@ -108,6 +108,24 @@
       ],
       "group": "build",
       "problemMatcher": []
+    },
+    {
+      "label": "Debug gptp with Milan",
+      "type": "shell",
+      "windows": {
+          "command": "powershell",
+          "args": [
+            "-NoProfile",
+            "-Command",
+            "$mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like '*I21*'  } | Select-Object -First 1 -ExpandProperty MacAddress);",
+            "& 'build\\Debug\\gptp.exe' -Milan $mac"
+          ]
+        },
+        "dependsOn": [
+        "Build project Debug"
+      ],
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }

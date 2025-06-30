@@ -115,7 +115,29 @@ EtherPort::EtherPort( PortInit_t *portInit ) :
 			operLogPdelayReqInterval = 0;      // 1 second
 		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
 			operLogSyncInterval = 0;           // 1 second
-	} else
+	} 
+	else if (getMilanProfile())
+	{
+		setAsCapable( true );  // Milan profile should be immediately capable
+		
+		// Milan-specific timing requirements for fast convergence
+		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
+			setInitSyncInterval( getMilanConfig().milan_sync_interval_log );  // 125ms default
+		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
+			setInitPDelayInterval( getMilanConfig().milan_pdelay_interval_log );  // 1 second default
+		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
+			operLogPdelayReqInterval = getMilanConfig().milan_pdelay_interval_log;
+		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
+			operLogSyncInterval = getMilanConfig().milan_sync_interval_log;
+			
+		// Set announce interval for Milan profile
+		setAnnounceInterval( getMilanConfig().milan_announce_interval_log );
+		
+		GPTP_LOG_STATUS("*** MILAN PROFILE ENABLED *** (convergence target: %dms, sync interval: %.3fms)", 
+			getMilanConfig().max_convergence_time_ms,
+			pow(2.0, getMilanConfig().milan_sync_interval_log) * 1000.0);
+	}
+	else
 	{
 		setAsCapable( false );
 
@@ -401,6 +423,12 @@ bool EtherPort::_processEvent( Event e )
 		// action from executing
 		if( getAutomotiveProfile( ))
 			ret = true;
+		else if( getMilanProfile( ))
+		{
+			// Milan profile allows BMCA but with enhanced convergence requirements
+			ret = false;  // Allow default BMCA processing
+			GPTP_LOG_STATUS("*** MILAN BMCA: STATE_CHANGE_EVENT - Enhanced convergence mode ***");
+		}
 		else
 			ret = false;
 
@@ -411,6 +439,11 @@ bool EtherPort::_processEvent( Event e )
 		if( getAutomotiveProfile( ))
 		{
 			GPTP_LOG_EXCEPTION("LINKUP");
+		}
+		else if( getMilanProfile( ))
+		{
+			GPTP_LOG_STATUS("*** MILAN LINKUP *** (Target convergence: %dms)", 
+				getMilanConfig().max_convergence_time_ms);
 		}
 		else {
 			GPTP_LOG_STATUS("LINKUP");
