@@ -297,8 +297,68 @@ int _tmain(int argc, _TCHAR* argv[])
 		(static_cast<WindowsWirelessTimestamper *> (portInit.timestamper))->setAdapter(new IntelWirelessAdapter());
 	}
 
-	// Create Clock object
+	// Create Clock object with configuration support
+	// Check for configuration file and read clock quality parameters
+	bool use_config_file = false;
+	std::string config_file_path = "gptp_cfg.ini";
+	unsigned char config_clockClass = 248;
+	unsigned char config_clockAccuracy = 0x22;
+	uint16_t config_offsetScaledLogVariance = 0x436A;
+	std::string config_profile = "standard";
+	
+	// Check if configuration file exists
+	DWORD file_attr = GetFileAttributesA(config_file_path.c_str());
+	if (file_attr != INVALID_FILE_ATTRIBUTES && !(file_attr & FILE_ATTRIBUTE_DIRECTORY)) {
+		use_config_file = true;
+		
+		GptpIniParser iniParser(config_file_path);
+		if (iniParser.parserError() < 0) {
+			GPTP_LOG_ERROR("Cannot parse ini file. Aborting file reading, using defaults.");
+			use_config_file = false;
+		} else {
+			GPTP_LOG_INFO("Reading configuration from %s", config_file_path.c_str());
+			priority1 = iniParser.getPriority1();
+			config_clockClass = iniParser.getClockClass();
+			config_clockAccuracy = iniParser.getClockAccuracy();
+			config_offsetScaledLogVariance = iniParser.getOffsetScaledLogVariance();
+			config_profile = iniParser.getProfile();
+			
+			GPTP_LOG_INFO("priority1 = %d", priority1);
+			GPTP_LOG_INFO("clockClass = %d", config_clockClass);
+			GPTP_LOG_INFO("clockAccuracy = 0x%02X", config_clockAccuracy);
+			GPTP_LOG_INFO("offsetScaledLogVariance = 0x%04X", config_offsetScaledLogVariance);
+			GPTP_LOG_INFO("profile = %s", config_profile.c_str());
+			
+			// Override profile settings if Milan or automotive specified
+			if (config_profile == "milan" || portInit.milan_config.milan_profile) {
+				portInit.milan_config.milan_profile = true;
+				GPTP_LOG_INFO("Milan profile enabled via configuration");
+			} else if (config_profile == "automotive" || portInit.automotive_profile) {
+				portInit.automotive_profile = true;
+				GPTP_LOG_INFO("Automotive profile enabled via configuration");
+			}
+		}
+	} else {
+		GPTP_LOG_INFO("Configuration file %s not found, using default values", config_file_path.c_str());
+	}
+	
 	portInit.clock = new IEEE1588Clock(false, false, priority1, timerq_factory, ipc, portInit.lock_factory);  // Do not force slave
+	
+	// Configure clock quality based on profile and configuration
+	if (use_config_file) {
+		// Apply configuration file settings directly
+		ClockQuality quality;
+		quality.cq_class = config_clockClass;
+		quality.clockAccuracy = config_clockAccuracy;
+		quality.offsetScaledLogVariance = config_offsetScaledLogVariance;
+		portInit.clock->setClockQuality(quality);
+		
+		GPTP_LOG_INFO("Clock quality configured from file: class=%d, accuracy=0x%02X, variance=0x%04X",
+			quality.cq_class, quality.clockAccuracy, quality.offsetScaledLogVariance);
+	} else {
+		// Apply profile-specific clock quality
+		portInit.clock->setProfileClockQuality(portInit.milan_config.milan_profile, portInit.automotive_profile);
+	}
 
 	if (!wireless)
 	{

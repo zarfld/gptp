@@ -52,6 +52,13 @@ uint32_t findSpeedByName( const char *name, const char **end );
 
 GptpIniParser::GptpIniParser(std::string filename)
 {
+    // Initialize default values
+    _config.priority1 = 248;
+    _config.clockClass = 248;
+    _config.clockAccuracy = 0x22;
+    _config.offsetScaledLogVariance = 0x436A;
+    _config.profile = "standard";
+    
     _error = ini_parse(filename.c_str(), iniCallBack, this);
 }
 
@@ -84,6 +91,41 @@ int GptpIniParser::iniCallBack(void *user, const char *section, const char *name
                 valOK = true;
                 parser->_config.priority1 = p1;
             }
+        }
+        else if( parseMatch(name, "clockClass") )
+        {
+            errno = 0;
+            char *pEnd;
+            unsigned char cc = (unsigned char) strtoul(value, &pEnd, 10);
+            if( *pEnd == '\0' && errno == 0) {
+                valOK = true;
+                parser->_config.clockClass = cc;
+            }
+        }
+        else if( parseMatch(name, "clockAccuracy") )
+        {
+            errno = 0;
+            char *pEnd;
+            unsigned char ca = (unsigned char) strtoul(value, &pEnd, 0); // base 0 to support hex
+            if( *pEnd == '\0' && errno == 0) {
+                valOK = true;
+                parser->_config.clockAccuracy = ca;
+            }
+        }
+        else if( parseMatch(name, "offsetScaledLogVariance") )
+        {
+            errno = 0;
+            char *pEnd;
+            uint16_t oslv = (uint16_t) strtoul(value, &pEnd, 0); // base 0 to support hex
+            if( *pEnd == '\0' && errno == 0) {
+                valOK = true;
+                parser->_config.offsetScaledLogVariance = oslv;
+            }
+        }
+        else if( parseMatch(name, "profile") )
+        {
+            valOK = true;
+            parser->_config.profile = std::string(value);
         }
     }
     else if( parseMatch(section, "port") )

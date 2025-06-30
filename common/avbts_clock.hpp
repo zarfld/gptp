@@ -328,6 +328,31 @@ public:
   }
 
   /**
+   * @brief Set clock quality parameters directly
+   * @param quality ClockQuality structure to copy values from
+   * @return void
+   */
+  void setClockQuality(const ClockQuality& quality) {
+	  clock_quality = quality;
+	  GPTP_LOG_INFO("Clock quality manually set: class=%d, accuracy=0x%02X, variance=0x%04X",
+		  clock_quality.cq_class, clock_quality.clockAccuracy, clock_quality.offsetScaledLogVariance);
+  }
+
+  /**
+   * @brief Set clock quality based on profile configuration
+   * @param milan_profile Enable Milan Baseline profile clock quality
+   * @param automotive_profile Enable AVnu Automotive profile clock quality  
+   * @return void
+   */
+  void setProfileClockQuality(bool milan_profile, bool automotive_profile);
+
+  /**
+   * @brief Validate clock quality parameters against IEEE 1588 specification
+   * @return true if parameters are valid, false otherwise
+   */
+  bool validateClockQuality();
+
+  /**
    * @brief  Gets grandmaster priority1 attribute (IEEE 802.1AS-2011 Clause 10.5.3.2.2)
    * @return Grandmaster priority1
    */

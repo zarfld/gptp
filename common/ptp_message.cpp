@@ -1952,7 +1952,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 	if (linkDelayInterval == PTPMessageSignalling::sigMsgInterval_Initial) {
 		port->resetInitPDelayInterval();
 
-		waitTime = ((long long) (pow((double)2, port->getPDelayInterval()) *  1000000000.0));
+		waitTime = ((long long) (pow(2.0, port->getPDelayInterval()) *  1000000000.0));
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startPDelayIntervalTimer(waitTime);
 	}
@@ -1966,7 +1966,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 	else {
 		port->setPDelayInterval(linkDelayInterval);
 
-		waitTime = ((long long) (pow((double)2, port->getPDelayInterval()) *  1000000000.0));
+		waitTime = ((long long) (pow(2.0, port->getPDelayInterval()) *  1000000000.0));
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startPDelayIntervalTimer(waitTime);
 	}

@@ -89,7 +89,8 @@ IEEE1588Clock::IEEE1588Clock
 
 	this->forceOrdinarySlave = forceOrdinarySlave;
 
-    /*TODO: Make the values below configurable*/
+    // Initialize clock quality with standard defaults
+    // Will be updated by setProfileClockQuality() when port is created
 	clock_quality.clockAccuracy = 0x22;
 	clock_quality.cq_class = 248;
 	clock_quality.offsetScaledLogVariance = 0x436A;
@@ -492,6 +493,67 @@ bool IEEE1588Clock::isBetterThan(PTPMessageAnnounce * msg)
 #endif
 
 	return (memcmp(this1, that1, 14) < 0) ? true : false;
+}
+
+/**
+ * @brief Set clock quality based on profile configuration
+ * @param milan_profile Enable Milan Baseline profile clock quality
+ * @param automotive_profile Enable AVnu Automotive profile clock quality
+ */
+void IEEE1588Clock::setProfileClockQuality(bool milan_profile, bool automotive_profile)
+{
+	if (milan_profile) {
+		// Milan Baseline Profile requirements
+		clock_quality.clockAccuracy = 0x20;         // Enhanced accuracy (~1µs)
+		clock_quality.cq_class = 248;               // End application time
+		clock_quality.offsetScaledLogVariance = 0x4000; // Enhanced stability
+		
+		GPTP_LOG_INFO("Milan Profile: Enhanced clock quality applied");
+		GPTP_LOG_INFO("Clock accuracy: 0x%02X, Variance: 0x%04X", 
+		              clock_quality.clockAccuracy, clock_quality.offsetScaledLogVariance);
+		
+	} else if (automotive_profile) {
+		// AVnu Automotive Profile requirements  
+		clock_quality.clockAccuracy = 0x22;         // Standard accuracy
+		clock_quality.cq_class = 248;               // End application time
+		clock_quality.offsetScaledLogVariance = 0x436A; // Good stability
+		
+		GPTP_LOG_INFO("Automotive Profile: Standard clock quality applied");
+		
+	} else {
+		// Standard IEEE 1588 defaults (already set in constructor)
+		GPTP_LOG_INFO("Standard Profile: Default clock quality");
+	}
+	
+	// Validate clock quality parameters
+	if (!validateClockQuality()) {
+		GPTP_LOG_WARNING("Clock quality validation failed - using safe defaults");
+		clock_quality.clockAccuracy = 0x22;
+		clock_quality.cq_class = 248;
+		clock_quality.offsetScaledLogVariance = 0x436A;
+	}
+}
+
+/**
+ * @brief Validate clock quality parameters against IEEE 1588 specification
+ * @return true if parameters are valid, false otherwise
+ */
+bool IEEE1588Clock::validateClockQuality()
+{
+	// Basic IEEE 1588 validation
+	if (clock_quality.cq_class > 255) {
+		GPTP_LOG_ERROR("Invalid clock class: %u", clock_quality.cq_class);
+		return false;
+	}
+	
+	// Clock accuracy enumeration validation (typical range 0x17-0x31)
+	if (clock_quality.clockAccuracy < 0x17 || clock_quality.clockAccuracy > 0x31) {
+		GPTP_LOG_WARNING("Clock accuracy 0x%02X outside typical range (0x17-0x31)", 
+		                 clock_quality.clockAccuracy);
+	}
+	
+	// Offset scaled log variance is uint16_t, so automatically valid range
+	return true;
 }
 
 IEEE1588Clock::~IEEE1588Clock(void)

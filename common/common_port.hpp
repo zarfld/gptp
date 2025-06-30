@@ -391,6 +391,7 @@ private:
 	unsigned pdelay_count;
 
 	signed char initialLogPdelayReqInterval;
+	signed char operLogPdelayReqInterval;
 	signed char log_min_mean_pdelay_req_interval;
 
 	PTPMessageAnnounce *qualified_announce;
@@ -1455,6 +1456,51 @@ public:
 	signed char getInitSyncInterval( void )
 	{
 		return initialLogSyncInterval;
+	}
+
+	/**
+	 * @brief  Sets the PDelay interval back to initial value
+	 * @return none
+	 */
+	void resetInitPDelayInterval( void )
+	{
+		operLogPdelayReqInterval = initialLogPdelayReqInterval;
+	}
+
+	/**
+	 * @brief  Sets the initial PDelay interval
+	 * @return none
+	 */
+	void setInitPDelayInterval( signed char interval )
+	{
+		initialLogPdelayReqInterval = interval;
+	}
+
+	/**
+	 * @brief  Gets the initial PDelay interval
+	 * @return initial PDelay interval
+	 */
+	signed char getInitPDelayInterval( void )
+	{
+		return initialLogPdelayReqInterval;
+	}
+
+	/**
+	 * @brief  Sets the operational PDelay interval
+	 * @return none
+	 */
+	void setPDelayInterval( signed char interval )
+	{
+		operLogPdelayReqInterval = interval;
+	}
+
+	/**
+	 * @brief  Gets the operational PDelay interval
+	 * @return operational PDelay interval
+	 */
+	signed char getPDelayInterval( void )
+	{
+		return operLogPdelayReqInterval;
 	}
 
 	/**

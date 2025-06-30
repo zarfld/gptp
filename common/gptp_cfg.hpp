@@ -67,6 +67,10 @@ class GptpIniParser
         {
             /*ptp data set*/
             unsigned char priority1;
+            unsigned char clockClass;
+            unsigned char clockAccuracy;
+            uint16_t offsetScaledLogVariance;
+            std::string profile;
 
             /*port data set*/
             unsigned int announceReceiptTimeout;
@@ -102,6 +106,46 @@ class GptpIniParser
         unsigned char getPriority1(void)
         {
             return _config.priority1;
+        }
+
+        /**
+         * @brief  Reads clockClass config value
+         * @param  void
+         * @return clockClass
+         */
+        unsigned char getClockClass(void)
+        {
+            return _config.clockClass;
+        }
+
+        /**
+         * @brief  Reads clockAccuracy config value
+         * @param  void
+         * @return clockAccuracy
+         */
+        unsigned char getClockAccuracy(void)
+        {
+            return _config.clockAccuracy;
+        }
+
+        /**
+         * @brief  Reads offsetScaledLogVariance config value
+         * @param  void
+         * @return offsetScaledLogVariance
+         */
+        uint16_t getOffsetScaledLogVariance(void)
+        {
+            return _config.offsetScaledLogVariance;
+        }
+
+        /**
+         * @brief  Reads profile config value
+         * @param  void
+         * @return profile name
+         */
+        std::string getProfile(void)
+        {
+            return _config.profile;
         }
 
         /**

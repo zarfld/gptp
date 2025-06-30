@@ -66,10 +66,14 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	milan_profile = portInit->milan_config.milan_profile;
 	milan_config = portInit->milan_config;
 	
+	// Configure clock quality based on profile
+	clock->setProfileClockQuality(milan_profile, automotive_profile);
+	
 	// Initialize Milan profile statistics
 	memset(&milan_stats, 0, sizeof(milan_stats));
 	if (milan_profile) {
-		milan_stats.convergence_start_time = clock->getTime();
+		Timestamp start_time = clock->getTime();
+		milan_stats.convergence_start_time = TIMESTAMP_TO_NS(start_time);
 	}
 	
 	announce_sequence_id = 0;
@@ -120,7 +124,8 @@ bool CommonPort::checkMilanConvergence()
 {
 	if (!milan_profile) return false;
 	
-	uint64_t current_time = clock->getTime();
+	Timestamp current_timestamp = clock->getTime();
+	uint64_t current_time = TIMESTAMP_TO_NS(current_timestamp);
 	uint64_t convergence_time = current_time - milan_stats.convergence_start_time;
 	
 	// Check if we've exceeded the convergence time limit
