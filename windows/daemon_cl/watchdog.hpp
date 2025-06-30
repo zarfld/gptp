@@ -120,6 +120,13 @@ public:
     void reportHealth(const char* status, bool is_healthy = true);
 
     /**
+     * @brief Report an error condition to the watchdog
+     * @param error_message Description of the error
+     * @param is_critical true if this is a critical error that should affect service status
+     */
+    void reportError(const char* error_message, bool is_critical = false);
+
+    /**
      * @brief Check if running as Windows service
      * @return true if running as service, false if console application
      */
@@ -132,6 +139,7 @@ private:
     volatile bool stop_watchdog;        ///< Flag to stop watchdog thread
     SERVICE_STATUS_HANDLE service_handle; ///< Windows service handle (if applicable)
     bool service_mode;                  ///< true if running as Windows service
+    CRITICAL_SECTION health_lock;       ///< Critical section for thread-safe health reporting
 
     /**
      * @brief Initialize service-specific watchdog features

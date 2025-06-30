@@ -41,6 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "windows_hal.hpp"
 #include "avbts_message.hpp"
 #include "gptp_cfg.hpp"
+#include "watchdog.hpp"
 #include <tchar.h>
 #include <iphlpapi.h>
 
@@ -83,6 +84,32 @@ BOOL WINAPI ctrl_handler( DWORD ctrl_type ) {
 		ret = false;
 	}
 	return ret;
+}
+
+int watchdog_setup()
+{
+	WindowsWatchdogHandler *watchdog = new WindowsWatchdogHandler();
+	int watchdog_result;
+	long unsigned int watchdog_interval;
+	
+	watchdog_interval = watchdog->getWindowsWatchdogInterval(&watchdog_result);
+	if (watchdog_result) {
+		GPTP_LOG_INFO("Watchdog interval read from configuration: %lu us", watchdog_interval);
+		watchdog->update_interval = watchdog_interval / 2;
+		GPTP_LOG_STATUS("Starting Windows watchdog handler (Update every: %lu us)", watchdog->update_interval);
+		
+		if (!watchdog->startWatchdog()) {
+			GPTP_LOG_ERROR("Failed to start Windows watchdog");
+			delete watchdog;
+			return -1;
+		}
+		
+		return 0;
+	} else {
+		GPTP_LOG_INFO("Windows watchdog disabled");
+		delete watchdog;
+		return 0;
+	}
 }
 
 int parseMacAddr( _TCHAR *macstr, uint8_t *octet_string ) {
@@ -262,6 +289,11 @@ int _tmain(int argc, _TCHAR* argv[])
 			printf("Wireless operation requires remote MAC address");
 			return -1;
 		}
+	}
+
+	// Setup and start watchdog monitoring
+	if (watchdog_setup() != 0) {
+		GPTP_LOG_ERROR("Failed to setup watchdog, continuing without watchdog support");
 	}
 
 	// Wait for Ctrl-C
