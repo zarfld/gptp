@@ -574,29 +574,29 @@ skip_timestamp_config:
 	// Basic functionality checks (25 points each)
 	if (miniport != INVALID_HANDLE_VALUE) {
 		health_score += 25;
-		health_details << "✓ Adapter access ";
+		health_details << "[OK] Adapter access ";
 	} else {
-		health_details << "✗ Adapter access ";
+		health_details << "[FAIL] Adapter access ";
 	}
 	
 	if (tsc_hz.QuadPart > 0) {
 		health_score += 25;
-		health_details << "✓ TSC available ";
+		health_details << "[OK] TSC available ";
 	} else {
-		health_details << "✗ TSC unavailable ";
+		health_details << "[FAIL] TSC unavailable ";
 	}
 	
 	if (netclock_hz.QuadPart > 0) {
 		health_score += 25;
-		health_details << "✓ Network clock ";
+		health_details << "[OK] Network clock ";
 	} else {
-		health_details << "✗ Network clock ";
+		health_details << "[FAIL] Network clock ";
 	}
 	
 	// Cross-timestamping bonus
 	if (cross_timestamping_initialized) {
 		health_score += 25;
-		health_details << "✓ Cross-timestamping ";
+		health_details << "[OK] Cross-timestamping ";
 		
 		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
 		if (crossTimestamp.isPreciseTimestampingSupported()) {
@@ -608,7 +608,7 @@ skip_timestamp_config:
 			}
 		}
 	} else {
-		health_details << "✗ Cross-timestamping ";
+		health_details << "[FAIL] Cross-timestamping ";
 	}
 	
 	GPTP_LOG_STATUS("System Health Score: %d/100", health_score);
@@ -616,16 +616,16 @@ skip_timestamp_config:
 	
 	// Overall status assessment
 	if (health_score >= 90) {
-		GPTP_LOG_STATUS("Overall Status: ✅ EXCELLENT - Optimal PTP performance");
+		GPTP_LOG_STATUS("Overall Status: [EXCELLENT] - Optimal PTP performance");
 		GPTP_LOG_STATUS("Recommendation: System is optimally configured for high-precision timing");
 	} else if (health_score >= 75) {
-		GPTP_LOG_STATUS("Overall Status: ✅ GOOD - Suitable for most applications");
+		GPTP_LOG_STATUS("Overall Status: [GOOD] - Suitable for most applications");
 		GPTP_LOG_STATUS("Recommendation: System is well-configured for PTP operations");
 	} else if (health_score >= 50) {
-		GPTP_LOG_STATUS("Overall Status: ⚠️  FAIR - Consider optimization");
+		GPTP_LOG_STATUS("Overall Status: [FAIR] - Consider optimization");
 		GPTP_LOG_STATUS("Recommendation: Some improvements possible for better precision");
 	} else {
-		GPTP_LOG_STATUS("Overall Status: ❌ POOR - Review configuration");
+		GPTP_LOG_STATUS("Overall Status: [POOR] - Review configuration");
 		GPTP_LOG_STATUS("Recommendation: System needs attention for optimal PTP performance");
 	}
 	
@@ -651,7 +651,7 @@ skip_timestamp_config:
 	if (AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
 								DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &administratorsGroup)) {
 		if (CheckTokenMembership(NULL, administratorsGroup, &isAdmin)) {
-			GPTP_LOG_STATUS("Privileges: %s", isAdmin ? "Administrator ✅" : "Standard User ⚠️");
+			GPTP_LOG_STATUS("Privileges: %s", isAdmin ? "Administrator [OK]" : "Standard User [WARNING]");
 			if (!isAdmin) {
 				GPTP_LOG_STATUS("Privilege Note: Run as Administrator for full hardware access");
 			}
@@ -663,15 +663,15 @@ skip_timestamp_config:
 	if (health_score < 75) {
 		GPTP_LOG_STATUS("--- Diagnostic Suggestions ---");
 		if (miniport == INVALID_HANDLE_VALUE) {
-			GPTP_LOG_STATUS("• Ensure administrator privileges and adapter compatibility");
+			GPTP_LOG_STATUS("* Ensure administrator privileges and adapter compatibility");
 		}
 		if (!cross_timestamping_initialized) {
-			GPTP_LOG_STATUS("• Cross-timestamping disabled - check hardware support");
+			GPTP_LOG_STATUS("* Cross-timestamping disabled - check hardware support");
 		}
 		if (netclock_hz.QuadPart == 0) {
-			GPTP_LOG_STATUS("• Network clock detection failed - verify adapter configuration");
+			GPTP_LOG_STATUS("* Network clock detection failed - verify adapter configuration");
 		}
-		GPTP_LOG_STATUS("• Consider Windows/driver updates for better PTP support");
+		GPTP_LOG_STATUS("* Consider Windows/driver updates for better PTP support");
 	}
 	
 	GPTP_LOG_STATUS("==========================================");
@@ -1283,12 +1283,12 @@ void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_
     // Report findings and provide guidance
     if (ptp_hw_found) {
         if (ptp_hw_enabled) {
-            GPTP_LOG_STATUS("✅ Intel PTP Hardware Timestamp: %s", ptp_hw_status.c_str());
+            GPTP_LOG_STATUS("[OK] Intel PTP Hardware Timestamp: %s", ptp_hw_status.c_str());
         } else {
-            GPTP_LOG_WARNING("❌ Intel PTP Hardware Timestamp: %s", ptp_hw_status.c_str());
-            GPTP_LOG_STATUS("💡 To enable hardware timestamping for better precision:");
-            GPTP_LOG_STATUS("   1. Open Device Manager → Network adapters");
-            GPTP_LOG_STATUS("   2. Right-click '%s' → Properties", adapter_description);
+            GPTP_LOG_WARNING("[DISABLED] Intel PTP Hardware Timestamp: %s", ptp_hw_status.c_str());
+            GPTP_LOG_STATUS("Setup Guide: To enable hardware timestamping for better precision:");
+            GPTP_LOG_STATUS("   1. Open Device Manager -> Network adapters");
+            GPTP_LOG_STATUS("   2. Right-click '%s' -> Properties", adapter_description);
             GPTP_LOG_STATUS("   3. Go to Advanced tab");
             GPTP_LOG_STATUS("   4. Set 'PTP Hardware Timestamp' to 'Enabled'");
             GPTP_LOG_STATUS("   5. Optionally set 'Software Timestamp' to appropriate value");
@@ -1307,13 +1307,13 @@ void WindowsEtherTimestamper::checkIntelPTPRegistrySettings(const char* adapter_
     // Additional guidance for Intel I219 specifically
     if (strstr(adapter_description, "I219") != NULL) {
         if (!ptp_hw_enabled && ptp_hw_found) {
-            GPTP_LOG_STATUS("📋 Intel I219 PTP Configuration Guide:");
-            GPTP_LOG_STATUS("   • I219 supports hardware PTP timestamping");
-            GPTP_LOG_STATUS("   • Current setting prevents optimal precision");
-            GPTP_LOG_STATUS("   • Enabling hardware timestamps can improve precision from ~1000ns to ~100ns");
-            GPTP_LOG_STATUS("   • Some I219 variants may require specific driver versions");
+            GPTP_LOG_STATUS("Intel I219 PTP Configuration Guide:");
+            GPTP_LOG_STATUS("   * I219 supports hardware PTP timestamping");
+            GPTP_LOG_STATUS("   * Current setting prevents optimal precision");
+            GPTP_LOG_STATUS("   * Enabling hardware timestamps can improve precision from ~1000ns to ~100ns");
+            GPTP_LOG_STATUS("   * Some I219 variants may require specific driver versions");
         } else if (ptp_hw_enabled) {
-            GPTP_LOG_STATUS("✅ Intel I219 PTP hardware timestamping is properly configured");
+            GPTP_LOG_STATUS("[OK] Intel I219 PTP hardware timestamping is properly configured");
         }
     }
 
