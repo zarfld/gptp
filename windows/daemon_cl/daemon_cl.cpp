@@ -326,9 +326,15 @@ uint32_t findLinkSpeed( LinkLayerAddress *local_addr )
 	ret_sz = 15000;
 	pAddr = (PIP_ADAPTER_ADDRESSES)buffer;
 	err = GetAdaptersAddresses( AF_UNSPEC, 0, NULL, pAddr, &ret_sz );
+	
+	if (err != ERROR_SUCCESS) {
+		GPTP_LOG_ERROR("GetAdaptersAddresses failed with error %d", err);
+		free(buffer);
+		return INVALID_LINKSPEED;
+	}
+	
 	for (; pAddr != NULL; pAddr = pAddr->Next)
 	{
-		//fprintf(stderr, "** here : %p\n", pAddr);
 		if (pAddr->PhysicalAddressLength == ETHER_ADDR_OCTETS &&
 			*local_addr == LinkLayerAddress(pAddr->PhysicalAddress))
 		{
@@ -336,23 +342,52 @@ uint32_t findLinkSpeed( LinkLayerAddress *local_addr )
 		}
 	}
 
-	if (pAddr == NULL)
+	if (pAddr == NULL) {
+		GPTP_LOG_ERROR("Could not find adapter for specified MAC address");
+		free(buffer);
 		return INVALID_LINKSPEED;
-
-	switch ( pAddr->ReceiveLinkSpeed / WIN_LINKSPEED_MULT )
-	{
-	default:
-		GPTP_LOG_ERROR("Can't find link speed, %llu", pAddr->ReceiveLinkSpeed);
-		ret = INVALID_LINKSPEED;
-		break;
-	case LINKSPEED_1G:
-		ret = LINKSPEED_1G;
-		break;
-	case LINKSPEED_100MB:
-		ret = LINKSPEED_100MB;
-		break;
 	}
 
-	delete buffer;
+	// Check for invalid/uninitialized link speed values
+	if (pAddr->ReceiveLinkSpeed == 0 || pAddr->ReceiveLinkSpeed == UINT64_MAX) {
+		GPTP_LOG_WARNING("Adapter reports invalid link speed (%llu), attempting fallback detection", pAddr->ReceiveLinkSpeed);
+		
+		// Try TransmitLinkSpeed as fallback
+		if (pAddr->TransmitLinkSpeed != 0 && pAddr->TransmitLinkSpeed != UINT64_MAX) {
+			GPTP_LOG_INFO("Using TransmitLinkSpeed as fallback: %llu", pAddr->TransmitLinkSpeed);
+			pAddr->ReceiveLinkSpeed = pAddr->TransmitLinkSpeed;
+		} else {
+			// Default to 1Gbps for modern interfaces
+			GPTP_LOG_WARNING("No valid link speed detected, defaulting to 1Gbps");
+			free(buffer);
+			return LINKSPEED_1G;
+		}
+	}
+
+	GPTP_LOG_INFO("Detected raw link speed: %llu bits/sec", pAddr->ReceiveLinkSpeed);
+	
+	// Convert to Kbps (divide by 1000) for comparison
+	uint64_t speed_kbps = pAddr->ReceiveLinkSpeed / WIN_LINKSPEED_MULT;
+	GPTP_LOG_VERBOSE("Link speed in Kbps: %llu", speed_kbps);
+
+	// Enhanced speed detection with more realistic ranges
+	if (speed_kbps >= 900000 && speed_kbps <= 1100000) {
+		// 1 Gbps (900Mbps - 1.1Gbps range to account for variations)
+		ret = LINKSPEED_1G;
+		GPTP_LOG_INFO("Detected 1 Gigabit Ethernet");
+	} else if (speed_kbps >= 90000 && speed_kbps <= 110000) {
+		// 100 Mbps (90Mbps - 110Mbps range)
+		ret = LINKSPEED_100MB;
+		GPTP_LOG_INFO("Detected 100 Megabit Ethernet");
+	} else if (speed_kbps >= 9000000) {
+		// 10+ Gbps - treat as 1Gbps for gPTP purposes
+		ret = LINKSPEED_1G;
+		GPTP_LOG_INFO("Detected high-speed interface (%llu Kbps), treating as 1Gbps for gPTP", speed_kbps);
+	} else {
+		GPTP_LOG_WARNING("Unrecognized link speed %llu Kbps, defaulting to 1Gbps", speed_kbps);
+		ret = LINKSPEED_1G;
+	}
+
+	free(buffer);
 	return ret;
 }

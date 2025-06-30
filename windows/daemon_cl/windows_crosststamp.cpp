@@ -103,6 +103,9 @@ bool WindowsCrossTimestamp::initialize(const char* iface_label)
 
     // Perform initial calibration
     calibrateCorrelation();
+    
+    // Perform initial quality assessment
+    assessInitialQuality();
 
     m_initialized = true;
 
@@ -379,6 +382,54 @@ void WindowsCrossTimestamp::calibrateCorrelation()
     m_correlation.last_calibration = m_correlation.last_qpc.QuadPart;
     
     GPTP_LOG_VERBOSE("Cross-timestamp correlation calibrated with %d samples", num_samples);
+}
+
+void WindowsCrossTimestamp::assessInitialQuality()
+{
+    // Perform a test cross-timestamp to establish initial quality
+    Timestamp test_system, test_device;
+    
+    switch (m_method) {
+    case TimestampMethod::RDTSC_SYSTEM_TIME:
+        if (getCrossTimestamp_RDTSC(&test_system, &test_device)) {
+            GPTP_LOG_VERBOSE("Initial RDTSC cross-timestamp quality assessment: %d%% (error: %llu ns)", 
+                           m_quality, m_estimated_error_ns);
+        } else {
+            GPTP_LOG_WARNING("RDTSC cross-timestamp test failed, falling back to QPC");
+            m_method = TimestampMethod::QPC_SYSTEM_TIME;
+            m_quality = 50; // Default QPC quality
+        }
+        break;
+        
+    case TimestampMethod::QPC_SYSTEM_TIME:
+        if (getCrossTimestamp_QPC(&test_system, &test_device)) {
+            GPTP_LOG_VERBOSE("Initial QPC cross-timestamp quality assessment: %d%% (error: %llu ns)", 
+                           m_quality, m_estimated_error_ns);
+        } else {
+            GPTP_LOG_ERROR("QPC cross-timestamp test failed");
+            m_quality = 0;
+        }
+        break;
+        
+    case TimestampMethod::HARDWARE_ASSISTED:
+        // Hardware method falls back to QPC currently
+        if (getCrossTimestamp_QPC(&test_system, &test_device)) {
+            GPTP_LOG_VERBOSE("Initial hardware-assisted cross-timestamp quality assessment: %d%% (error: %llu ns)", 
+                           m_quality, m_estimated_error_ns);
+        } else {
+            GPTP_LOG_WARNING("Hardware-assisted cross-timestamp test failed");
+            m_quality = 0;
+        }
+        break;
+        
+    default:
+        GPTP_LOG_WARNING("Unknown cross-timestamp method, setting default quality");
+        m_quality = 30;
+        break;
+    }
+    
+    GPTP_LOG_INFO("Cross-timestamp initial quality assessment complete: %d%% (method %d)", 
+                  m_quality, static_cast<int>(m_method));
 }
 
 void WindowsCrossTimestamp::updateCorrelation()

@@ -170,6 +170,11 @@ private:
     void calibrateCorrelation();
 
     /**
+     * @brief Assess initial cross-timestamp quality during initialization
+     */
+    void assessInitialQuality();
+
+    /**
      * @brief Update correlation parameters
      */
     void updateCorrelation();

@@ -377,25 +377,56 @@ skip_timestamp_config:
 	// Try Intel-specific OIDs as fallback for hardware timestamping
 	// This implements Option 2 from the Intel community thread discussion
 	bool intel_oids_available = false;
+	bool is_intel_device = false;
 	{
-		intel_oids_available = testIntelOIDAvailability(pAdapterInfo->Description);
+		// Enhanced Intel device detection with specific I219 support
+		const char* adapter_desc = pAdapterInfo->Description;
+		
+		// Check for Intel devices with known timestamping support
+		if (strstr(adapter_desc, "Intel") != NULL) {
+			is_intel_device = true;
+			
+			// Specific checks for known Intel PTP-capable devices
+			if (strstr(adapter_desc, "I219") != NULL) {
+				GPTP_LOG_STATUS("Detected Intel I219 Ethernet controller with PTP support");
+				// I219 supports hardware timestamping but may need software fallback
+				intel_oids_available = testIntelOIDAvailability(adapter_desc);
+			} else if (strstr(adapter_desc, "I217") != NULL || strstr(adapter_desc, "I218") != NULL) {
+				GPTP_LOG_STATUS("Detected Intel I217/I218 Ethernet controller with PTP support");
+				intel_oids_available = testIntelOIDAvailability(adapter_desc);
+			} else if (strstr(adapter_desc, "I210") != NULL || strstr(adapter_desc, "I211") != NULL) {
+				GPTP_LOG_STATUS("Detected Intel I210/I211 Ethernet controller with hardware PTP");
+				intel_oids_available = testIntelOIDAvailability(adapter_desc);
+			} else if (strstr(adapter_desc, "I350") != NULL) {
+				GPTP_LOG_STATUS("Detected Intel I350 Ethernet controller");
+				intel_oids_available = testIntelOIDAvailability(adapter_desc);
+			} else {
+				GPTP_LOG_INFO("Detected Intel Ethernet controller, testing for PTP support");
+				intel_oids_available = testIntelOIDAvailability(adapter_desc);
+			}
+		} else {
+			intel_oids_available = testIntelOIDAvailability(adapter_desc);
+		}
 		
 		if (intel_oids_available) {
 			GPTP_LOG_STATUS("Intel custom OIDs are available - hardware timestamping enabled via legacy path");
-			GPTP_LOG_INFO("Using Intel-specific OID timestamping for interface %s", pAdapterInfo->Description);
+			GPTP_LOG_INFO("Using Intel-specific OID timestamping for interface %s", adapter_desc);
 			
 			// Log which Intel adapter we detected
 			DeviceClockRateMapping *rate_map = DeviceClockRateMap;
 			while (rate_map->device_desc != NULL) {
-				if (strstr(pAdapterInfo->Description, rate_map->device_desc) != NULL) {
+				if (strstr(adapter_desc, rate_map->device_desc) != NULL) {
 					GPTP_LOG_INFO("Detected Intel adapter type: %s with clock rate %u Hz", 
 						rate_map->device_desc, rate_map->clock_rate);
 					break;
 				}
 				++rate_map;
 			}
+		} else if (is_intel_device) {
+			GPTP_LOG_WARNING("Intel device detected but custom OIDs not available - using software timestamping");
+			GPTP_LOG_INFO("This may indicate: 1) Driver doesn't support PTP OIDs, 2) Administrator privileges required, 3) Device doesn't support hardware timestamping");
 		} else {
-			GPTP_LOG_INFO("Intel custom OIDs not available - confirmed software timestamping");
+			GPTP_LOG_INFO("Non-Intel device - confirmed software timestamping");
 		}
 	}
 	
@@ -415,15 +446,44 @@ skip_timestamp_config:
 
 	// Initialize cross-timestamping functionality for this interface
 	WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
-	if (!crossTimestamp.initialize(pAdapterInfo->Description)) {
+	
+	// Enhanced cross-timestamping initialization with Intel device context
+	bool crossTimestamp_success = false;
+	if (is_intel_device && intel_oids_available) {
+		// Intel device with OID support - highest quality potential
+		GPTP_LOG_INFO("Initializing cross-timestamping for Intel device with OID support");
+		crossTimestamp_success = crossTimestamp.initialize(pAdapterInfo->Description);
+	} else if (is_intel_device) {
+		// Intel device without OID support - medium quality potential
+		GPTP_LOG_INFO("Initializing cross-timestamping for Intel device (software path)");
+		crossTimestamp_success = crossTimestamp.initialize(pAdapterInfo->Description);
+	} else {
+		// Non-Intel device - basic quality
+		GPTP_LOG_INFO("Initializing cross-timestamping for non-Intel device");
+		crossTimestamp_success = crossTimestamp.initialize(pAdapterInfo->Description);
+	}
+	
+	if (!crossTimestamp_success) {
 		GPTP_LOG_WARNING("Failed to initialize cross-timestamping for interface %s, using legacy timestamps", 
 			pAdapterInfo->Description);
 		cross_timestamping_initialized = false;
 		// Continue without cross-timestamping - legacy method will be used
 	} else {
+		int quality = crossTimestamp.getTimestampQuality();
 		GPTP_LOG_STATUS("Cross-timestamping initialized for interface %s with quality %d%%", 
-			pAdapterInfo->Description, crossTimestamp.getTimestampQuality());
+			pAdapterInfo->Description, quality);
 		cross_timestamping_initialized = true;
+		
+		// Log additional context about the timestamping method
+		if (quality >= 80) {
+			GPTP_LOG_STATUS("High-quality cross-timestamping available");
+		} else if (quality >= 50) {
+			GPTP_LOG_INFO("Medium-quality cross-timestamping available");
+		} else if (quality > 0) {
+			GPTP_LOG_WARNING("Low-quality cross-timestamping - consider hardware upgrade for better precision");
+		} else {
+			GPTP_LOG_WARNING("Cross-timestamping initialized but quality assessment failed");
+		}
 	}
 
 	return true;
