@@ -86,6 +86,13 @@ elseif(WIN32)
       "$<TARGET_FILE_DIR:gptp>/test_milan_config.ini"
     COMMENT "Copying test_milan_config.ini to output directory"
   )
+  
+  add_custom_command(TARGET gptp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_SOURCE_DIR}/avnu_presonus_config.ini"
+      "$<TARGET_FILE_DIR:gptp>/avnu_presonus_config.ini"
+    COMMENT "Copying avnu_presonus_config.ini to output directory"
+  )
 
   add_subdirectory("windows/named_pipe_test")
 

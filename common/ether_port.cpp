@@ -257,7 +257,12 @@ void EtherPort::processMessage
 		GPTP_LOG_ERROR("Discarding invalid message");
 		return;
 	}
-	GPTP_LOG_VERBOSE("Processing message");
+	GPTP_LOG_VERBOSE("Processing message type: %d", msg->getMessageType());
+	
+	// Add specific debug for PDelay Request messages
+	if (msg->getMessageType() == PATH_DELAY_REQ_MESSAGE) {
+		GPTP_LOG_INFO("*** RECEIVED PDelay Request - calling processMessage");
+	}
 
 	if( msg->isEvent() )
 	{
@@ -708,7 +713,24 @@ bool EtherPort::_processEvent( Event e )
 		if( !getAutomotiveProfile( ))
 		{
 			GPTP_LOG_EXCEPTION("PDelay Response Receipt Timeout");
-			setAsCapable(false);
+			
+			// Milan Specification 5.6.2.4 compliance:
+			// asCapable should be TRUE after 2-5 successful PDelay exchanges
+			// Only disable asCapable if we haven't met the Milan requirement
+			if( getMilanProfile() ) {
+				if( getPdelayCount() < 2 ) {
+					// Milan: Haven't reached minimum 2 successful PDelay exchanges yet
+					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: asCapable remains true - need %d more successful PDelay exchanges (current: %d/2 minimum) ***", 
+						2 - getPdelayCount(), getPdelayCount());
+					// Don't set asCapable(false) in Milan profile until we've had at least 2 successes
+				} else {
+					// Milan: Had successful exchanges before, temporary timeout - don't immediately disable
+					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay timeout after %d successful exchanges - maintaining asCapable=true ***", getPdelayCount());
+				}
+			} else {
+				// Standard profile: disable asCapable on timeout
+				setAsCapable(false);
+			}
 		}
 		setPdelayCount( 0 );
 		break;

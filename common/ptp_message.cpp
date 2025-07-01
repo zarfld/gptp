@@ -1243,6 +1243,8 @@ PTPMessagePathDelayReq::PTPMessagePathDelayReq
 
 void PTPMessagePathDelayReq::processMessage( CommonPort *port )
 {
+	GPTP_LOG_INFO("*** PTPMessagePathDelayReq::processMessage - START processing PDelay Request");
+	
 	OSTimer *timer = port->getTimerFactory()->createTimer();
 	PortIdentity resp_fwup_id;
 	PortIdentity requestingPortIdentity_p;
@@ -1270,6 +1272,8 @@ void PTPMessagePathDelayReq::processMessage( CommonPort *port )
 
 	port->incCounter_ieee8021AsPortStatRxPdelayRequest();
 
+	GPTP_LOG_INFO("*** PTPMessagePathDelayReq::processMessage - passed state checks, creating response");
+
 	/* Generate and send message */
 	resp = new PTPMessagePathDelayResp(eport);
 	port->getPortIdentity(resp_id);
@@ -1288,10 +1292,14 @@ void PTPMessagePathDelayReq::processMessage( CommonPort *port )
 	resp->setRequestingPortIdentity(&requestingPortIdentity_p);
 	resp->setRequestReceiptTimestamp(_timestamp);
 
+	GPTP_LOG_INFO("*** About to send PDelay Response - acquiring TX lock");
 	port->getTxLock();
+	GPTP_LOG_INFO("*** TX lock acquired, calling sendPort");
 	resp->sendPort(eport, sourcePortIdentity);
+	GPTP_LOG_INFO("*** sendPort returned, releasing TX lock");
 	GPTP_LOG_DEBUG("*** Sent PDelay Response message");
 	port->putTxLock();
+	GPTP_LOG_INFO("*** TX lock released");
 
 	if( resp->getTimestamp()._version != _timestamp._version ) {
 		GPTP_LOG_ERROR("TX timestamp version mismatch: %u/%u",
@@ -1811,7 +1819,28 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	} else
 	{
 		if( !eport->getAutomotiveProfile( ))
-			port->setAsCapable( true );
+		{
+			// Milan Specification 5.6.2.4 compliance:
+			// asCapable should be TRUE after 2-5 successful PDelay exchanges
+			if( eport->getMilanProfile() ) {
+				unsigned int pdelay_count = port->getPdelayCount();
+				if( pdelay_count >= 2 && pdelay_count <= 5 ) {
+					// Milan: Set asCapable=true after 2-5 successful exchanges
+					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: Setting asCapable=true after %d successful PDelay exchanges (requirement: 2-5) ***", pdelay_count);
+					port->setAsCapable( true );
+				} else if( pdelay_count >= 2 ) {
+					// Milan: Keep asCapable=true after initial establishment
+					port->setAsCapable( true );
+				} else {
+					// Milan: Less than 2 successful exchanges, keep current state
+					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay success %d/2 - need %d more before setting asCapable=true ***", 
+						pdelay_count, 2 - pdelay_count);
+				}
+			} else {
+				// Standard profile: set asCapable immediately on successful PDelay
+				port->setAsCapable( true );
+			}
+		}
 	}
 	port->setPeerOffset( request_tx_timestamp, remote_req_rx_timestamp );
 
