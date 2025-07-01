@@ -193,20 +193,29 @@ bool EtherPort::_init_port( void )
 
 void EtherPort::startPDelay()
 {
+	GPTP_LOG_STATUS("*** DEBUG: startPDelay() called, pdelayHalted=%s, automotive=%s, milan=%s ***", 
+		pdelayHalted() ? "true" : "false",
+		getAutomotiveProfile() ? "true" : "false", 
+		getMilanProfile() ? "true" : "false");
+	
 	if(!pdelayHalted()) {
 		if( getAutomotiveProfile( ))
 		{
 			if( getPDelayInterval() !=
 			    PTPMessageSignalling::sigMsgInterval_NoSend)
 			{
+				GPTP_LOG_STATUS("*** DEBUG: Automotive profile - starting PDelay timer with EVENT_TIMER_GRANULARITY ***");
 				pdelay_started = true;
 				startPDelayIntervalTimer(EVENT_TIMER_GRANULARITY);
 			}
 		}
 		else {
+			GPTP_LOG_STATUS("*** DEBUG: Non-automotive profile - starting PDelay timer with 32ms interval ***");
 			pdelay_started = true;
 			startPDelayIntervalTimer(32000000);
 		}
+	} else {
+		GPTP_LOG_WARNING("*** DEBUG: PDelay is halted, not starting timer ***");
 	}
 }
 
@@ -558,7 +567,7 @@ bool EtherPort::_processEvent( Event e )
 		ret = true;
 		break;
 	case PDELAY_INTERVAL_TIMEOUT_EXPIRES:
-		GPTP_LOG_DEBUG("PDELAY_INTERVAL_TIMEOUT_EXPIRES occured");
+		GPTP_LOG_STATUS("*** DEBUG: PDELAY_INTERVAL_TIMEOUT_EXPIRES occurred - sending PDelay request ***");
 		{
 			Timestamp req_timestamp;
 
@@ -605,6 +614,8 @@ bool EtherPort::_processEvent( Event e )
 					 (pow((double)2,getPDelayInterval())*1000000000.0));
 				interval = interval > EVENT_TIMER_GRANULARITY ?
 					interval : EVENT_TIMER_GRANULARITY;
+				GPTP_LOG_STATUS("*** DEBUG: Restarting PDelay timer with interval=%lld ns (%.3f ms) ***", 
+					interval, interval / 1000000.0);
 				startPDelayIntervalTimer(interval);
 			}
 		}
@@ -885,10 +896,13 @@ int EtherPort::getRxTimestamp
 void EtherPort::startPDelayIntervalTimer
 ( long long unsigned int waitTime )
 {
+	GPTP_LOG_STATUS("*** DEBUG: startPDelayIntervalTimer() called with waitTime=%llu ns (%.3f ms) ***", 
+		waitTime, waitTime / 1000000.0);
 	pDelayIntervalTimerLock->lock();
 	clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
 	clock->addEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES, waitTime);
 	pDelayIntervalTimerLock->unlock();
+	GPTP_LOG_STATUS("*** DEBUG: PDelay interval timer set successfully ***");
 }
 
 void EtherPort::syncDone() {

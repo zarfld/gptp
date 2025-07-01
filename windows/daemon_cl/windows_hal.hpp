@@ -966,56 +966,75 @@ public:
 			} else {
 				GPTP_LOG_WARNING("Unknown error 0x%08X when reading Intel TX timestamp OID", result);
 			}
-			
-			// TX Timestamp fallback: Use current time as approximation
-			// Note: TX timestamps are harder to approximate than RX since the packet is already sent
-			GPTP_LOG_VERBOSE("Attempting TX timestamp fallback for messageType=%d, seq=%u", 
-				messageId.getMessageType(), messageId.getSequenceId());
-			
-			// Try cross-timestamping first for best accuracy
-			WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
-			if (crossTimestamp.isPreciseTimestampingSupported()) {
-				Timestamp system_time, device_time;
-				uint32_t local_clock, nominal_clock_rate;
-				
-				if (crossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
-					timestamp = device_time;
-					timestamp._version = version;
-					
-					GPTP_LOG_VERBOSE("TX timestamp cross-timestamp fallback successful: messageType=%d, seq=%u", 
-						messageId.getMessageType(), messageId.getSequenceId());
-					
-					return GPTP_EC_SUCCESS;
-				}
-			}
-			
-			// Fallback to TSC if cross-timestamping fails
-			if (tsc_hz.QuadPart > 0) {
-				LARGE_INTEGER tsc_now;
-				if (QueryPerformanceCounter(&tsc_now)) {
-					uint64_t tsc_ns = scaleTSCClockToNanoseconds(tsc_now.QuadPart);
-					timestamp = nanoseconds64ToTimestamp(tsc_ns);
-					timestamp._version = version;
-					
-					GPTP_LOG_VERBOSE("TX timestamp TSC fallback successful: messageType=%d, seq=%u, ts=%llu ns", 
-						messageId.getMessageType(), messageId.getSequenceId(), tsc_ns);
-					
-					return GPTP_EC_SUCCESS;
-				}
-			}
-			
-			return GPTP_EC_FAILURE;
+			goto try_tx_fallback;
 		}
 		if( returned != sizeof(buf_tmp) ){
-			GPTP_LOG_WARNING("Error reading TX timestamp: returned %d, expected %d", returned, sizeof(buf_tmp));
-			return GPTP_EC_EAGAIN;
+			// Only log occasionally when Intel OIDs return insufficient data
+			static uint32_t tx_insufficient_data_count = 0;
+			tx_insufficient_data_count++;
+			if (tx_insufficient_data_count <= 3 || tx_insufficient_data_count % 100 == 0) {
+				GPTP_LOG_VERBOSE("Intel TX timestamp returned insufficient data: %d bytes, expected %d (attempt %u)", 
+					returned, sizeof(buf_tmp), tx_insufficient_data_count);
+			}
+			goto try_tx_fallback;
 		} 
+		
+		// Validate that the TX timestamp data is not uninitialized (0xCCCCCCCC pattern)
 		tx_r = (((uint64_t)buf[1]) << 32) | buf[0];
+		if (tx_r == 0 || tx_r == 0xCCCCCCCCCCCCCCCCULL || 
+		    buf[0] == 0xCCCCCCCC || buf[1] == 0xCCCCCCCC) {
+			static uint32_t tx_uninitialized_count = 0;
+			tx_uninitialized_count++;
+			if (tx_uninitialized_count <= 1) {
+				GPTP_LOG_INFO("Intel TX timestamp hardware clock not running - using software timestamps");
+			}
+			goto try_tx_fallback;
+		}
+		
 		tx_s = scaleNativeClockToNanoseconds( tx_r );
 		timestamp = nanoseconds64ToTimestamp( tx_s );
 		timestamp._version = version;
 
 		return GPTP_EC_SUCCESS;
+		
+	try_tx_fallback:
+		// TX Timestamp fallback when hardware timestamps are unavailable
+		GPTP_LOG_VERBOSE("Attempting TX timestamp fallback for messageType=%d, seq=%u", 
+			messageId.getMessageType(), messageId.getSequenceId());
+		
+		// Try cross-timestamping first for best accuracy
+		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+		if (crossTimestamp.isPreciseTimestampingSupported()) {
+			Timestamp system_time, device_time;
+			uint32_t local_clock, nominal_clock_rate;
+			
+			if (crossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
+				timestamp = device_time;
+				timestamp._version = version;
+				
+				GPTP_LOG_VERBOSE("TX timestamp cross-timestamp fallback successful: messageType=%d, seq=%u", 
+					messageId.getMessageType(), messageId.getSequenceId());
+				
+				return GPTP_EC_SUCCESS;
+			}
+		}
+		
+		// Fallback to TSC if cross-timestamping fails
+		if (tsc_hz.QuadPart > 0) {
+			LARGE_INTEGER tsc_now;
+			if (QueryPerformanceCounter(&tsc_now)) {
+				uint64_t tsc_ns = scaleTSCClockToNanoseconds(tsc_now.QuadPart);
+				timestamp = nanoseconds64ToTimestamp(tsc_ns);
+				timestamp._version = version;
+				
+				GPTP_LOG_VERBOSE("TX timestamp TSC fallback successful: messageType=%d, seq=%u, ts=%llu ns", 
+					messageId.getMessageType(), messageId.getSequenceId(), tsc_ns);
+				
+				return GPTP_EC_SUCCESS;
+			}
+		}
+		
+		return GPTP_EC_FAILURE;
 	}
 
 	/**
@@ -1061,12 +1080,24 @@ public:
 		}
 
 		// Primary method: Intel custom OID for hardware RX timestamps
+		// Check if Intel PTP hardware clock is running before attempting timestamp reads
+		static bool intel_ptp_available = true; // Assume available initially
+		static uint32_t consecutive_failures = 0;
+		
+		// If we've had many consecutive failures, skip Intel OID attempts for efficiency
+		if (consecutive_failures > 50) {
+			intel_ptp_available = false;
+			GPTP_LOG_VERBOSE("Skipping Intel OID after %u consecutive failures", consecutive_failures);
+			goto try_fallback_timestamp;
+		}
+		
 		while(( result = readOID( OID_INTEL_GET_RXSTAMP, buf_tmp, sizeof(buf_tmp), &returned )) == ERROR_SUCCESS ) {
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
 		
 		if( result != ERROR_GEN_FAILURE ) {
 			timestamp_failures++;
+			consecutive_failures++;
 			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d (0x%08X) (Attempt %u, Failures: %u)", 
 				messageId.getMessageType(), result, result, timestamp_attempts, timestamp_failures);
 			if (result == ERROR_NOT_SUPPORTED) {
@@ -1081,30 +1112,52 @@ public:
 			goto try_fallback_timestamp;
 		}
 		
+		// Check if we got the expected amount of data
 		if( returned != sizeof(buf_tmp) ) {
 			timestamp_failures++;
-			GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d (Attempt %u, Failures: %u)", 
-				returned, sizeof(buf_tmp), timestamp_attempts, timestamp_failures);
+			consecutive_failures++;
 			
-			// Log buffer contents for debugging (first few bytes)
-			if (returned > 0 && returned < 16) {
+			// Don't spam warnings - only log periodically when Intel PTP isn't working
+			if (consecutive_failures <= 5 || consecutive_failures % 50 == 0) {
+				GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d (Attempt %u, Failures: %u)", 
+					returned, sizeof(buf_tmp), timestamp_attempts, timestamp_failures);
+			}
+			
+			// Log buffer contents for debugging only on first few failures
+			if (returned > 0 && returned < 16 && consecutive_failures <= 3) {
 				GPTP_LOG_WARNING("Partial data received: %02X %02X %02X %02X", 
 					((uint8_t*)buf_tmp)[0], ((uint8_t*)buf_tmp)[1], 
 					((uint8_t*)buf_tmp)[2], ((uint8_t*)buf_tmp)[3]);
 			}
-			return GPTP_EC_EAGAIN;
+			goto try_fallback_timestamp;
+		}
+		
+		// Validate that the timestamp data is not uninitialized (0xCCCCCCCC pattern)
+		uint64_t timestamp_raw = (((uint64_t)buf[1]) << 32) | buf[0];
+		if (timestamp_raw == 0 || timestamp_raw == 0xCCCCCCCCCCCCCCCCULL || 
+		    buf[0] == 0xCCCCCCCC || buf[1] == 0xCCCCCCCC) {
+			timestamp_failures++;
+			consecutive_failures++;
+			
+			// Only log the first few uninitialized timestamp warnings
+			if (consecutive_failures <= 3) {
+				GPTP_LOG_WARNING("Intel RX timestamp contains uninitialized data: 0x%08X%08X (clock not running) (Attempt %u, Failures: %u)", 
+					buf[1], buf[0], timestamp_attempts, timestamp_failures);
+			}
+			goto try_fallback_timestamp;
 		}
 		
 		packet_sequence_id = *((uint32_t *) buf+3) >> 16;
 		if (PLAT_ntohs(packet_sequence_id) != messageId.getSequenceId()) {
 			GPTP_LOG_VERBOSE("RX timestamp sequence ID mismatch: got %u, expected %u (Attempt %u)", 
 				PLAT_ntohs(packet_sequence_id), messageId.getSequenceId(), timestamp_attempts);
-			return GPTP_EC_EAGAIN;
+			goto try_fallback_timestamp;
 		}
 		
 		// SUCCESS: Intel OID provided valid RX timestamp
 		timestamp_successes++;
-		rx_r = (((uint64_t)buf[1]) << 32) | buf[0];
+		consecutive_failures = 0; // Reset failure counter on success
+		rx_r = timestamp_raw;
 		rx_s = scaleNativeClockToNanoseconds( rx_r );
 		timestamp = nanoseconds64ToTimestamp( rx_s );
 		timestamp._version = version;

@@ -35,6 +35,7 @@
 #include "windows_hal.hpp"
 #include "windows_hal_iphlpapi.hpp"
 #include "windows_hal_ndis.hpp"
+#include "gptp_log.hpp"
 
 // Thread callback implementation
 DWORD WINAPI OSThreadCallback( LPVOID input ) {
@@ -49,8 +50,26 @@ DWORD WINAPI OSThreadCallback( LPVOID input ) {
 
 // Timer queue handler implementation
 VOID CALLBACK WindowsTimerQueueHandler( PVOID arg_in, BOOLEAN ignore ) {
-    // Implementation would need to be moved from the original windows_hal.cpp
-    // For now, this is a placeholder structure
+    WindowsTimerQueueHandlerArg *arg = (WindowsTimerQueueHandlerArg *) arg_in;
+    
+    if (!arg) {
+        GPTP_LOG_ERROR("Timer queue handler called with NULL argument");
+        return;
+    }
+    
+    GPTP_LOG_DEBUG("Timer queue handler fired: type=%d", arg->type);
+    
+    // Call the timer callback function
+    if (arg->func) {
+        arg->func(arg->inner_arg);
+    } else {
+        GPTP_LOG_ERROR("Timer queue handler: callback function is NULL for type %d", arg->type);
+    }
+    
+    // Add to retired timers list for cleanup if needed
+    if (arg->queue && arg->rm) {
+        arg->queue->retiredTimers.push_back(arg);
+    }
 }
 
 // Unified hardware clock rate detection with fallback strategy
