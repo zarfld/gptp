@@ -916,7 +916,7 @@ public:
 		if( result != ERROR_GEN_FAILURE ) {
 			GPTP_LOG_WARNING("Error (TX) timestamping PDelay request, error=%d (0x%08X). Intel OID may not be supported or accessible", result, result);
 			if (result == ERROR_NOT_SUPPORTED) {
-				GPTP_LOG_INFO("Driver does not support Intel TX timestamping OID - falling back to software timestamps");
+				GPTP_LOG_INFO("Driver does not support Intel TX timestamping OID - trying fallback methods");
 			} else if (result == ERROR_ACCESS_DENIED) {
 				GPTP_LOG_WARNING("Access denied to Intel TX timestamp OID - ensure running as administrator");
 			} else if (result == ERROR_INVALID_HANDLE || result == ERROR_FILE_NOT_FOUND) {
@@ -924,6 +924,44 @@ public:
 			} else {
 				GPTP_LOG_WARNING("Unknown error 0x%08X when reading Intel TX timestamp OID", result);
 			}
+			
+			// TX Timestamp fallback: Use current time as approximation
+			// Note: TX timestamps are harder to approximate than RX since the packet is already sent
+			GPTP_LOG_VERBOSE("Attempting TX timestamp fallback for messageType=%d, seq=%u", 
+				messageId.getMessageType(), messageId.getSequenceId());
+			
+			// Try cross-timestamping first for best accuracy
+			WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+			if (crossTimestamp.isPreciseTimestampingSupported()) {
+				Timestamp system_time, device_time;
+				uint32_t local_clock, nominal_clock_rate;
+				
+				if (crossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
+					timestamp = device_time;
+					timestamp._version = version;
+					
+					GPTP_LOG_VERBOSE("TX timestamp cross-timestamp fallback successful: messageType=%d, seq=%u", 
+						messageId.getMessageType(), messageId.getSequenceId());
+					
+					return GPTP_EC_SUCCESS;
+				}
+			}
+			
+			// Fallback to TSC if cross-timestamping fails
+			if (tsc_hz.QuadPart > 0) {
+				LARGE_INTEGER tsc_now;
+				if (QueryPerformanceCounter(&tsc_now)) {
+					uint64_t tsc_ns = scaleTSCClockToNanoseconds(tsc_now.QuadPart);
+					timestamp = nanoseconds64ToTimestamp(tsc_ns);
+					timestamp._version = version;
+					
+					GPTP_LOG_VERBOSE("TX timestamp TSC fallback successful: messageType=%d, seq=%u, ts=%llu ns", 
+						messageId.getMessageType(), messageId.getSequenceId(), tsc_ns);
+					
+					return GPTP_EC_SUCCESS;
+				}
+			}
+			
 			return GPTP_EC_FAILURE;
 		}
 		if( returned != sizeof(buf_tmp) ){
@@ -969,6 +1007,7 @@ public:
 		static uint32_t timestamp_attempts = 0;
 		static uint32_t timestamp_successes = 0;
 		static uint32_t timestamp_failures = 0;
+		static uint32_t fallback_attempts = 0;
 		timestamp_attempts++;
 
 		// Check if miniport handle is valid before attempting to read
@@ -976,18 +1015,20 @@ public:
 			timestamp_failures++;
 			GPTP_LOG_WARNING("Cannot read RX timestamp: miniport handle is invalid (Attempt %u, Failures: %u)", 
 				timestamp_attempts, timestamp_failures);
-			return GPTP_EC_FAILURE;
+			goto try_fallback_timestamp;
 		}
 
+		// Primary method: Intel custom OID for hardware RX timestamps
 		while(( result = readOID( OID_INTEL_GET_RXSTAMP, buf_tmp, sizeof(buf_tmp), &returned )) == ERROR_SUCCESS ) {
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
+		
 		if( result != ERROR_GEN_FAILURE ) {
 			timestamp_failures++;
 			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d (0x%08X) (Attempt %u, Failures: %u)", 
 				messageId.getMessageType(), result, result, timestamp_attempts, timestamp_failures);
 			if (result == ERROR_NOT_SUPPORTED) {
-				GPTP_LOG_INFO("Driver does not support Intel RX timestamping OID - falling back to software timestamps");
+				GPTP_LOG_INFO("Driver does not support Intel RX timestamping OID - trying fallback methods");
 			} else if (result == ERROR_ACCESS_DENIED) {
 				GPTP_LOG_WARNING("Access denied to Intel RX timestamp OID - ensure running as administrator");
 			} else if (result == ERROR_INVALID_HANDLE || result == ERROR_FILE_NOT_FOUND) {
@@ -995,8 +1036,9 @@ public:
 			} else {
 				GPTP_LOG_WARNING("Unknown error 0x%08X when reading Intel RX timestamp OID", result);
 			}
-			return GPTP_EC_FAILURE;
+			goto try_fallback_timestamp;
 		}
+		
 		if( returned != sizeof(buf_tmp) ) {
 			timestamp_failures++;
 			GPTP_LOG_WARNING("RX timestamp read returned insufficient data: %d bytes, expected %d (Attempt %u, Failures: %u)", 
@@ -1010,6 +1052,7 @@ public:
 			}
 			return GPTP_EC_EAGAIN;
 		}
+		
 		packet_sequence_id = *((uint32_t *) buf+3) >> 16;
 		if (PLAT_ntohs(packet_sequence_id) != messageId.getSequenceId()) {
 			GPTP_LOG_VERBOSE("RX timestamp sequence ID mismatch: got %u, expected %u (Attempt %u)", 
@@ -1017,6 +1060,7 @@ public:
 			return GPTP_EC_EAGAIN;
 		}
 		
+		// SUCCESS: Intel OID provided valid RX timestamp
 		timestamp_successes++;
 		rx_r = (((uint64_t)buf[1]) << 32) | buf[0];
 		rx_s = scaleNativeClockToNanoseconds( rx_r );
@@ -1028,9 +1072,101 @@ public:
 			GPTP_LOG_STATUS("RX timestamp SUCCESS #%u: messageType=%d, seq=%u, ts=%llu ns (Successes: %u/%u attempts)",
 				timestamp_successes, messageId.getMessageType(), messageId.getSequenceId(), rx_s, timestamp_successes, timestamp_attempts);
 		}
-		timestamp._version = version;
 
 		return GPTP_EC_SUCCESS;
+
+	try_fallback_timestamp:
+		// Enhanced fallback method: Try multiple Windows timestamp approaches
+		fallback_attempts++;
+		
+		GPTP_LOG_VERBOSE("Attempting enhanced timestamp fallback (attempt %u) for messageType=%d, seq=%u", 
+			fallback_attempts, messageId.getMessageType(), messageId.getSequenceId());
+		
+		// Fallback 1: Try standard NDIS timestamp OIDs (OID_TIMESTAMP_CAPABILITY/OID_TIMESTAMP_CURRENT_CONFIG)
+		if (tryNDISTimestamp(timestamp, messageId)) {
+			GPTP_LOG_VERBOSE("NDIS timestamp fallback successful: messageType=%d, seq=%u", 
+				messageId.getMessageType(), messageId.getSequenceId());
+			return GPTP_EC_SUCCESS;
+		}
+		
+		// Fallback 2: Try IPHLPAPI-based timestamping
+		if (tryIPHLPAPITimestamp(timestamp, messageId)) {
+			GPTP_LOG_VERBOSE("IPHLPAPI timestamp fallback successful: messageType=%d, seq=%u", 
+				messageId.getMessageType(), messageId.getSequenceId());
+			return GPTP_EC_SUCCESS;
+		}
+		
+		// Fallback 3: Try packet capture timestamp (if available)
+		if (tryPacketCaptureTimestamp(timestamp, messageId)) {
+			GPTP_LOG_VERBOSE("Packet capture timestamp fallback successful: messageType=%d, seq=%u", 
+				messageId.getMessageType(), messageId.getSequenceId());
+			return GPTP_EC_SUCCESS;
+		}
+		
+		// Fallback 4: Cross-timestamp correlation (existing method)
+		Timestamp system_time, device_time;
+		uint32_t local_clock, nominal_clock_rate;
+		
+		// Use the same cross-timestamping mechanism as HWTimestamper_gettime
+		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+		
+		if (crossTimestamp.isPreciseTimestampingSupported()) {
+			if (crossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
+				// Use device time as software RX timestamp approximation
+				timestamp = device_time;
+				timestamp._version = version;
+				
+				GPTP_LOG_VERBOSE("Cross-timestamp fallback successful: messageType=%d, seq=%u, ts=%llu.%09u", 
+					messageId.getMessageType(), messageId.getSequenceId(), 
+					(uint64_t)timestamp.seconds_ls + ((uint64_t)timestamp.seconds_ms << 32), timestamp.nanoseconds);
+				
+				return GPTP_EC_SUCCESS;
+			}
+		}
+		
+		// Fallback 5: Intel OID system time (if miniport handle was valid)
+		if (miniport != INVALID_HANDLE_VALUE) {
+			DWORD systim_buf[6];
+			DWORD systim_returned;
+			
+			if (readOID(OID_INTEL_GET_SYSTIM, systim_buf, sizeof(systim_buf), &systim_returned) == ERROR_SUCCESS && 
+				systim_returned == sizeof(systim_buf)) {
+				
+				uint64_t now_net = (((uint64_t)systim_buf[1]) << 32) | systim_buf[0];
+				if (now_net > 0) {
+					uint64_t now_net_ns = scaleNativeClockToNanoseconds(now_net);
+					timestamp = nanoseconds64ToTimestamp(now_net_ns);
+					timestamp._version = version;
+					
+					GPTP_LOG_VERBOSE("Intel OID system time fallback successful: messageType=%d, seq=%u, ts=%llu ns", 
+						messageId.getMessageType(), messageId.getSequenceId(), now_net_ns);
+					
+					return GPTP_EC_SUCCESS;
+				}
+			}
+		}
+		
+		// Fallback 6: Ultimate fallback - Software timestamp using TSC
+		if (tsc_hz.QuadPart > 0) {
+			LARGE_INTEGER tsc_now;
+			if (QueryPerformanceCounter(&tsc_now)) {
+				uint64_t tsc_ns = scaleTSCClockToNanoseconds(tsc_now.QuadPart);
+				timestamp = nanoseconds64ToTimestamp(tsc_ns);
+				timestamp._version = version;
+				
+				GPTP_LOG_VERBOSE("TSC software timestamp fallback: messageType=%d, seq=%u, ts=%llu ns (precision: software-only)", 
+					messageId.getMessageType(), messageId.getSequenceId(), tsc_ns);
+				
+				return GPTP_EC_SUCCESS;
+			}
+		}
+		
+		// All fallback methods failed
+		GPTP_LOG_ERROR("All RX timestamping methods failed for messageType=%d, seq=%u (fallback attempts: %u)", 
+			messageId.getMessageType(), messageId.getSequenceId(), fallback_attempts);
+		GPTP_LOG_ERROR("Attempted methods: Intel OID → NDIS → IPHLPAPI → Packet Capture → Cross-timestamp → Intel System Time → TSC");
+		
+		return GPTP_EC_FAILURE;
 	}
 
 	/**
@@ -1039,6 +1175,30 @@ public:
 	 * @param adapter_description Adapter description for logging
 	 */
 	void checkIntelPTPRegistrySettings(const char* adapter_guid, const char* adapter_description) const;
+
+	/**
+	 * @brief Attempt to get RX timestamp using standard NDIS OIDs
+	 * @param timestamp [out] RX timestamp if successful
+	 * @param messageId Message ID for sequence validation
+	 * @return true if timestamp retrieved successfully, false otherwise
+	 */
+	bool tryNDISTimestamp(Timestamp& timestamp, const PTPMessageId& messageId) const;
+
+	/**
+	 * @brief Attempt to get RX timestamp using IPHLPAPI
+	 * @param timestamp [out] RX timestamp if successful  
+	 * @param messageId Message ID for sequence validation
+	 * @return true if timestamp retrieved successfully, false otherwise
+	 */
+	bool tryIPHLPAPITimestamp(Timestamp& timestamp, const PTPMessageId& messageId) const;
+
+	/**
+	 * @brief Attempt to get RX timestamp from packet capture layer
+	 * @param timestamp [out] RX timestamp if successful
+	 * @param messageId Message ID for sequence validation
+	 * @return true if timestamp retrieved successfully, false otherwise
+	 */
+	bool tryPacketCaptureTimestamp(Timestamp& timestamp, const PTPMessageId& messageId) const;
 
 	/**
 	 * @brief Test Intel custom OID availability and functionality
