@@ -1692,6 +1692,32 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	port->getClock()->deleteEventTimerLocked
 		(port, PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES);
 
+	// Milan profile: mark that we received a response (even if late)
+	if( eport->getMilanProfile() ) {
+		eport->setPDelayResponseReceived(true);
+		
+		// Check if response is late based on expected timing
+		Timestamp now = port->getClock()->getTime();
+		Timestamp req_time = eport->getLastPDelayReqTimestamp();
+		if( req_time.nanoseconds != 0 ) { // Valid request timestamp
+			uint64_t elapsed_ns = TIMESTAMP_TO_NS(now) - TIMESTAMP_TO_NS(req_time);
+			uint64_t expected_response_time_ns = (uint64_t)(pow(2.0, eport->getPDelayInterval()) * 1000000000.0);
+			
+			if( elapsed_ns > expected_response_time_ns + 10000000 ) { // More than 10ms late
+				unsigned late_count = eport->getConsecutiveLateResponses() + 1;
+				eport->setConsecutiveLateResponses(late_count);
+				eport->setConsecutiveMissingResponses(0); // Reset missing count
+				GPTP_LOG_STATUS("*** MILAN: PDelay response is late by %.3f ms (consecutive late: %d) ***", 
+					(elapsed_ns - expected_response_time_ns) / 1000000.0, late_count);
+			} else {
+				// On-time response, reset counters
+				eport->setConsecutiveLateResponses(0);
+				eport->setConsecutiveMissingResponses(0);
+				GPTP_LOG_DEBUG("*** MILAN: PDelay response on-time, resetting late/missing counters ***");
+			}
+		}
+	}
+
 	GPTP_LOG_VERBOSE("Request Sequence Id: %u", req->getSequenceId());
 	GPTP_LOG_VERBOSE("Response Sequence Id: %u", resp->getSequenceId());
 	GPTP_LOG_VERBOSE("Follow-Up Sequence Id: %u", sequenceId);
@@ -1824,6 +1850,11 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 			// asCapable should be TRUE after 2-5 successful PDelay exchanges
 			if( eport->getMilanProfile() ) {
 				unsigned int pdelay_count = port->getPdelayCount();
+				
+				// Reset consecutive late/missing response counters on successful processing
+				eport->setConsecutiveLateResponses(0);
+				eport->setConsecutiveMissingResponses(0);
+				
 				if( pdelay_count >= 2 && pdelay_count <= 5 ) {
 					// Milan: Set asCapable=true after 2-5 successful exchanges
 					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: Setting asCapable=true after %d successful PDelay exchanges (requirement: 2-5) ***", pdelay_count);
@@ -1834,6 +1865,20 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 				} else {
 					// Milan: Less than 2 successful exchanges, keep current state
 					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay success %d/2 - need %d more before setting asCapable=true ***", 
+						pdelay_count, 2 - pdelay_count);
+				}
+			} else if( eport->getAvnuBaseProfile() ) {
+				unsigned int pdelay_count = port->getPdelayCount();
+				if( pdelay_count >= 2 && pdelay_count <= 10 ) {
+					// AVnu Base/ProAV: Set asCapable=true after 2-10 successful exchanges
+					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: Setting asCapable=true after %d successful PDelay exchanges (requirement: 2-10) ***", pdelay_count);
+					port->setAsCapable( true );
+				} else if( pdelay_count >= 2 ) {
+					// AVnu Base/ProAV: Keep asCapable=true after initial establishment
+					port->setAsCapable( true );
+				} else {
+					// AVnu Base/ProAV: Less than 2 successful exchanges, keep current state
+					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: PDelay success %d/2 - need %d more before setting asCapable=true ***", 
 						pdelay_count, 2 - pdelay_count);
 				}
 			} else {

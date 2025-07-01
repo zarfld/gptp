@@ -779,20 +779,42 @@ void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 	GPTP_LOG_STATUS("Starting link monitoring for MAC: %02x:%02x:%02x:%02x:%02x:%02x", 
 		port_mac[0], port_mac[1], port_mac[2], port_mac[3], port_mac[4], port_mac[5]);
 
-	// **CRITICAL FIX**: For now, assume link is UP and set asCapable immediately
-	// This fixes the issue where Announce messages never start
-	bool link_up = true;  // Assume link is up for direct connection testing
-	pPort->setAsCapable(link_up);
+	// **PROFILE-AWARE LINK MONITORING**: Set asCapable based on profile requirements
+	// Different profiles have different asCapable initialization requirements
+	bool initial_as_capable = false;
 	
-	GPTP_LOG_STATUS("*** CRITICAL FIX: Setting asCapable=%s immediately ***", 
-					link_up ? "true" : "false");
-	
-	if (link_up) {
-		GPTP_LOG_STATUS("*** ANNOUNCE MESSAGES SHOULD NOW START ***");
-		GPTP_LOG_STATUS("*** TRIGGERING LINKUP EVENT FOR BMCA ***");
-		// Trigger the LINKUP event to start BMCA (Best Master Clock Algorithm)
-		pPort->processEvent(LINKUP);
+	if (pPort->getAutomotiveProfile()) {
+		// Automotive profile: asCapable=true when link is up (immediate)
+		initial_as_capable = true;
+		GPTP_LOG_STATUS("*** AUTOMOTIVE PROFILE: Setting asCapable=true on link up ***");
+	} else if (pPort->getMilanProfile()) {
+		// Milan profile: asCapable=true immediately for fast convergence
+		initial_as_capable = true;
+		GPTP_LOG_STATUS("*** MILAN PROFILE: Setting asCapable=true for fast convergence ***");
+	} else if (pPort->getAvnuBaseProfile()) {
+		// AVnu Base/ProAV profile: asCapable=false, must earn it via 2-10 PDelay exchanges
+		initial_as_capable = false;
+		GPTP_LOG_STATUS("*** AVNU BASE PROFILE: Starting with asCapable=false - must earn via 2-10 PDelay exchanges ***");
+	} else {
+		// Standard IEEE 1588 profile: asCapable=false initially
+		initial_as_capable = false;
+		GPTP_LOG_STATUS("*** STANDARD PROFILE: Starting with asCapable=false ***");
 	}
+	
+	pPort->setAsCapable(initial_as_capable);
+	
+	GPTP_LOG_STATUS("*** PROFILE-AWARE INITIALIZATION: Setting asCapable=%s ***", 
+					initial_as_capable ? "true" : "false");
+	
+	if (initial_as_capable) {
+		GPTP_LOG_STATUS("*** ANNOUNCE MESSAGES WILL START IMMEDIATELY ***");
+	} else {
+		GPTP_LOG_STATUS("*** ANNOUNCE MESSAGES WILL START AFTER EARNING asCapable ***");
+	}
+	
+	GPTP_LOG_STATUS("*** TRIGGERING LINKUP EVENT FOR BMCA ***");
+	// Always trigger LINKUP event regardless of asCapable state for PDelay to start
+	pPort->processEvent(LINKUP);
 
 	// TODO: Implement proper link monitoring in future
 	GPTP_LOG_STATUS("Link monitoring setup complete (simplified mode)");

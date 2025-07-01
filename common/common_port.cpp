@@ -64,6 +64,7 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	qualified_announce = NULL;
 	automotive_profile = portInit->automotive_profile;
 	milan_profile = portInit->milan_config.milan_profile;
+	avnu_base_profile = portInit->avnu_base_profile;
 	milan_config = portInit->milan_config;
 	
 	// Configure clock quality based on profile
@@ -86,6 +87,12 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	asCapable = false;
 	link_speed = INVALID_LINKSPEED;
 	allow_negative_correction_field = portInit->allowNegativeCorrField;
+	
+	// Milan profile: initialize late response tracking
+	_consecutive_late_responses = 0;
+	_consecutive_missing_responses = 0;
+	_last_pdelay_req_timestamp = Timestamp(0, 0, 0);
+	_pdelay_response_received = false;
 	memset(&counters, 0, sizeof(counters));
 }
 

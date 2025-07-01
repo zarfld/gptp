@@ -89,7 +89,8 @@ void print_usage( char *arg0 ) {
 		"Options:\n"
 		"  -R <priority>     Set priority1 value\n"
 		"  -debug-packets    Enable enhanced packet reception debugging\n"
-		"  -Milan            Enable Milan Baseline Interoperability Profile\n",
+		"  -Milan            Enable Milan Baseline Interoperability Profile\n"
+		"  -AvnuBase         Enable AVnu Base/ProAV Functional Interoperability Profile\n",
 		arg0 );
 }
 
@@ -171,6 +172,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	portInit.timestamper = NULL;
 	portInit.net_label = NULL;
 	portInit.automotive_profile = false;
+	portInit.avnu_base_profile = false;
 	portInit.isGM = false;
 	portInit.testMode = false;
 	portInit.initialLogSyncInterval = LOG2_INTERVAL_INVALID;
@@ -236,6 +238,12 @@ int _tmain(int argc, _TCHAR* argv[])
 				printf("  - Max convergence time: %dms\n", portInit.milan_config.max_convergence_time_ms);
 				printf("  - Sync interval: %.3fms\n", pow(2.0, portInit.milan_config.milan_sync_interval_log) * 1000.0);
 				printf("  - Enhanced BMCA with fast convergence\n");
+			}
+			else if (strcmp(argv[i], "-AvnuBase") == 0) {
+				portInit.avnu_base_profile = true;
+				printf("AVnu Base/ProAV Functional Interoperability Profile enabled\n");
+				printf("  - asCapable requires 2-10 successful PDelay exchanges\n");
+				printf("  - Enhanced link detection and timeout handling\n");
 			}
 			else if (toupper(argv[i][1]) == 'W')
 			{
@@ -329,13 +337,28 @@ int _tmain(int argc, _TCHAR* argv[])
 			GPTP_LOG_INFO("offsetScaledLogVariance = 0x%04X", config_offsetScaledLogVariance);
 			GPTP_LOG_INFO("profile = %s", config_profile.c_str());
 			
-			// Override profile settings if Milan or automotive specified
-			if (config_profile == "milan" || portInit.milan_config.milan_profile) {
+			// Profile priority: Command line options override configuration file
+			if (portInit.milan_config.milan_profile) {
+				// Milan profile was explicitly set via command line
+				GPTP_LOG_INFO("Milan profile enabled via command line (overrides config file)");
+			} else if (portInit.avnu_base_profile) {
+				// AVnu Base profile was explicitly set via command line
+				GPTP_LOG_INFO("AVnu Base/ProAV profile enabled via command line (overrides config file)");
+			} else if (portInit.automotive_profile) {
+				// Automotive profile was explicitly set via command line
+				GPTP_LOG_INFO("Automotive profile enabled via command line (overrides config file)");
+			} else if (config_profile == "milan") {
+				// Use Milan profile from configuration file
 				portInit.milan_config.milan_profile = true;
-				GPTP_LOG_INFO("Milan profile enabled via configuration");
-			} else if (config_profile == "automotive" || portInit.automotive_profile) {
+				GPTP_LOG_INFO("Milan profile enabled via configuration file");
+			} else if (config_profile == "avnu_base") {
+				// Use AVnu Base profile from configuration file
+				portInit.avnu_base_profile = true;
+				GPTP_LOG_INFO("AVnu Base/ProAV profile enabled via configuration file");
+			} else if (config_profile == "automotive") {
+				// Use automotive profile from configuration file
 				portInit.automotive_profile = true;
-				GPTP_LOG_INFO("Automotive profile enabled via configuration");
+				GPTP_LOG_INFO("Automotive profile enabled via configuration file");
 			}
 		}
 	} else {

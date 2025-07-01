@@ -255,6 +255,9 @@ typedef struct {
 	/* milan_profile set the Milan Baseline Interoperability Profile */
 	bool milan_profile;
 
+	/* avnu_base_profile set the AVnu Base/ProAV Functional Interoperability Profile */
+	bool avnu_base_profile;
+
 	/* Set to true if the port is the grandmaster. Used for fixed GM in
 	 * the the AVnu automotive profile */
 	bool isGM;
@@ -361,6 +364,7 @@ private:
 	bool testMode;
 	bool automotive_profile;
 	bool milan_profile;
+	bool avnu_base_profile;
 	MilanProfileConfig_t milan_config;
 	MilanProfileStats_t milan_stats;       // Milan profile runtime statistics
 
@@ -405,6 +409,12 @@ private:
 	OSLock *syncReceiptTimerLock;
 	OSLock *syncIntervalTimerLock;
 	OSLock *announceIntervalTimerLock;
+
+	// Milan profile: track late responses vs missing responses
+	unsigned _consecutive_late_responses;	// Track consecutive late (but not missing) responses
+	unsigned _consecutive_missing_responses;	// Track consecutive missing responses
+	Timestamp _last_pdelay_req_timestamp;	// Track when last PDelay request was sent
+	bool _pdelay_response_received;		// Track if response was received (late or on-time)
 
 protected:
 	static const int64_t INVALID_LINKDELAY = 3600000000000;
@@ -1273,6 +1283,12 @@ public:
 	bool getAutomotiveProfile() { return(automotive_profile); }
 
 	/**
+	* @brief  Gets the AVnu Base/ProAV Functional Interoperability profile flag
+	* @return avnu_base_profile flag
+	*/
+	bool getAvnuBaseProfile() { return(avnu_base_profile); }
+
+	/**
 	* @brief  Gets the Milan Baseline Interoperability profile flag
 	* @return milan_profile flag
 	*/
@@ -1368,344 +1384,1020 @@ public:
 	}
 
 	/**
-	 * @brief  Increments announce sequence id and returns
-	 * @return Next announce sequence id.
+	 * @brief  Milan profile: Gets consecutive late responses count
+	 * @return consecutive late responses count
 	 */
-	uint16_t getNextAnnounceSequenceId( void )
+	unsigned getConsecutiveLateResponses()
 	{
-		return announce_sequence_id++;
+		return _consecutive_late_responses;
 	}
 
 	/**
-	 * @brief  Increments signal sequence id and returns
-	 * @return Next signal sequence id.
+	 * @brief  Milan profile: Sets consecutive late responses count
+	 * @param count consecutive late responses count
 	 */
-	uint16_t getNextSignalSequenceId( void )
+	void setConsecutiveLateResponses(unsigned count)
 	{
-		return signal_sequence_id++;
+		_consecutive_late_responses = count;
 	}
 
 	/**
-	 * @brief  Increments sync sequence ID and returns
-	 * @return Next synce sequence id.
+	 * @brief  Milan profile: Gets consecutive missing responses count
+	 * @return consecutive missing responses count
 	 */
-	uint16_t getNextSyncSequenceId( void )
+	unsigned getConsecutiveMissingResponses()
 	{
-		return sync_sequence_id++;
+		return _consecutive_missing_responses;
 	}
 
 	/**
-	 * @brief  Gets the lastGmTimeBaseIndicator
-	 * @return uint16 of the lastGmTimeBaseIndicator
+	 * @brief  Milan profile: Sets consecutive missing responses count
+	 * @param count consecutive missing responses count
 	 */
-	uint16_t getLastGmTimeBaseIndicator( void ) {
-		return lastGmTimeBaseIndicator;
+	void setConsecutiveMissingResponses(unsigned count)
+	{
+		_consecutive_missing_responses = count;
 	}
 
 	/**
-	 * @brief  Sets the lastGmTimeBaseIndicator
-	 * @param  gmTimeBaseIndicator from last Follow up message
+	 * @brief  Milan profile: Gets last PDelay request timestamp
+	 * @return last PDelay request timestamp
+	 */
+	Timestamp getLastPDelayReqTimestamp()
+	{
+		return _last_pdelay_req_timestamp;
+	}
+
+	/**
+	 * @brief  Milan profile: Sets last PDelay request timestamp
+	 * @param timestamp last PDelay request timestamp
+	 */
+	void setLastPDelayReqTimestamp(Timestamp timestamp)
+	{
+		_last_pdelay_req_timestamp = timestamp;
+	}
+
+	/**
+	 * @brief  Milan profile: Gets PDelay response received flag
+	 * @return true if PDelay response was received, false otherwise
+	 */
+	bool getPDelayResponseReceived()
+	{
+		return _pdelay_response_received;
+	}
+
+	/**
+	 * @brief  Milan profile: Sets PDelay response received flag
+	 * @param received true if PDelay response was received, false otherwise
+	 */
+	void setPDelayResponseReceived(bool received)
+	{
+		_pdelay_response_received = received;
+	}
+
+	/**
+	 * @brief  Gets the hardware timestamper version
+	 * @return HW timestamper version
+	 */
+	int getTimestampVersion();
+
+	/**
+	 * @brief  Adjusts the clock frequency.
+	 * @param  freq_offset Frequency offset
+	 * @return TRUE if adjusted. FALSE otherwise.
+	 */
+	bool _adjustClockRate( FrequencyRatio freq_offset );
+
+	/**
+	 * @brief  Adjusts the clock frequency.
+	 * @param  freq_offset Frequency offset
+	 * @return TRUE if adjusted. FALSE otherwise.
+	 */
+	bool adjustClockRate( FrequencyRatio freq_offset ) {
+		return _adjustClockRate( freq_offset );
+	}
+
+	/**
+	 * @brief  Adjusts the clock phase.
+	 * @param  phase_adjust phase offset in ns
+	 * @return TRUE if adjusted. FALSE otherwise.
+	 */
+	bool adjustClockPhase( int64_t phase_adjust );
+
+	/**
+	 * @brief  Gets extended error message from hardware timestamper
+	 * @param  msg [out] Extended error message
 	 * @return void
 	 */
-	void setLastGmTimeBaseIndicator(uint16_t gmTimeBaseIndicator)
+	void getExtendedError(char *msg);
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxSyncCount
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxSyncCount( void )
 	{
-		lastGmTimeBaseIndicator = gmTimeBaseIndicator;
+		counters.ieee8021AsPortStatRxSyncCount++;
 	}
 
 	/**
-	 * @brief  Gets the sync interval value
-	 * @return Sync Interval
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxFollowUpCount
+	 * @return void
 	 */
-	signed char getSyncInterval( void )
+	void incCounter_ieee8021AsPortStatRxFollowUpCount( void )
 	{
-		return log_mean_sync_interval;
+		counters.ieee8021AsPortStatRxFollowUpCount++;
 	}
 
 	/**
-	 * @brief  Sets the sync interval value
-	 * @param  val time interval
-	 * @return none
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPdelayRequest
+	 * @return void
 	 */
-	void setSyncInterval( signed char val )
+	void incCounter_ieee8021AsPortStatRxPdelayRequest( void )
 	{
-		log_mean_sync_interval = val;
+		counters.ieee8021AsPortStatRxPdelayRequest++;
 	}
 
 	/**
-	 * @brief  Sets the sync interval back to initial value
-	 * @return none
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPdelayResponse
+	 * @return void
 	 */
-	void resetInitSyncInterval( void )
+	void incCounter_ieee8021AsPortStatRxPdelayResponse( void )
 	{
-		log_mean_sync_interval = initialLogSyncInterval;;
+		counters.ieee8021AsPortStatRxPdelayResponse++;
 	}
 
 	/**
-	 * @brief  Sets the sync interval
-	 * @return none
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPdelayResponseFollowUp
+	 * @return void
 	 */
-	void setInitSyncInterval( signed char interval )
+	void incCounter_ieee8021AsPortStatRxPdelayResponseFollowUp( void )
 	{
-		initialLogSyncInterval = interval;
+		counters.ieee8021AsPortStatRxPdelayResponseFollowUp++;
 	}
 
 	/**
-	 * @brief  Gets the sync interval
-	 * @return sync interval
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxAnnounce
+	 * @return void
 	 */
-	signed char getInitSyncInterval( void )
+	void incCounter_ieee8021AsPortStatRxAnnounce( void )
 	{
-		return initialLogSyncInterval;
+		counters.ieee8021AsPortStatRxAnnounce++;
 	}
 
 	/**
-	 * @brief  Sets the PDelay interval back to initial value
-	 * @return none
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPTPPacketDiscard
+	 * @return void
 	 */
-	void resetInitPDelayInterval( void )
+	void incCounter_ieee8021AsPortStatRxPTPPacketDiscard( void )
 	{
-		operLogPdelayReqInterval = initialLogPdelayReqInterval;
+		counters.ieee8021AsPortStatRxPTPPacketDiscard++;
 	}
 
 	/**
-	 * @brief  Sets the initial PDelay interval
-	 * @return none
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxSyncReceiptTimeouts
+	 * @return void
 	 */
-	void setInitPDelayInterval( signed char interval )
+	void incCounter_ieee8021AsPortStatRxSyncReceiptTimeouts( void )
 	{
-		initialLogPdelayReqInterval = interval;
+		counters.ieee8021AsPortStatRxSyncReceiptTimeouts++;
 	}
 
 	/**
-	 * @brief  Gets the initial PDelay interval
-	 * @return initial PDelay interval
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatAnnounceReceiptTimeouts
+	 * @return void
 	 */
-	signed char getInitPDelayInterval( void )
+	void incCounter_ieee8021AsPortStatAnnounceReceiptTimeouts( void )
 	{
-		return initialLogPdelayReqInterval;
+		counters.ieee8021AsPortStatAnnounceReceiptTimeouts++;
 	}
 
+
 	/**
-	 * @brief  Sets the operational PDelay interval
-	 * @return none
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatPdelayAllowedLostResponsesExceeded
+	 * @return void
 	 */
-	void setPDelayInterval( signed char interval )
+	// TODO: Not called
+	void incCounter_ieee8021AsPortStatPdelayAllowedLostResponsesExceeded
+	( void )
 	{
-		operLogPdelayReqInterval = interval;
+		counters.
+			ieee8021AsPortStatPdelayAllowedLostResponsesExceeded++;
 	}
 
 	/**
-	 * @brief  Gets the operational PDelay interval
-	 * @return operational PDelay interval
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatTxSyncCount
+	 * @return void
 	 */
-	signed char getPDelayInterval( void )
+	void incCounter_ieee8021AsPortStatTxSyncCount( void )
 	{
-		return operLogPdelayReqInterval;
+		counters.ieee8021AsPortStatTxSyncCount++;
 	}
 
 	/**
-	 * @brief  Gets the announce interval
-	 * @return Announce interval
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatTxFollowUpCount
+	 * @return void
 	 */
-	signed char getAnnounceInterval( void ) {
-		return log_mean_announce_interval;
+	void incCounter_ieee8021AsPortStatTxFollowUpCount( void )
+	{
+		counters.ieee8021AsPortStatTxFollowUpCount++;
 	}
 
 	/**
-	 * @brief  Sets the announce interval
-	 * @param  val time interval
-	 * @return none
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatTxPdelayRequest
+	 * @return void
 	 */
-	void setAnnounceInterval(signed char val) {
-		log_mean_announce_interval = val;
+	void incCounter_ieee8021AsPortStatTxPdelayRequest( void )
+	{
+		counters.ieee8021AsPortStatTxPdelayRequest++;
 	}
+
 	/**
-	 * @brief  Start sync receipt timer
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatTxPdelayResponse
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatTxPdelayResponse( void )
+	{
+		counters.ieee8021AsPortStatTxPdelayResponse++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatTxPdelayResponseFollowUp
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatTxPdelayResponseFollowUp( void )
+	{
+		counters.ieee8021AsPortStatTxPdelayResponseFollowUp++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatTxAnnounce
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatTxAnnounce( void )
+	{
+		counters.ieee8021AsPortStatTxAnnounce++;
+	}
+
+	/**
+	 * @brief  Logs port counters
+	 * @return void
+	 */
+	void logIEEEPortCounters( void )
+	{
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxSyncCount : %u",
+			  counters.ieee8021AsPortStatRxSyncCount );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxFollowUpCount : %u",
+			  counters.ieee8021AsPortStatRxFollowUpCount );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxPdelayRequest : %u",
+			  counters.ieee8021AsPortStatRxPdelayRequest );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxPdelayResponse : %u",
+			  counters.ieee8021AsPortStatRxPdelayResponse );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxPdelayResponseFollowUp "
+			  ": %u", counters.
+			  ieee8021AsPortStatRxPdelayResponseFollowUp );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxAnnounce : %u",
+			  counters.ieee8021AsPortStatRxAnnounce );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxPTPPacketDiscard : %u",
+			  counters.
+			  ieee8021AsPortStatRxPTPPacketDiscard );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatRxSyncReceiptTimeouts "
+			  ": %u", counters.
+			  ieee8021AsPortStatRxSyncReceiptTimeouts );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatAnnounceReceiptTimeouts "
+			  ": %u", counters.
+			  ieee8021AsPortStatAnnounceReceiptTimeouts );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatPdelayAllowed"
+			  "LostResponsesExceeded : %u", counters.
+			  ieee8021AsPortStatPdelayAllowedLostResponsesExceeded
+				);
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatTxSyncCount : %u",
+			  counters.ieee8021AsPortStatTxSyncCount );
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatTxFollowUpCount : %u", counters.
+			  ieee8021AsPortStatTxFollowUpCount);
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatTxPdelayRequest : %u",
+			  counters.ieee8021AsPortStatTxPdelayRequest);
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatTxPdelayResponse : %u", counters.
+			  ieee8021AsPortStatTxPdelayResponse);
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatTxPdelayResponseFollowUp : %u",
+			  counters.ieee8021AsPortStatTxPdelayResponseFollowUp
+				);
+		GPTP_LOG_STATUS
+			( "IEEE Port Counter "
+			  "ieee8021AsPortStatTxAnnounce : %u",
+			  counters.ieee8021AsPortStatTxAnnounce);
+	}
+
+	/**
+	 * @brief  Get the cross timestamping information.
+	 * The gPTP subsystem uses these samples to calculate
+	 * ratios which can be used to translate or extrapolate
+	 * one clock into another clock reference. The gPTP service
+	 * uses these supplied cross timestamps to perform internal
+	 * rate estimation and conversion functions.
+	 * @param  system_time [out] System time
+	 * @param  device_time [out] Device time
+	 * @param  local_clock [out] Local clock
+	 * @param  nominal_clock_rate [out] Nominal clock rate
+	 * @return True in case of success. FALSE in case of error
+	 */
+	void getDeviceTime
+	( Timestamp &system_time, Timestamp &device_time,
+	  uint32_t &local_clock, uint32_t & nominal_clock_rate );
+
+	/**
+	 * @brief  Sets asCapable flag
+	 * @param  ascap flag to be set. If FALSE, marks peer_offset_init as
+	 * false.
+	 * @return void
+	 */
+	void setAsCapable(bool ascap)
+	{
+		if ( ascap != asCapable ) {
+			GPTP_LOG_STATUS
+				("*** AsCapable STATE CHANGE: %s *** (Announce messages will %s be sent)", 
+				 ascap == true ? "ENABLED" : "DISABLED",
+				 ascap == true ? "NOW" : "NO LONGER");
+		}
+		if( !ascap )
+		{
+			_peer_offset_init = false;
+		}
+		asCapable = ascap;
+	}
+
+	/**
+	 * @brief  Gets the asCapable flag
+	 * @return asCapable flag.
+	 */
+	bool getAsCapable()
+	{
+		return( asCapable );
+	}
+
+	/**
+	 * @brief  Gets the Peer rate offset. Used to calculate neighbor
+	 * rate ratio.
+	 * @return FrequencyRatio peer rate offset
+	 */
+	FrequencyRatio getPeerRateOffset( void )
+	{
+		return _peer_rate_offset;
+	}
+
+	/**
+	 * @brief  Sets the peer rate offset. Used to calculate neighbor rate
+	 * ratio.
+	 * @param  offset Offset to be set
+	 * @return void
+	 */
+	void setPeerRateOffset( FrequencyRatio offset ) {
+		_peer_rate_offset = offset;
+	}
+
+	/**
+	 * @brief  Sets peer offset timestamps
+	 * @param  mine Local timestamps
+	 * @param  theirs Remote timestamps
+	 * @return void
+	 */
+	void setPeerOffset(Timestamp mine, Timestamp theirs) {
+		_peer_offset_ts_mine = mine;
+		_peer_offset_ts_theirs = theirs;
+		_peer_offset_init = true;
+	}
+
+	/**
+	 * @brief  Gets peer offset timestamps
+	 * @param  mine [out] Reference to local timestamps
+	 * @param  theirs [out] Reference to remote timestamps
+	 * @return TRUE if peer offset has already been initialized. FALSE
+	 * otherwise.
+	 */
+	bool getPeerOffset(Timestamp & mine, Timestamp & theirs) {
+		mine = _peer_offset_ts_mine;
+		theirs = _peer_offset_ts_theirs;
+		return _peer_offset_init;
+	}
+
+	/**
+	 * @brief  Sets the neighbor propagation delay threshold
+	 * @param  delay Delay in nanoseconds
+	 * @return void
+	 */
+	void setNeighPropDelayThresh(int64_t delay) {
+		neighbor_prop_delay_thresh = delay;
+	}
+
+	/**
+	 * @brief  Restart PDelay
+	 * @return void
+	 */
+	void restartPDelay() {
+		_peer_offset_init = false;
+	}
+
+	/**
+	 * @brief  Gets a pointer to timer_factory object
+	 * @return timer_factory pointer
+	 */
+	const OSTimerFactory *getTimerFactory() {
+		return timer_factory;
+	}
+
+	/**
+	 * @brief Watch for link up and down events.
+	 * @return Its an infinite loop. Returns NULL in case of error.
+	 */
+	void *watchNetLink( void )
+	{
+		// Should never return
+		net_iface->watchNetLink(this);
+
+		return NULL;
+	}
+
+	/**
+	 * @brief Receive frame
+	 */
+	net_result recv
+	( LinkLayerAddress *addr, uint8_t *payload, size_t &length,
+	  uint32_t &link_speed )
+	{
+		net_result result = net_iface->nrecv( addr, payload, length );
+		link_speed = this->link_speed;
+		return result;
+	}
+
+	/**
+	 * @brief Send frame
+	 */
+	net_result send
+	( LinkLayerAddress *addr, uint16_t etherType, uint8_t *payload,
+	  size_t length, bool timestamp )
+	{
+		return net_iface->send
+		( addr, etherType, payload, length, timestamp );
+	}
+
+	/**
+	 * @brief Get the payload offset inside a packet
+	 * @return 0
+	 */
+	unsigned getPayloadOffset()
+	{
+		return net_iface->getPayloadOffset();
+	}
+
+	/**
+	 * @brief Starts link thread
+	 * @return TRUE if ok, FALSE if error
+	 */
+	bool linkWatch( OSThreadFunction func, OSThreadFunctionArg arg )
+	{
+		return link_thread->start( func, arg );
+	}
+
+	/**
+	 * @brief Starts listening thread
+	 * @return TRUE if ok, FALSE if error
+	 */
+	bool linkOpen( OSThreadFunction func, OSThreadFunctionArg arg )
+	{
+		return listening_thread->start( func, arg );
+	}
+
+	/**
+	 * @brief Terminates the thread
+	 * @return void
+	 */
+	void stopLinkWatchThread()
+	{
+		GPTP_LOG_VERBOSE("Stop link watch thread");
+		setLinkThreadRunning(false);
+	}
+
+	/**
+	 * @brief Terminates the thread
+	 * @return void
+	 */
+	void stopListeningThread()
+	{
+		GPTP_LOG_VERBOSE("Stop listening thread");
+		setListeningThreadRunning(false);
+	}
+
+	/**
+	 * @brief Joins terminated thread
+	 * @param exit_code [out]
+	 * @return TRUE if ok, FALSE if error
+	 */
+	bool joinLinkWatchThread( OSThreadExitCode & exit_code )
+	{
+		return link_thread->join( exit_code );
+	}
+
+	/**
+	 * @brief Joins terminated thread
+	 * @param exit_code [out]
+	 * @return TRUE if ok, FALSE if error
+	 */
+	bool joinListeningThread( OSThreadExitCode & exit_code )
+	{
+		return listening_thread->join( exit_code );
+	}
+
+	/**
+	 * @brief Sets the listeningThreadRunning flag
+	 * @param state value to be set
+	 * @return void
+	 */
+	void setListeningThreadRunning(bool state)
+	{
+		listening_thread_running = state;
+	}
+
+	/**
+	 * @brief Gets the listeningThreadRunning flag
+	 * @return TRUE if running, FALSE if stopped
+	 */
+	bool getListeningThreadRunning()
+	{
+		return listening_thread_running;
+	}
+
+	/**
+	 * @brief Sets the linkThreadRunning flag
+	 * @param state value to be set
+	 * @return void
+	 */
+	void setLinkThreadRunning(bool state)
+	{
+		link_thread_running = state;
+	}
+
+	/**
+	 * @brief Gets the linkThreadRunning flag
+	 * @return TRUE if running, FALSE if stopped
+	 */
+	bool getLinkThreadRunning()
+	{
+		return link_thread_running;
+	}
+
+	/**
+	 * @brief  Gets the portState information
+	 * @return PortState
+	 */
+	PortState getPortState( void ) {
+		return port_state;
+	}
+
+	/**
+	 * @brief Sets the PortState
+	 * @param state value to be set
+	 * @return void
+	 */
+	void setPortState( PortState state ) {
+		port_state = state;
+	}
+
+	/**
+	 * @brief  Gets port identity
+	 * @param  identity [out] Reference to PortIdentity
+	 * @return void
+	 */
+	void getPortIdentity(PortIdentity & identity) {
+		identity = this->port_identity;
+	}
+
+	/**
+	 * @brief  Gets the "best" announce
+	 * @return Pointer to PTPMessageAnnounce
+	 */
+	PTPMessageAnnounce *calculateERBest( void );
+
+	/**
+	 * @brief  Changes the port state
+	 * @param  state Current state
+	 * @param  changed_external_master TRUE if external master has
+	 * changed, FALSE otherwise
+	 * @return void
+	 */
+	void recommendState(PortState state, bool changed_external_master);
+
+	/**
+	 * @brief  Locks the TX port
+	 * @return TRUE if success. FALSE otherwise.
+	 */
+	virtual bool getTxLock()
+	{
+		return true;
+	}
+
+	/**
+	 * @brief  Unlocks the port TX.
+	 * @return TRUE if success. FALSE otherwise.
+	 */
+	virtual bool putTxLock()
+	{
+		return false;
+	}
+
+	/**
+	 * @brief  Adds a new qualified announce the port. IEEE 802.1AS
+	 * Clause 10.3.10.2
+	 * @param  annc PTP announce message
+	 * @return void
+	 */
+	void setQualifiedAnnounce( PTPMessageAnnounce *annc )
+	{
+		delete qualified_announce;
+		qualified_announce = annc;
+	}
+
+	/**
+	 * @brief  Switches port to a gPTP master
+	 * @param  annc If TRUE, starts announce event timer.
+	 * @return void
+	 */
+	virtual void becomeMaster( bool annc ) = 0;
+
+	/**
+	 * @brief  Switches port to a gPTP slave.
+	 * @param  restart_syntonization if TRUE, restarts the syntonization
+	 * @return void
+	 */
+	virtual void becomeSlave( bool restart_syntonization ) = 0;
+
+	/**
+	* @brief  Gets the AVnu automotive profile flag
+	* @return automotive_profile flag
+	*/
+	bool getAutomotiveProfile() { return(automotive_profile); }
+
+	/**
+	* @brief  Gets the AVnu Base/ProAV Functional Interoperability profile flag
+	* @return avnu_base_profile flag
+	*/
+	bool getAvnuBaseProfile() { return(avnu_base_profile); }
+
+	/**
+	* @brief  Gets the Milan Baseline Interoperability profile flag
+	* @return milan_profile flag
+	*/
+	bool getMilanProfile() { return(milan_profile); }
+
+	/**
+	* @brief  Gets the Milan profile configuration
+	* @return reference to Milan configuration
+	*/
+	const MilanProfileConfig_t& getMilanConfig() const { return(milan_config); }
+
+	/**
+	* @brief  Gets the Milan profile statistics
+	* @return reference to Milan statistics
+	*/
+	MilanProfileStats_t& getMilanStats() { return(milan_stats); }
+	const MilanProfileStats_t& getMilanStats() const { return(milan_stats); }
+
+	/**
+	* @brief  Update Milan profile jitter statistics
+	* @param  sync_timestamp Current sync message timestamp
+	* @return none
+	*/
+	void updateMilanJitterStats(uint64_t sync_timestamp);
+
+	/**
+	* @brief  Check Milan profile convergence compliance
+	* @return true if convergence target is met
+	*/
+	bool checkMilanConvergence();
+	
+	/**
+	 * @brief  Start pDelay interval timer
 	 * @param  waitTime time interval
 	 * @return none
 	 */
-	void startSyncReceiptTimer(long long unsigned int waitTime);
+	virtual void startPDelayIntervalTimer( unsigned long long waitTime ) {}
 
 	/**
-	 * @brief  Stop sync receipt timer
-	 * @return none
-	 */
-	void stopSyncReceiptTimer( void );
-
-	/**
-	 * @brief  Start sync interval timer
-	 * @param  waitTime time interval in nanoseconds
-	 * @return none
-	 */
-	void startSyncIntervalTimer(long long unsigned int waitTime);
-
-	/**
-	 * @brief  Start announce interval timer
-	 * @param  waitTime time interval
-	 * @return none
-	 */
-	void startAnnounceIntervalTimer(long long unsigned int waitTime);
-
-	/**
-	 * @brief  Starts announce event timer
+	 * @brief  Sets current sync count value.
+	 * @param  cnt [in] sync count value
 	 * @return void
 	 */
-	void startAnnounce();
-
-	/**
-	 * @brief Process default state change event
-	 * @return true if event is handled without errors
-	 */
-	bool processStateChange( Event e );
-
-	/**
-	 * @brief Default sync/announce timeout handler
-	 * @return true if event is handled without errors
-	 */
-	bool processSyncAnnounceTimeout( Event e );
-
-
-	/**
-	 * @brief Perform default event action, can be overridden by media
-	 * specific actions in _processEvent
-	 * @return true if event is handled without errors
-	 */
-	bool processEvent( Event e );
-
-	/**
-	 * @brief Perform media specific event handling action
-	 * @return true if event is handled without errors
-	 */
-	virtual bool _processEvent( Event e ) = 0;
-
-	/**
-	* @brief  Performs media specific setup after start sync is completed
-	* @return void
-	*/
-	virtual void syncDone() = 0;
-
-	/**
-	* @brief Sends a general message to a port. No timestamps
-	* @param buf [in] Pointer to the data buffer
-	* @param len Size of the message
-	* @param mcast_type Enumeration
-	* MulticastType (pdelay, none or other). Depracated.
-	* @param destIdentity Destination port identity
-	* @return void
-	*/
-	virtual void sendGeneralPort
-	(uint16_t etherType, uint8_t * buf, int len, MulticastType mcast_type,
-		PortIdentity * destIdentity) = 0;
-
-	/**
-	 * @brief Sets link speed
-	 */
-	void setLinkSpeed( uint32_t link_speed )
+	void setSyncCount(unsigned int cnt)
 	{
-		this->link_speed = link_speed;
+		sync_count = cnt;
 	}
 
 	/**
-	 * @brief Returns link speed
+	 * @brief  Increments sync count
+	 * @return void
 	 */
-	uint32_t getLinkSpeed( void )
-	{
-		return link_speed;
+	void incSyncCount() {
+		++sync_count;
 	}
 
 	/**
-	 * @brief Returns TX PHY delay
+	 * @brief  Gets current sync count value. It is set to zero
+	 * when master and incremented at each sync received for slave.
+	 * @return sync count
 	 */
-	Timestamp getTxPhyDelay( uint32_t link_speed ) const;
-
-	/**
-	 * @brief Returns RX PHY delay
-	 */
-	Timestamp getRxPhyDelay( uint32_t link_speed ) const;
-
-	/**
-	* @brief Gets the permission flag for processing SyncFollowUp
-	* messages with negative correction field
-	* @return allow_negative_correction_field flag
-	*/
-	bool getAllowNegativeCorrField( void )
+	unsigned getSyncCount()
 	{
-		return( allow_negative_correction_field );
-	}
-};
-
-/**
- * @brief Specifies a RX/TX PHY compensation pair
- */
-class phy_delay_spec_t
-{
-private:
-	uint16_t tx_delay;
-	uint16_t rx_delay;
-public:
-	/**
-	 * Constructor setting PHY compensation
-	 */
-	phy_delay_spec_t(
-		uint16_t tx_delay,
-		uint16_t rx_delay )
-	{
-		this->tx_delay = tx_delay;
-		this->rx_delay = rx_delay;
+		return sync_count;
 	}
 
 	/**
-	 * Default constructor sets 0 PHY compensation
+	 * @brief  Sets current pdelay count value.
+	 * @param  cnt [in] pdelay count value
+	 * @return void
 	 */
-	phy_delay_spec_t()
-	{
-		phy_delay_spec_t( 0, 0 );
+	void setPdelayCount(unsigned int cnt) {
+		pdelay_count = cnt;
 	}
 
 	/**
-	 * @brief sets PHY compensation
+	 * @brief  Increments Pdelay count
+	 * @return void
 	 */
-	void set_delay(
-		uint16_t tx_delay,
-		uint16_t rx_delay )
+	void incPdelayCount()
 	{
-		this->tx_delay = tx_delay;
-		this->rx_delay = rx_delay;
+		++pdelay_count;
 	}
 
 	/**
-	 * @brief sets RX PHY compensation
+	 * @brief  Gets current pdelay count value. It is set to zero
+	 * when asCapable is false.
+	 * @return pdelay count
 	 */
-	void set_tx_delay(
-		uint16_t tx_delay )
+	unsigned getPdelayCount()
 	{
-		this->tx_delay = tx_delay;
+		return pdelay_count;
 	}
 
 	/**
-	 * @brief sets TX PHY compensation
+	 * @brief  Milan profile: Gets consecutive late responses count
+	 * @return consecutive late responses count
 	 */
-	void set_rx_delay(
-		uint16_t rx_delay )
+	unsigned getConsecutiveLateResponses()
 	{
-		this->rx_delay = rx_delay;
+		return _consecutive_late_responses;
 	}
 
 	/**
-	 * @brief gets TX PHY compensation
+	 * @brief  Milan profile: Sets consecutive late responses count
+	 * @param count consecutive late responses count
 	 */
-	uint16_t get_tx_delay() const
+	void setConsecutiveLateResponses(unsigned count)
 	{
-		return tx_delay;
+		_consecutive_late_responses = count;
 	}
 
 	/**
-	 * @brief gets RX PHY compensation
+	 * @brief  Milan profile: Gets consecutive missing responses count
+	 * @return consecutive missing responses count
 	 */
-	uint16_t get_rx_delay() const
+	unsigned getConsecutiveMissingResponses()
 	{
-		return rx_delay;
+		return _consecutive_missing_responses;
 	}
-};
 
-#endif/*COMMON_PORT_HPP*/
+	/**
+	 * @brief  Milan profile: Sets consecutive missing responses count
+	 * @param count consecutive missing responses count
+	 */
+	void setConsecutiveMissingResponses(unsigned count)
+	{
+		_consecutive_missing_responses = count;
+	}
+
+	/**
+	 * @brief  Milan profile: Gets last PDelay request timestamp
+	 * @return last PDelay request timestamp
+	 */
+	Timestamp getLastPDelayReqTimestamp()
+	{
+		return _last_pdelay_req_timestamp;
+	}
+
+	/**
+	 * @brief  Milan profile: Sets last PDelay request timestamp
+	 * @param timestamp last PDelay request timestamp
+	 */
+	void setLastPDelayReqTimestamp(Timestamp timestamp)
+	{
+		_last_pdelay_req_timestamp = timestamp;
+	}
+
+	/**
+	 * @brief  Milan profile: Gets PDelay response received flag
+	 * @return true if PDelay response was received, false otherwise
+	 */
+	bool getPDelayResponseReceived()
+	{
+		return _pdelay_response_received;
+	}
+
+	/**
+	 * @brief  Milan profile: Sets PDelay response received flag
+	 * @param received true if PDelay response was received, false otherwise
+	 */
+	void setPDelayResponseReceived(bool received)
+	{
+		_pdelay_response_received = received;
+	}
+
+	/**
+	 * @brief  Gets the hardware timestamper version
+	 * @return HW timestamper version
+	 */
+	int getTimestampVersion();
+
+	/**
+	 * @brief  Adjusts the clock frequency.
+	 * @param  freq_offset Frequency offset
+	 * @return TRUE if adjusted. FALSE otherwise.
+	 */
+	bool _adjustClockRate( FrequencyRatio freq_offset );
+
+	/**
+	 * @brief  Adjusts the clock frequency.
+	 * @param  freq_offset Frequency offset
+	 * @return TRUE if adjusted. FALSE otherwise.
+	 */
+	bool adjustClockRate( FrequencyRatio freq_offset ) {
+		return _adjustClockRate( freq_offset );
+	}
+
+	/**
+	 * @brief  Adjusts the clock phase.
+	 * @param  phase_adjust phase offset in ns
+	 * @return TRUE if adjusted. FALSE otherwise.
+	 */
+	bool adjustClockPhase( int64_t phase_adjust );
+
+	/**
+	 * @brief  Gets extended error message from hardware timestamper
+	 * @param  msg [out] Extended error message
+	 * @return void
+	 */
+	void getExtendedError(char *msg);
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxSyncCount
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxSyncCount( void )
+	{
+		counters.ieee8021AsPortStatRxSyncCount++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxFollowUpCount
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxFollowUpCount( void )
+	{
+		counters.ieee8021AsPortStatRxFollowUpCount++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPdelayRequest
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxPdelayRequest( void )
+	{
+		counters.ieee8021AsPortStatRxPdelayRequest++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPdelayResponse
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxPdelayResponse( void )
+	{
+		counters.ieee8021AsPortStatRxPdelayResponse++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPdelayResponseFollowUp
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxPdelayResponseFollowUp( void )
+	{
+		counters.ieee8021AsPortStatRxPdelayResponseFollowUp++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxAnnounce
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxAnnounce( void )
+	{
+		counters.ieee8021AsPortStatRxAnnounce++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxPTPPacketDiscard
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxPTPPacketDiscard( void )
+	{
+		counters.ieee8021AsPortStatRxPTPPacketDiscard++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatRxSyncReceiptTimeouts
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatRxSyncReceiptTimeouts( void )
+	{
+		counters.ieee8021AsPortStatRxSyncReceiptTimeouts++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatAnnounceReceiptTimeouts
+	 * @return void
+	 */
+	void incCounter_ieee8021AsPortStatAnnounceReceiptTimeouts( void )
+	{
+		counters.ieee8021AsPortStatAnnounceReceiptTimeouts++;
+	}
+
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatPdelayAllowedLostResponsesExceeded
+	 * @return void
+	 */
+	// TODO: Not called
+	void incCounter_ieee8021AsPortStatPdelayAllowedLostResponsesExceeded
+	( void )
+	{
+		counters.
+			ieee8021AsPortStatPdelayAllowedLostResponsesExceeded++;
+	}
+
+	/**
+	 * @brief  Increment IEEE Port counter:
+	 *         ieee8021AsPortStatTxSyncCount
+	 * @return void
+	 */
+	void inc

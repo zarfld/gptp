@@ -137,6 +137,22 @@ EtherPort::EtherPort( PortInit_t *portInit ) :
 			getMilanConfig().max_convergence_time_ms,
 			pow(2.0, getMilanConfig().milan_sync_interval_log) * 1000.0);
 	}
+	else if (getAvnuBaseProfile())
+	{
+		setAsCapable( false );  // AVnu Base profile starts with asCapable=false
+		
+		// AVnu Base/ProAV profile timing settings
+		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
+			setInitSyncInterval( -3 );       // 125 ms (similar to standard)
+		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
+			setInitPDelayInterval( 0 );      // 1 second
+		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
+			operLogPdelayReqInterval = 0;    // 1 second
+		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
+			operLogSyncInterval = 0;         // 1 second
+			
+		GPTP_LOG_STATUS("*** AVNU BASE/PROAV PROFILE ENABLED *** (asCapable requires 2-10 successful PDelay exchanges)");
+	}
 	else
 	{
 		setAsCapable( false );
@@ -193,10 +209,11 @@ bool EtherPort::_init_port( void )
 
 void EtherPort::startPDelay()
 {
-	GPTP_LOG_STATUS("*** DEBUG: startPDelay() called, pdelayHalted=%s, automotive=%s, milan=%s ***", 
+	GPTP_LOG_STATUS("*** DEBUG: startPDelay() called, pdelayHalted=%s, automotive=%s, milan=%s, avnu_base=%s ***", 
 		pdelayHalted() ? "true" : "false",
 		getAutomotiveProfile() ? "true" : "false", 
-		getMilanProfile() ? "true" : "false");
+		getMilanProfile() ? "true" : "false",
+		getAvnuBaseProfile() ? "true" : "false");
 	
 	if(!pdelayHalted()) {
 		if( getAutomotiveProfile( ))
@@ -596,6 +613,14 @@ bool EtherPort::_processEvent( Event e )
 			getTxLock();
 			pdelay_req->sendPort(this, NULL);
 			GPTP_LOG_DEBUG("*** Sent PDelay Request message");
+			
+			// Milan profile: track when PDelay request was sent and reset response flag
+			if( getMilanProfile() ) {
+				setLastPDelayReqTimestamp(clock->getTime());
+				setPDelayResponseReceived(false);
+				GPTP_LOG_DEBUG("*** MILAN: Tracking PDelay request sent at timestamp for late response detection ***");
+			}
+			
 			putTxLock();
 
 			{
@@ -718,21 +743,65 @@ bool EtherPort::_processEvent( Event e )
 			// asCapable should be TRUE after 2-5 successful PDelay exchanges
 			// Only disable asCapable if we haven't met the Milan requirement
 			if( getMilanProfile() ) {
-				if( getPdelayCount() < 2 ) {
-					// Milan: Haven't reached minimum 2 successful PDelay exchanges yet
-					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: asCapable remains true - need %d more successful PDelay exchanges (current: %d/2 minimum) ***", 
-						2 - getPdelayCount(), getPdelayCount());
-					// Don't set asCapable(false) in Milan profile until we've had at least 2 successes
+				// Check if this is a truly missing response vs a late one that never arrived
+				bool response_received = getPDelayResponseReceived();
+				if( !response_received ) {
+					// Truly missing response
+					unsigned missing_count = getConsecutiveMissingResponses() + 1;
+					setConsecutiveMissingResponses(missing_count);
+					setConsecutiveLateResponses(0); // Reset late count
+					
+					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay response missing (consecutive missing: %d) ***", missing_count);
+					
+					// Milan: Only set asCapable=false after multiple consecutive missing responses
+					// AND only if we haven't established the minimum 2 successful exchanges
+					if( getPdelayCount() < 2 ) {
+						// Haven't reached minimum requirement yet
+						GPTP_LOG_STATUS("*** MILAN COMPLIANCE: asCapable remains false - need %d more successful PDelay exchanges (current: %d/2 minimum) ***", 
+							2 - getPdelayCount(), getPdelayCount());
+					} else if( missing_count >= 3 ) {
+						// Had successful exchanges before, but now 3+ consecutive missing - this indicates link failure
+						GPTP_LOG_STATUS("*** MILAN COMPLIANCE: %d consecutive missing responses after %d successful exchanges - setting asCapable=false ***", 
+							missing_count, getPdelayCount());
+						setAsCapable(false);
+					} else {
+						// Had successful exchanges, temporary missing response - maintain asCapable
+						GPTP_LOG_STATUS("*** MILAN COMPLIANCE: %d missing response(s) after %d successful exchanges - maintaining asCapable=true ***", 
+							missing_count, getPdelayCount());
+					}
 				} else {
-					// Milan: Had successful exchanges before, temporary timeout - don't immediately disable
-					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay timeout after %d successful exchanges - maintaining asCapable=true ***", getPdelayCount());
+					// Response was received but processed as late - don't count as missing
+					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay response was late but received - not counting as missing ***");
+				}
+			} else if( getAvnuBaseProfile() ) {
+				if( getPdelayCount() < 2 ) {
+					// AVnu Base/ProAV: Haven't reached minimum 2 successful PDelay exchanges yet
+					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: asCapable remains false - need %d more successful PDelay exchanges (current: %d/2 minimum) ***", 
+						2 - getPdelayCount(), getPdelayCount());
+					setAsCapable(false);  // Keep asCapable=false until requirement met
+				} else {
+					// AVnu Base/ProAV: Had successful exchanges before, temporary timeout - don't immediately disable
+					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: PDelay timeout after %d successful exchanges - maintaining asCapable=true ***", getPdelayCount());
 				}
 			} else {
 				// Standard profile: disable asCapable on timeout
 				setAsCapable(false);
 			}
 		}
-		setPdelayCount( 0 );
+		
+		// Reset pdelay_count based on profile behavior
+		if( getMilanProfile() ) {
+			// Milan: Only reset pdelay_count if we're losing asCapable or haven't established it yet
+			if( !getAsCapable() || getPdelayCount() < 2 ) {
+				setPdelayCount( 0 );
+				GPTP_LOG_STATUS("*** MILAN: Resetting pdelay_count due to asCapable=false or insufficient exchanges ***");
+			} else {
+				GPTP_LOG_STATUS("*** MILAN: Maintaining pdelay_count=%d with asCapable=true ***", getPdelayCount());
+			}
+		} else {
+			// Other profiles: always reset on timeout
+			setPdelayCount( 0 );
+		}
 		break;
 
 	case PDELAY_RESP_PEER_MISBEHAVING_TIMEOUT_EXPIRES:
