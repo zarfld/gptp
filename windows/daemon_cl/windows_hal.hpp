@@ -61,6 +61,48 @@
 #include <map>
 #include <list>
 
+// NDIS timestamp OIDs and structures (define if not available in older SDKs)
+#ifndef OID_TIMESTAMP_CAPABILITY
+#define OID_TIMESTAMP_CAPABILITY 0x00010265
+#endif
+#ifndef OID_TIMESTAMP_CURRENT_CONFIG  
+#define OID_TIMESTAMP_CURRENT_CONFIG 0x00010266
+#endif
+
+// Fallback NDIS structures for older SDKs
+#ifndef NDIS_TIMESTAMP_CAPABILITIES_REVISION_1
+typedef struct _NDIS_TIMESTAMP_CAPABILITIES {
+    NDIS_OBJECT_HEADER Header;
+    ULONG64 HardwareClockFrequencyHz;
+    BOOLEAN CrossTimestamp;
+    ULONG64 Reserved1;
+    ULONG64 Reserved2;
+} NDIS_TIMESTAMP_CAPABILITIES, *PNDIS_TIMESTAMP_CAPABILITIES;
+
+typedef struct _NDIS_TIMESTAMP_CONFIGURATION {
+    NDIS_OBJECT_HEADER Header;
+    ULONG Flags;
+    ULONG64 Reserved;
+} NDIS_TIMESTAMP_CONFIGURATION, *PNDIS_TIMESTAMP_CONFIGURATION;
+#endif
+
+// Fallback statistics structure if not available
+#ifndef NDIS_STATISTICS_INFO_REVISION_1
+typedef struct _NDIS_STATISTICS_INFO {
+    ULONG64 ifInOctets;
+    ULONG64 ifInUcastPkts;
+    ULONG64 ifInNUcastPkts;
+    ULONG64 ifInDiscards;
+    ULONG64 ifInErrors;
+    ULONG64 ifInUnknownProtos;
+    ULONG64 ifOutOctets;
+    ULONG64 ifOutUcastPkts;
+    ULONG64 ifOutNUcastPkts;
+    ULONG64 ifOutDiscards;
+    ULONG64 ifOutErrors;
+} NDIS_STATISTICS_INFO, *PNDIS_STATISTICS_INFO;
+#endif
+
 // Include modular Windows HAL components for enhanced functionality  
 #include "windows_hal_iphlpapi.hpp"
 #include "windows_hal_ndis.hpp"
@@ -1184,6 +1226,32 @@ public:
 	 */
 	bool tryNDISTimestamp(Timestamp& timestamp, const PTPMessageId& messageId) const;
 
+private:
+	/**
+	 * @brief Try NDIS timestamp capability OIDs (Windows 8.1+)
+	 * @param timestamp [out] RX timestamp if successful
+	 * @param messageId Message ID for validation
+	 * @return true if successful
+	 */
+	bool tryNDISTimestampCapability(Timestamp& timestamp, const PTPMessageId& messageId) const;
+
+	/**
+	 * @brief Try NDIS performance counter correlation for timestamping
+	 * @param timestamp [out] RX timestamp if successful
+	 * @param messageId Message ID for validation
+	 * @return true if successful
+	 */
+	bool tryNDISPerformanceCounter(Timestamp& timestamp, const PTPMessageId& messageId) const;
+
+	/**
+	 * @brief Try NDIS adapter statistics correlation for timestamping
+	 * @param timestamp [out] RX timestamp if successful
+	 * @param messageId Message ID for validation
+	 * @return true if successful
+	 */
+	bool tryNDISStatisticsCorrelation(Timestamp& timestamp, const PTPMessageId& messageId) const;
+
+public:
 	/**
 	 * @brief Attempt to get RX timestamp using IPHLPAPI
 	 * @param timestamp [out] RX timestamp if successful  
