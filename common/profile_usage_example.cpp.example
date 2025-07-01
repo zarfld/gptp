@@ -1,0 +1,182 @@
+/**
+ * @file profile_usage_example.cpp
+ * @brief Example showing how the unified gPTPProfile approach simplifies code
+ * 
+ * This example demonstrates how the scattered profile checks throughout the
+ * codebase can be replaced with simple property reads from a single profile object.
+ */
+
+#include "gptp_profile.hpp"
+#include "gptp_log.hpp"
+
+// Example: Current scattered approach (BEFORE)
+void currentScatteredApproach_BEFORE(CommonPort* port) {
+    // This pattern is repeated 42+ times throughout the codebase
+    if (port->getMilanProfile()) {
+        // Milan-specific behavior
+        port->setAsCapable(true);
+        port->setSyncInterval(-3);  // 125ms
+        bool should_send_announce = port->getAsCapable();
+        unsigned int min_pdelay = 2;
+        unsigned int max_pdelay = 5;
+        bool maintain_on_timeout = true;
+        // ... more Milan-specific logic
+    } else if (port->getAvnuBaseProfile()) {
+        // AVnu Base-specific behavior
+        port->setAsCapable(false);
+        port->setSyncInterval(0);   // 1s
+        bool should_send_announce = port->getAsCapable();
+        unsigned int min_pdelay = 2;
+        unsigned int max_pdelay = 10;
+        bool maintain_on_timeout = true;
+        // ... more AVnu Base-specific logic
+    } else if (port->getAutomotiveProfile()) {
+        // Automotive-specific behavior
+        port->setAsCapable(true);
+        port->setSyncInterval(0);   // 1s
+        bool should_send_announce = true; // Always send
+        unsigned int min_pdelay = 0;
+        unsigned int max_pdelay = 0;
+        bool maintain_on_timeout = true;
+        // ... more Automotive-specific logic
+    } else {
+        // Standard behavior
+        port->setAsCapable(false);
+        port->setSyncInterval(0);   // 1s
+        bool should_send_announce = port->getAsCapable();
+        unsigned int min_pdelay = 1;
+        unsigned int max_pdelay = 0;
+        bool maintain_on_timeout = false;
+        // ... more Standard-specific logic
+    }
+}
+
+// Example: Unified profile approach (AFTER)
+void unifiedProfileApproach_AFTER(CommonPort* port, const gPTPProfile& profile) {
+    // All profile-specific behavior is now data-driven from the profile object
+    
+    // Initialize asCapable based on profile
+    if (profile.initial_as_capable) {
+        port->setAsCapable(true);
+    }
+    
+    // Set timing intervals from profile
+    port->setSyncInterval(profile.sync_interval_log);
+    port->setAnnounceInterval(profile.announce_interval_log);
+    port->setPDelayInterval(profile.pdelay_interval_log);
+    
+    // Configure thresholds from profile
+    port->setNeighborPropDelayThresh(profile.neighbor_prop_delay_thresh);
+    port->setSyncReceiptThresh(profile.sync_receipt_thresh);
+    
+    // Set clock quality from profile
+    port->getClock()->setClockClass(profile.clock_class);
+    port->getClock()->setClockAccuracy(profile.clock_accuracy);
+    port->getClock()->setOffsetScaledLogVariance(profile.offset_scaled_log_variance);
+    
+    GPTP_LOG_STATUS("*** PROFILE CONFIGURED: %s - %s ***", 
+        profile.profile_name.c_str(), profile.profile_description.c_str());
+}
+
+// Example: asCapable evaluation with unified profile
+bool evaluateAsCapable_AFTER(const gPTPProfile& profile, 
+                            unsigned int pdelay_count,
+                            bool current_as_capable,
+                            bool pdelay_success,
+                            bool pdelay_timeout,
+                            bool pdelay_late,
+                            unsigned int consecutive_late_count) {
+    
+    if (pdelay_timeout) {
+        // Check if we should maintain asCapable on timeout
+        if (profile.maintain_as_capable_on_timeout && 
+            pdelay_count >= profile.min_pdelay_successes) {
+            GPTP_LOG_STATUS("*** %s: Maintaining asCapable=true on timeout (had %d successful exchanges) ***", 
+                profile.profile_name.c_str(), pdelay_count);
+            return true;
+        } else {
+            GPTP_LOG_STATUS("*** %s: Setting asCapable=false on timeout ***", profile.profile_name.c_str());
+            return false;
+        }
+    }
+    
+    if (pdelay_success) {
+        // Check for late response handling
+        if (pdelay_late && consecutive_late_count >= profile.consecutive_late_limit) {
+            if (profile.maintain_as_capable_on_late_response) {
+                GPTP_LOG_STATUS("*** %s: %d consecutive late responses but maintaining asCapable=true ***", 
+                    profile.profile_name.c_str(), consecutive_late_count);
+                return true;
+            } else {
+                GPTP_LOG_STATUS("*** %s: Too many consecutive late responses, setting asCapable=false ***", 
+                    profile.profile_name.c_str());
+                return false;
+            }
+        }
+        
+        // Check if we've met the profile's PDelay requirements
+        if (pdelay_count >= profile.min_pdelay_successes) {
+            if (profile.max_pdelay_successes == 0 || pdelay_count <= profile.max_pdelay_successes) {
+                GPTP_LOG_STATUS("*** %s: Setting asCapable=true after %d successful PDelay exchanges (requirement: %d-%d) ***", 
+                    profile.profile_name.c_str(), pdelay_count, 
+                    profile.min_pdelay_successes, 
+                    profile.max_pdelay_successes ? profile.max_pdelay_successes : 999);
+                return true;
+            }
+        } else {
+            GPTP_LOG_STATUS("*** %s: PDelay success %d/%d - need %d more ***", 
+                profile.profile_name.c_str(), pdelay_count, profile.min_pdelay_successes,
+                profile.min_pdelay_successes - pdelay_count);
+        }
+    }
+    
+    return current_as_capable;
+}
+
+// Example: Link state handling with unified profile
+void handleLinkStateChange_AFTER(const gPTPProfile& profile, CommonPort* port, bool link_up) {
+    if (link_up) {
+        if (profile.as_capable_on_link_up) {
+            port->setAsCapable(true);
+            GPTP_LOG_STATUS("*** %s: Setting asCapable=true on link up ***", profile.profile_name.c_str());
+        }
+        
+        if (profile.start_pdelay_on_link_up) {
+            port->startPDelay();
+            GPTP_LOG_STATUS("*** %s: Starting PDelay on link up ***", profile.profile_name.c_str());
+        }
+    } else {
+        if (profile.as_capable_on_link_down) {
+            port->setAsCapable(false);
+            GPTP_LOG_STATUS("*** %s: Setting asCapable=false on link down ***", profile.profile_name.c_str());
+        }
+    }
+}
+
+// Example: Message transmission decisions with unified profile
+bool shouldSendAnnounce_AFTER(const gPTPProfile& profile, bool as_capable, bool is_grandmaster) {
+    if (profile.send_announce_when_as_capable_only) {
+        return as_capable;
+    } else {
+        return true; // Always send (e.g., Automotive profile)
+    }
+}
+
+// Example: Usage in main application
+void initializeWithProfile() {
+    // Create profile based on configuration
+    gPTPProfile current_profile = gPTPProfileFactory::createProfileByName("milan");
+    
+    // Validate profile
+    if (!gPTPProfileFactory::validateProfile(current_profile)) {
+        GPTP_LOG_ERROR("*** PROFILE VALIDATION FAILED ***");
+        return;
+    }
+    
+    // Log profile information
+    GPTP_LOG_STATUS("*** USING PROFILE: %s ***", 
+        gPTPProfileFactory::getProfileDescription(current_profile).c_str());
+    
+    // Now all code simply reads from current_profile instead of scattered checks
+    // No more if(getMilanProfile()) everywhere!
+}
