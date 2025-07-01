@@ -199,25 +199,7 @@ public:
 	}
 };
 
-/**
- * @brief Physical delay specification for different link speeds
- */
-class phy_delay_spec_t {
-public:
-	phy_delay_spec_t() : tx_delay(0), rx_delay(0) {}
-	phy_delay_spec_t(uint64_t tx, uint64_t rx) : tx_delay(tx), rx_delay(rx) {}
-	
-	uint64_t get_tx_delay() const { return tx_delay; }
-	uint64_t get_rx_delay() const { return rx_delay; }
-	void set_tx_delay(uint64_t delay) { tx_delay = delay; }
-	void set_rx_delay(uint64_t delay) { rx_delay = delay; }
-	void set_delay(uint64_t tx, uint64_t rx) { tx_delay = tx; rx_delay = rx; }
-
-private:
-	uint64_t tx_delay;  // TX delay in nanoseconds
-	uint64_t rx_delay;  // RX delay in nanoseconds
-};
-
+class phy_delay_spec_t;
 typedef std::unordered_map<uint32_t, phy_delay_spec_t> phy_delay_map_t;
 
 /**
@@ -1294,86 +1276,184 @@ public:
 	 */
 	virtual void becomeSlave( bool restart_syntonization ) = 0;
 
-	// Milan and profile accessors
-	bool getMilanProfile() const { return milan_profile; }
-	bool getAvnuBaseProfile() const { return avnu_base_profile; }
-	bool getAutomotiveProfile() const { return automotive_profile; }
-	const MilanProfileConfig_t &getMilanConfig() const { return milan_config; }
-	MilanProfileStats_t &getMilanStats() { return milan_stats; }
-	const MilanProfileStats_t &getMilanStats() const { return milan_stats; }
-	void updateMilanJitterStats(uint64_t jitter_ns);
+	/**
+	* @brief  Gets the AVnu automotive profile flag
+	* @return automotive_profile flag
+	*/
+	bool getAutomotiveProfile() { return(automotive_profile); }
+
+	/**
+	* @brief  Gets the AVnu Base/ProAV Functional Interoperability profile flag
+	* @return avnu_base_profile flag
+	*/
+	bool getAvnuBaseProfile() { return(avnu_base_profile); }
+
+	/**
+	* @brief  Gets the Milan Baseline Interoperability profile flag
+	* @return milan_profile flag
+	*/
+	bool getMilanProfile() { return(milan_profile); }
+
+	/**
+	* @brief  Gets the Milan profile configuration
+	* @return reference to Milan configuration
+	*/
+	const MilanProfileConfig_t& getMilanConfig() const { return(milan_config); }
+
+	/**
+	* @brief  Gets the Milan profile statistics
+	* @return reference to Milan statistics
+	*/
+	MilanProfileStats_t& getMilanStats() { return(milan_stats); }
+	const MilanProfileStats_t& getMilanStats() const { return(milan_stats); }
+
+	/**
+	* @brief  Update Milan profile jitter statistics
+	* @param  sync_timestamp Current sync message timestamp
+	* @return none
+	*/
+	void updateMilanJitterStats(uint64_t sync_timestamp);
+
+	/**
+	* @brief  Check Milan profile convergence compliance
+	* @return true if convergence target is met
+	*/
 	bool checkMilanConvergence();
+	
+	/**
+	 * @brief  Start pDelay interval timer
+	 * @param  waitTime time interval
+	 * @return none
+	 */
+	virtual void startPDelayIntervalTimer( unsigned long long waitTime ) {}
 
-	// Counter and interval accessors
-	unsigned int getSyncCount() const { return sync_count; }
-	void setSyncCount(unsigned int v) { sync_count = v; }
-	void incSyncCount() { ++sync_count; }
-	unsigned int getPdelayCount() const { return pdelay_count; }
-	void setPdelayCount(unsigned int v) { pdelay_count = v; }
-	void incPdelayCount() { ++pdelay_count; }
-	unsigned int getConsecutiveLateResponses() const { return _consecutive_late_responses; }
-	void setConsecutiveLateResponses(unsigned int v) { _consecutive_late_responses = v; }
-	unsigned int getConsecutiveMissingResponses() const { return _consecutive_missing_responses; }
-	void setConsecutiveMissingResponses(unsigned int v) { _consecutive_missing_responses = v; }
-	Timestamp getLastPDelayReqTimestamp() const { return _last_pdelay_req_timestamp; }
-	void setLastPDelayReqTimestamp(Timestamp t) { _last_pdelay_req_timestamp = t; }
-	bool getPDelayResponseReceived() const { return _pdelay_response_received; }
-	void setPDelayResponseReceived(bool v) { _pdelay_response_received = v; }
+	/**
+	 * @brief  Sets current sync count value.
+	 * @param  cnt [in] sync count value
+	 * @return void
+	 */
+	void setSyncCount(unsigned int cnt)
+	{
+		sync_count = cnt;
+	}
 
-	// Interval accessors (stubs, to be implemented as needed)
-	int getInitSyncInterval() const { return initialLogSyncInterval; }
-	void setInitSyncInterval(int v) { initialLogSyncInterval = v; }
-	int getInitPDelayInterval() const { return initialLogPdelayReqInterval; }
-	void setInitPDelayInterval(int v) { initialLogPdelayReqInterval = v; }
-	int getSyncInterval() const { return log_mean_sync_interval; }
-	void setSyncInterval(int v) { log_mean_sync_interval = v; }
-	int getAnnounceInterval() const { return log_mean_announce_interval; }
-	void setAnnounceInterval(int v) { log_mean_announce_interval = v; }
-	int getPDelayInterval() const { return log_min_mean_pdelay_req_interval; }
-	void setPDelayInterval(int v) { log_min_mean_pdelay_req_interval = v; }
-	void resetInitSyncInterval() { initialLogSyncInterval = 0; }
-	void resetInitPDelayInterval() { initialLogPdelayReqInterval = 0; }
+	/**
+	 * @brief  Increments sync count
+	 * @return void
+	 */
+	void incSyncCount() {
+		++sync_count;
+	}
 
-	// GM Time Base Indicator accessors
-	uint16_t getLastGmTimeBaseIndicator() const { return lastGmTimeBaseIndicator; }
-	void setLastGmTimeBaseIndicator(uint16_t v) { lastGmTimeBaseIndicator = v; }
+	/**
+	 * @brief  Gets current sync count value. It is set to zero
+	 * when master and incremented at each sync received for slave.
+	 * @return sync count
+	 */
+	unsigned getSyncCount()
+	{
+		return sync_count;
+	}
 
-	// Allow negative correction field accessor
-	bool getAllowNegativeCorrField() const { return allow_negative_correction_field; }
+	/**
+	 * @brief  Sets current pdelay count value.
+	 * @param  cnt [in] pdelay count value
+	 * @return void
+	 */
+	void setPdelayCount(unsigned int cnt) {
+		pdelay_count = cnt;
+	}
 
-	// Timer lock accessors (stubs, to be implemented as needed)
-	void startSyncReceiptTimer();
-	void startSyncReceiptTimer(uint64_t interval);
-	void stopSyncReceiptTimer();
-	void startSyncIntervalTimer();
-	void startSyncIntervalTimer(uint64_t interval);
-	void stopSyncIntervalTimer();
-	void startAnnounceIntervalTimer();
-	void startAnnounceIntervalTimer(uint64_t interval);
-	void stopAnnounceIntervalTimer();
-	void startPDelayIntervalTimer(uint64_t interval);
+	/**
+	 * @brief  Increments Pdelay count
+	 * @return void
+	 */
+	void incPdelayCount()
+	{
+		++pdelay_count;
+	}
 
-	// Event processing (stubs)
-	void processEvent();
-	bool processEvent(Event);
-	void processStateChange(PortState state, bool changed_external_master);
-	bool processStateChange(Event);
-	void processSyncAnnounceTimeout();
-	bool processSyncAnnounceTimeout(Event);
-	void startAnnounce();
-	void sendGeneralPort();
-	void sendGeneralPort(int, uint8_t*, uint16_t, MulticastType, PortIdentity*);
-	Timestamp getTxPhyDelay(uint32_t link_speed) const;
-	Timestamp getRxPhyDelay(uint32_t link_speed) const;
+	/**
+	 * @brief  Gets current pdelay count value. It is set to zero
+	 * when asCapable is false.
+	 * @return pdelay count
+	 */
+	unsigned getPdelayCount()
+	{
+		return pdelay_count;
+	}
 
-	// Missing virtual functions that derived classes must implement
-	virtual bool _processEvent(Event e) { return false; }
-	virtual void syncDone() { }
+	/**
+	 * @brief  Milan profile: Gets consecutive late responses count
+	 * @return consecutive late responses count
+	 */
+	unsigned getConsecutiveLateResponses()
+	{
+		return _consecutive_late_responses;
+	}
 
-	// Sequence ID accessors
-	int getNextSyncSequenceId() const { return sync_sequence_id + 1; }
-	int getNextAnnounceSequenceId() const { return announce_sequence_id + 1; }
-	int getNextSignalSequenceId() const { return signal_sequence_id + 1; }
+	/**
+	 * @brief  Milan profile: Sets consecutive late responses count
+	 * @param count consecutive late responses count
+	 */
+	void setConsecutiveLateResponses(unsigned count)
+	{
+		_consecutive_late_responses = count;
+	}
+
+	/**
+	 * @brief  Milan profile: Gets consecutive missing responses count
+	 * @return consecutive missing responses count
+	 */
+	unsigned getConsecutiveMissingResponses()
+	{
+		return _consecutive_missing_responses;
+	}
+
+	/**
+	 * @brief  Milan profile: Sets consecutive missing responses count
+	 * @param count consecutive missing responses count
+	 */
+	void setConsecutiveMissingResponses(unsigned count)
+	{
+		_consecutive_missing_responses = count;
+	}
+
+	/**
+	 * @brief  Milan profile: Gets last PDelay request timestamp
+	 * @return last PDelay request timestamp
+	 */
+	Timestamp getLastPDelayReqTimestamp()
+	{
+		return _last_pdelay_req_timestamp;
+	}
+
+	/**
+	 * @brief  Milan profile: Sets last PDelay request timestamp
+	 * @param timestamp last PDelay request timestamp
+	 */
+	void setLastPDelayReqTimestamp(Timestamp timestamp)
+	{
+		_last_pdelay_req_timestamp = timestamp;
+	}
+
+	/**
+	 * @brief  Milan profile: Gets PDelay response received flag
+	 * @return true if PDelay response was received, false otherwise
+	 */
+	bool getPDelayResponseReceived()
+	{
+		return _pdelay_response_received;
+	}
+
+	/**
+	 * @brief  Milan profile: Sets PDelay response received flag
+	 * @param received true if PDelay response was received, false otherwise
+	 */
+	void setPDelayResponseReceived(bool received)
+	{
+		_pdelay_response_received = received;
+	}
 };
 
-#endif /*COMMON_PORT_HPP*/
+#endif/*COMMON_PORT_HPP*/

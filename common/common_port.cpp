@@ -858,3 +858,21 @@ Timestamp CommonPort::getRxPhyDelay( uint32_t link_speed ) const
 
 	return Timestamp(0, 0, 0);
 }
+
+void CommonPort::startPDelayIntervalTimer(uint64_t interval)
+{
+	// Default implementation - derived classes should override
+	// This is a placeholder that does nothing
+}
+
+void CommonPort::sendGeneralPort()
+{
+	// Default implementation - derived classes should override
+	// This is a placeholder that does nothing
+}
+
+void CommonPort::sendGeneralPort(int etherType, uint8_t* buf, uint16_t len, MulticastType mcast_type, PortIdentity* destIdentity)
+{
+	// Default implementation - derived classes should override
+	// This is a placeholder that does nothing
+}

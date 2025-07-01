@@ -593,6 +593,25 @@ protected:
 	bool getLinkUpState(void) {
 		return linkUp;
 	}
+
+	/**
+	 * @brief  Gets the link speed
+	 * @return Link speed in Mbps
+	 */
+	uint32_t getLinkSpeed() const {
+		// Default implementation - subclasses should override
+		return 1000; // Default to 1Gbps
+	}
+
+	/**
+	 * @brief  Sets the link speed
+	 * @param  speed Link speed in Mbps
+	 * @return void
+	 */
+	void setLinkSpeed(uint32_t speed) {
+		// Default implementation - subclasses should override
+		// This is a placeholder for derived classes to implement
+	}
 };
 
 #endif/*ETHER_PORT_HPP*/
