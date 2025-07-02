@@ -1049,7 +1049,7 @@ public:
 	 * @note IMPORTANT: This function is only called for EVENT messages (Sync, Follow_Up, some PDelay).
 	 *       GENERAL messages (Announce, Signaling) do NOT require hardware timestamps and use
 	 *       sendGeneralPort() which bypasses this timestamping entirely. This is why BMCA
-	 *       (Best Master Clock Algorithm) works even when hardware timestamping fails - 
+	 *       (Best Master Clock Algorithm) works even when hardware timestamping fails -
 	 *       Announce messages don't need precise timestamps, only message content for comparison.
 	 */
 	virtual int HWTimestamper_rxtimestamp(PortIdentity *identity, PTPMessageId messageId, Timestamp &timestamp, unsigned &clock_value, bool last)
@@ -1259,9 +1259,20 @@ public:
 		// All fallback methods failed
 		GPTP_LOG_ERROR("All RX timestamping methods failed for messageType=%d, seq=%u (fallback attempts: %u)", 
 			messageId.getMessageType(), messageId.getSequenceId(), fallback_attempts);
-		GPTP_LOG_ERROR("Attempted methods: Intel OID → NDIS → IPHLPAPI → Packet Capture → Cross-timestamp → Intel System Time → TSC");
-		
-		return GPTP_EC_FAILURE;
+		GPTP_LOG_ERROR("Attempted methods: Intel OID  NDIS  IPHLPAPI  Packet Capture  Cross-timestamp  Intel System Time  TSC");
+
+        // Ultimate fallback: use system time as RX timestamp
+        FILETIME ft;
+        GetSystemTimeAsFileTime(&ft);
+        ULARGE_INTEGER uli;
+        uli.LowPart = ft.dwLowDateTime;
+        uli.HighPart = ft.dwHighDateTime;
+        uint64_t nsec_since_1970 = (uli.QuadPart - 116444736000000000ULL) * 100;
+        timestamp = nanoseconds64ToTimestamp(nsec_since_1970);
+        timestamp._version = version;
+        GPTP_LOG_STATUS("Ultimate fallback: using system time as RX timestamp (hardware/software methods failed) for messageType=%d, seq=%u, ts=%llu ns", 
+            messageId.getMessageType(), messageId.getSequenceId(), nsec_since_1970);
+        return GPTP_EC_SUCCESS;
 	}
 
 	/**
