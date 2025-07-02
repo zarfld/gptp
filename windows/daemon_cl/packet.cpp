@@ -277,7 +277,11 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
 
     update_network_thread_heartbeat();
 
+    // --- DEBUG: Before WaitForSingleObject ---
+    printf("DEBUG: recvFrame: Before WaitForSingleObject (thread_id=%lu)\n", GetCurrentThreadId());
     wait_result = WaitForSingleObject( handle->capture_lock, 1000 );
+    // --- DEBUG: After WaitForSingleObject ---
+    printf("DEBUG: recvFrame: After WaitForSingleObject (thread_id=%lu, wait_result=%lu, WAIT_OBJECT_0=%lu, WAIT_TIMEOUT=%lu, WAIT_FAILED=%lu, GetLastError()=%lu)\n", GetCurrentThreadId(), wait_result, WAIT_OBJECT_0, WAIT_TIMEOUT, WAIT_FAILED, GetLastError());
     if( wait_result != WAIT_OBJECT_0 ) {
         ret = PACKET_GETMUTEX_ERROR;
         printf("ERROR: recvFrame: Failed to get capture_lock mutex\n");
@@ -300,7 +304,12 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
         }
     }
 
+    // --- DEBUG: Before pcap_next_ex ---
+    printf("DEBUG: recvFrame: Before pcap_next_ex (thread_id=%lu)\n", GetCurrentThreadId());
     pcap_result = pcap_next_ex( handle->iface, &hdr_r, (const u_char **) &data );
+    // --- DEBUG: After pcap_next_ex ---
+    printf("DEBUG: recvFrame: After pcap_next_ex (thread_id=%lu, pcap_result=%d)\n", GetCurrentThreadId(), pcap_result);
+
     if( pcap_result == 0 ) {
         ret = PACKET_RECVTIMEOUT_ERROR;
         timeout_count++;
@@ -380,5 +389,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     }
 
 fnexit:
+    // --- DEBUG: Exiting recvFrame ---
+    printf("DEBUG: recvFrame: EXIT (thread_id=%lu, ret=%d)\n", GetCurrentThreadId(), ret);
     return ret;
 }
