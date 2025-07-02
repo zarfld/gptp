@@ -32,11 +32,18 @@
 ******************************************************************************/
 
 
+#include <winsock2.h>
+#include <windows.h>
+#include <ws2def.h>
+#define WPCAP
+#include <pcap.h>
+#ifdef inline
+#undef inline
+#endif
+#include <iphlpapi.h>
+
 #include "packet.hpp"
 #include "platform.hpp"
-
-#include <pcap.h>
-#include "iphlpapi.h"
 
 #include "../../common/ether_port.hpp"
 extern EtherPort *gptp_ether_port;
