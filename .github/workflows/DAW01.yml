@@ -45,11 +45,12 @@ jobs:
         $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
         $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*I21*" }) | Select-Object -First 1 -ExpandProperty MacAddress
         $logFile = "$env:GITHUB_WORKSPACE\gptp.log"
+         $errFile = "$env:GITHUB_WORKSPACE\gptp_err.log"
     
         $process = Start-Process -FilePath $exe.FullName `
                                  -ArgumentList $mac `
                                  -RedirectStandardOutput $logFile `
-                                 -RedirectStandardError $logFile `
+                                 -RedirectStandardError $errFile `
                                  -NoNewWindow `
                                  -PassThru
     
