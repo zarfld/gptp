@@ -129,7 +129,10 @@ public:
 	virtual net_result send( LinkLayerAddress *addr, uint16_t etherType, uint8_t *payload, size_t length, bool timestamp) {
 		packet_addr_t dest;
 		addr->toOctetArray( dest.addr );
-		if( sendFrame( handle, &dest, etherType, payload, length ) != PACKET_NO_ERROR ) return net_fatal;
+		if( sendFrame( handle, &dest, etherType, payload, length ) != PACKET_NO_ERROR ) {
+			GPTP_LOG_ERROR("nrecv: sendFrame failed, returning net_fatal");
+			return net_fatal;
+		}
 		return net_succeed;
 	}
 	/**
@@ -144,8 +147,14 @@ public:
 	{
 		packet_addr_t dest;
 		packet_error_t pferror = recvFrame( handle, &dest, payload, length );
-		if( pferror != PACKET_NO_ERROR && pferror != PACKET_RECVTIMEOUT_ERROR ) return net_fatal;
-		if( pferror == PACKET_RECVTIMEOUT_ERROR ) return net_trfail;
+		if( pferror != PACKET_NO_ERROR && pferror != PACKET_RECVTIMEOUT_ERROR ) {
+			GPTP_LOG_ERROR("nrecv: recvFrame failed with error %d, returning net_fatal", pferror);
+			return net_fatal;
+		}
+		if( pferror == PACKET_RECVTIMEOUT_ERROR ) {
+			GPTP_LOG_DEBUG("nrecv: recvFrame timeout, returning net_trfail");
+			return net_trfail;
+		}
 		*addr = LinkLayerAddress( dest.addr );
 		return net_succeed;
 	}
@@ -200,21 +209,33 @@ public:
 	virtual bool createInterface( OSNetworkInterface **net_iface, InterfaceLabel *label, CommonTimestamper *timestamper ) {
 		WindowsPCAPNetworkInterface *net_iface_l = new WindowsPCAPNetworkInterface();
 		LinkLayerAddress *addr = dynamic_cast<LinkLayerAddress *>(label);
-		if( addr == NULL ) goto error_nofree;
+		if( addr == NULL ) {
+			GPTP_LOG_ERROR("createInterface: dynamic_cast<LinkLayerAddress*> failed, addr is NULL");
+			goto error_nofree;
+		}
 		net_iface_l->local_addr = *addr;
 		packet_addr_t pfaddr;
 		addr->toOctetArray( pfaddr.addr );
-		if( mallocPacketHandle( &net_iface_l->handle ) != PACKET_NO_ERROR ) goto error_nofree;
-		if( openInterfaceByAddr( net_iface_l->handle, &pfaddr, 1 ) != PACKET_NO_ERROR ) goto error_free_handle;
-		if( packetBind( net_iface_l->handle, PTP_ETHERTYPE ) != PACKET_NO_ERROR ) goto error_free_handle;
+		if( mallocPacketHandle( &net_iface_l->handle ) != PACKET_NO_ERROR ) {
+			GPTP_LOG_ERROR("createInterface: mallocPacketHandle failed");
+			goto error_nofree;
+		}
+		if( openInterfaceByAddr( net_iface_l->handle, &pfaddr, 1 ) != PACKET_NO_ERROR ) {
+			GPTP_LOG_ERROR("createInterface: openInterfaceByAddr failed");
+			goto error_free_handle;
+		}
+		if( packetBind( net_iface_l->handle, PTP_ETHERTYPE ) != PACKET_NO_ERROR ) {
+			GPTP_LOG_ERROR("createInterface: packetBind failed");
+			goto error_free_handle;
+		}
 		*net_iface = net_iface_l;
 
 		return true;
 
 error_free_handle:
 error_nofree:
+		GPTP_LOG_ERROR("createInterface: cleaning up after error, returning false");
 		delete net_iface_l;
-
 		return false;
 	}
 };
