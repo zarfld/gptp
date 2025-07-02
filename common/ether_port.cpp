@@ -352,12 +352,12 @@ void *EtherPort::openPort( EtherPort *port )
         net_result rrecv;
         size_t length = sizeof(buf);
         uint32_t link_speed;
-		
-		loop_counter++;
+        
+        loop_counter++;
 
-		// Heartbeat: update on every loop
-		network_thread_heartbeat++;
-		network_thread_last_activity = (uint64_t)time(NULL);
+        // Heartbeat: update on every loop
+        network_thread_heartbeat++;
+        network_thread_last_activity = (uint64_t)time(NULL);
 
         // Log thread activity every 100 loops to prove thread is alive
         if (loop_counter % 100 == 0) {
@@ -368,15 +368,19 @@ void *EtherPort::openPort( EtherPort *port )
                 loop_counter, time_diff_ms, network_thread_heartbeat);
         }
 
-		// Log every 10th recv call attempt to see if recv is blocking
-		if (loop_counter % 10 == 0) {
-			GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call recv() - loop #%llu", loop_counter);
-		}
+        // Log explizit beim ersten Eintritt in die Schleife
+        if (loop_counter == 1) {
+            GPTP_LOG_STATUS("*** NETWORK THREAD: First entry into receive loop (loop_counter=1) ***");
+        }
 
-		if ( ( rrecv = recv( &remote, buf, length, link_speed ))
-		     == net_succeed )
-		{
-			last_activity_time = clock->getTime();
+        // Log vor jedem recv call
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call recv() - loop #%llu", loop_counter);
+        rrecv = recv( &remote, buf, length, link_speed );
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: recv() returned %d - loop #%llu", rrecv, loop_counter);
+
+        if ( rrecv == net_succeed )
+        {
+            last_activity_time = clock->getTime();
 			
 			// Log all incoming packets at network level
 			GPTP_LOG_DEBUG("*** NETWORK RX: Received %zu bytes from network, link_speed=%u", 
@@ -398,26 +402,25 @@ void *EtherPort::openPort( EtherPort *port )
 				
 			GPTP_LOG_DEBUG("*** NETWORK RX: processMessage completed successfully");
 			
-		} else if (rrecv == net_fatal) {
-			GPTP_LOG_ERROR("*** NETWORK THREAD: Fatal error in network receive - terminating");
-			this->processEvent(FAULT_DETECTED);
-			break;
-		} else if (rrecv == net_trfail) {
-			GPTP_LOG_DEBUG("*** NETWORK RX: Temporary receive failure (net_trfail)");
-		} else {
-			GPTP_LOG_DEBUG("*** NETWORK RX: Receive returned: %d", rrecv);
-		}
+        } else if (rrecv == net_fatal) {
+            GPTP_LOG_ERROR("*** NETWORK THREAD: Fatal error in network receive - terminating (loop #%llu) ***", loop_counter);
+            this->processEvent(FAULT_DETECTED);
+            break;
+        } else if (rrecv == net_trfail) {
+            GPTP_LOG_DEBUG("*** NETWORK RX: Temporary receive failure (net_trfail) (loop #%llu)", loop_counter);
+        } else {
+            GPTP_LOG_DEBUG("*** NETWORK RX: Receive returned: %d (loop #%llu)", rrecv, loop_counter);
+        }
 		
 		// Check if getListeningThreadRunning() changed
 		if (!getListeningThreadRunning()) {
-			GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop");
+			GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop (loop #%llu) ***", loop_counter);
 			break;
 		}
 	}
-	
-	GPTP_LOG_ERROR("*** NETWORK THREAD: Listening thread terminated - loop_counter=%llu ***", loop_counter);
-	setListeningThreadRunning(false);
-	return NULL;
+    GPTP_LOG_ERROR("*** NETWORK THREAD: Listening thread terminated - loop_counter=%llu (reason: loop exit) ***", loop_counter);
+    setListeningThreadRunning(false);
+    return NULL;
 }
 
 net_result EtherPort::port_send
