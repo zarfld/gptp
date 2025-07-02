@@ -210,7 +210,7 @@ void WindowsWatchdogHandler::run_update()
             DWORD watchdog_tid = GetCurrentThreadId();
             if (current_heartbeat == last_heartbeat || activity_age_ms > NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS) {
                 // Debug print for diagnosis
-                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity(QPC)=%llu, now(QPC)=%lld, activity_age_ms=%.2f, watchdog_thread_id=%lu\n",
+                GPTP_LOG_DEBUG("watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity(QPC)=%llu, now(QPC)=%lld, activity_age_ms=%.2f, watchdog_thread_id=%lu\n",
                     gptp_ether_port,
                     last_heartbeat,
                     current_heartbeat,
