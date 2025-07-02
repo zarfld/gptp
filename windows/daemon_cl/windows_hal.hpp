@@ -146,7 +146,9 @@ public:
 	virtual net_result nrecv( LinkLayerAddress *addr, uint8_t *payload, size_t &length )
 	{
 		packet_addr_t dest;
+		GPTP_LOG_DEBUG("nrecv: call recvFrame - Waiting for packet on interface %s", local_addr.toString().c_str());
 		packet_error_t pferror = recvFrame( handle, &dest, payload, length );
+		GPTP_LOG_DEBUG("nrecv: recvFrame returned with error %d", pferror);
 		if( pferror != PACKET_NO_ERROR && pferror != PACKET_RECVTIMEOUT_ERROR ) {
 			GPTP_LOG_ERROR("nrecv: recvFrame failed with error %d, returning net_fatal", pferror);
 			return net_fatal;
@@ -156,6 +158,7 @@ public:
 			return net_trfail;
 		}
 		*addr = LinkLayerAddress( dest.addr );
+		GPTP_LOG_DEBUG("nrecv: recvFrame succeeded, returning net_succeed");
 		return net_succeed;
 	}
 	/**

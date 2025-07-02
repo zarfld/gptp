@@ -281,7 +281,8 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     extern void update_network_thread_heartbeat();
     printf("DEBUG: recvFrame: Calling update_network_thread_heartbeat (thread_id=%lu)\n", GetCurrentThreadId());
     update_network_thread_heartbeat();
-
+    printf("DEBUG: recvFrame: update_network_thread_heartbeat returned(thread_id=%lu)\n", GetCurrentThreadId());
+    
     // --- DEBUG: Before WaitForSingleObject ---
     printf("DEBUG: recvFrame: Before WaitForSingleObject (thread_id=%lu)\n", GetCurrentThreadId());
     wait_result = WaitForSingleObject( handle->capture_lock, 1000 );
@@ -397,6 +398,8 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
         printf("ERROR: recvFrame: Failed to release capture_lock mutex\n");
         goto fnexit;
     }
+
+    printf("DEBUG: recvFrame: EXIT (thread_id=%lu, ret=%d, length=%zu)\n", GetCurrentThreadId(), ret, length);
 fnexit:
     printf("DEBUG: recvFrame: EXIT (thread_id=%lu, ret=%d)\n", GetCurrentThreadId(), ret);
     return ret;
