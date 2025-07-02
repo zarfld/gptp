@@ -38,6 +38,16 @@
 #include <pcap.h>
 #include "iphlpapi.h"
 
+#include "../../common/ether_port.hpp"
+extern EtherPort *gptp_ether_port;
+
+void update_network_thread_heartbeat() {
+    if (gptp_ether_port) {
+        gptp_ether_port->network_thread_heartbeat++;
+        gptp_ether_port->network_thread_last_activity = (uint64_t)time(NULL);
+    }
+}
+
 // Enhanced debugging support
 #ifdef DEBUG_PACKET_RECEPTION
 #include "debug_packet_reception.hpp"
@@ -250,6 +260,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
 
     // --- Heartbeat update: call on every receive attempt ---
     extern void update_network_thread_heartbeat();
+
     update_network_thread_heartbeat();
 
     wait_result = WaitForSingleObject( handle->capture_lock, 1000 );
@@ -357,8 +368,3 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
 fnexit:
     return ret;
 }
-
-// Provide a weak stub for update_network_thread_heartbeat if not defined elsewhere
-#ifndef HAVE_UPDATE_NETWORK_THREAD_HEARTBEAT
-void update_network_thread_heartbeat() {}
-#endif
