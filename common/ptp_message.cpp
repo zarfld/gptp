@@ -1370,8 +1370,10 @@ bool PTPMessagePathDelayReq::sendPort
 {
 	uint32_t link_speed;
 
-	if(port->pdelayHalted())
+	if(port->pdelayHalted()) {
+		GPTP_LOG_WARNING("PTPMessagePathDelayReq::sendPort: PDelay is halted, not sending request, returning false");
 		return false;
+	}
 
 	uint8_t buf_t[256];
 	uint8_t *buf_ptr = buf_t + port->getPayloadOffset();
