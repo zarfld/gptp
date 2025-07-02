@@ -1656,12 +1656,9 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: PDelay response found (seq=%u)", resp->getSequenceId());
 
 	if( req->getSequenceId() != sequenceId ) {
-		GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: Sequence ID mismatch req=%u, fup=%u", 
-			req->getSequenceId(), sequenceId);
+		GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: ABORT - req->getSequenceId() != sequenceId (%u != %u)", req->getSequenceId(), sequenceId);
 		GPTP_LOG_ERROR
-			( "Received PDelay FUP has different seqID than the "
-			  "PDelay request (%d/%d)",
-			  sequenceId, req->getSequenceId() );
+			( "Received PDelay Response Follow Up but cannot find corresponding response");
 		goto abort;
 	}
 
@@ -1691,6 +1688,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		* IEEE 802.1AS, Figure 11-8, subclause 11.2.15.3
 		*/
 		if (resp->getSequenceId() != sequenceId) {
+			GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: ABORT - resp->getSequenceId() != sequenceId (%u != %u)", resp->getSequenceId(), sequenceId);
 			GPTP_LOG_ERROR
 			("Received PDelay Response Follow Up but cannot find "
 				"corresponding response");
@@ -1705,6 +1703,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		* IEEE 802.1AS, Figure 11-8, subclause 11.2.15.3
 		*/
 		if (req_clkId != resp_clkId) {
+			GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: ABORT - req_clkId != resp_clkId");
 			GPTP_LOG_ERROR
 			( "ClockID Resp/Req differs. PDelay Response ClockID: "
 			  "%s PDelay Request ClockID: %s",
@@ -1717,6 +1716,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		* IEEE 802.1AS, Figure 11-8, subclause 11.2.15.3
 		*/
 		if (resp_port_number != req_port_number) {
+			GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: ABORT - resp_port_number != req_port_number (%hu != %hu)", resp_port_number, req_port_number);
 			GPTP_LOG_ERROR
 			( "Request port number (%hu) is different from "
 			  "Response port number (%hu)",
@@ -1729,6 +1729,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		* IEEE 802.1AS, Figure 11-8, subclause 11.2.15.3
 		*/
 		if (fup_sourcePortIdentity != resp_sourcePortIdentity) {
+			GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: ABORT - fup_sourcePortIdentity != resp_sourcePortIdentity");
 			GPTP_LOG_ERROR( "Source port identity from "
 					"PDelay Response/FUP differ" );
 
@@ -1736,46 +1737,46 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		}
 	}
 
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: About to cancel timer (deleteEventTimerLocked) ***");
 	port->getClock()->deleteEventTimerLocked
 		(port, PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES);
-
 	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Timer cancelled successfully - PDelay exchange complete");
 
-	// Profile-specific late response tracking: mark that we received a response (even if late)
-	if( eport->getProfile().late_response_threshold_ms > 0 ) {
-		eport->setPDelayResponseReceived(true);
-		
-		// Check if response is late based on expected timing
-		Timestamp now = port->getClock()->getTime();
-		Timestamp req_time = eport->getLastPDelayReqTimestamp();
-		if( req_time.nanoseconds != 0 ) { // Valid request timestamp
-			uint64_t elapsed_ns = TIMESTAMP_TO_NS(now) - TIMESTAMP_TO_NS(req_time);
-			uint64_t expected_response_time_ns = (uint64_t)(pow(2.0, eport->getPDelayInterval()) * 1000000000.0);
-			
-			if( elapsed_ns > expected_response_time_ns + 10000000 ) // More than 10ms late
-				{
-				unsigned late_count = eport->getConsecutiveLateResponses() + 1;
-				eport->setConsecutiveLateResponses(late_count);
-				eport->setConsecutiveMissingResponses(0); // Reset missing count
-				GPTP_LOG_STATUS("*** MILAN: PDelay response is late by %.3f ms (consecutive late: %d) ***", 
-					(elapsed_ns - expected_response_time_ns) / 1000000.0, late_count);
-			} else {
-				// On-time response, reset counters
-				eport->setConsecutiveLateResponses(0);
-				eport->setConsecutiveMissingResponses(0);
-				GPTP_LOG_DEBUG("*** MILAN: PDelay response on-time, resetting late/missing counters ***");
-			}
-		}
-	}
-
-	GPTP_LOG_VERBOSE("Request Sequence Id: %u", req->getSequenceId());
-	GPTP_LOG_VERBOSE("Response Sequence Id: %u", resp->getSequenceId());
-	GPTP_LOG_VERBOSE("Follow-Up Sequence Id: %u", sequenceId);
+    // Profile-specific late response tracking: mark that we received a response (even if late)
+    if( eport->getProfile().late_response_threshold_ms > 0 ) {
+        eport->setPDelayResponseReceived(true);
+        
+        // Check if response is late based on expected timing
+        Timestamp now = port->getClock()->getTime();
+        Timestamp req_time = eport->getLastPDelayReqTimestamp();
+        if( req_time.nanoseconds != 0 ) { // Valid request timestamp
+            uint64_t elapsed_ns = TIMESTAMP_TO_NS(now) - TIMESTAMP_TO_NS(req_time);
+            uint64_t expected_response_time_ns = (uint64_t)(pow(2.0, eport->getPDelayInterval()) * 1000000000.0);
+            
+            if( elapsed_ns > expected_response_time_ns + 10000000 ) // More than 10ms late
+                {
+                unsigned late_count = eport->getConsecutiveLateResponses() + 1;
+                eport->setConsecutiveLateResponses(late_count);
+                eport->setConsecutiveMissingResponses(0); // Reset missing count
+                GPTP_LOG_STATUS("*** MILAN: PDelay response is late by %.3f ms (consecutive late: %d) ***", 
+                    (elapsed_ns - expected_response_time_ns) / 1000000.0, late_count);
+            } else {
+                // On-time response, reset counters
+                eport->setConsecutiveLateResponses(0);
+                eport->setConsecutiveMissingResponses(0);
+                GPTP_LOG_DEBUG("*** MILAN: PDelay response on-time, resetting late/missing counters ***");
+            }
+        }
+    }
 
 	int64_t link_delay;
 	unsigned long long turn_around;
 
-	/* Assume that we are a two-step clock, otherwise originTimestamp
+    GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: About to increment PdelayCount ***");
+    port->incPdelayCount();
+    GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: PdelayCount incremented, now %u", port->getPdelayCount());
+
+    /* Assume that we are a two-step clock, otherwise originTimestamp
 	   may be used */
 	request_tx_timestamp = req->getTimestamp();
 	if( request_tx_timestamp.nanoseconds == INVALID_TIMESTAMP.nanoseconds )
@@ -1948,7 +1949,7 @@ done:
 defer:
 	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Releasing PDelay RX lock and returning");
 	eport->putPDelayRxLock();
-
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: processMessage function exit");
 	return;
 }
 
