@@ -301,9 +301,64 @@ void EtherPort::processMessage
 	}
 	GPTP_LOG_VERBOSE("Processing message type: %d", msg->getMessageType());
 	
-	// Add specific debug for PDelay Request messages
+	// Enhanced debug for PDelay Request messages
 	if (msg->getMessageType() == PATH_DELAY_REQ_MESSAGE) {
 		GPTP_LOG_INFO("*** RECEIVED PDelay Request - calling processMessage");
+		GPTP_LOG_STATUS("*** PDELAY DEBUG: Received PDelay Request seq=%u from source", msg->getSequenceId());
+		
+		// Log source port identity
+		PortIdentity sourcePortId;
+		msg->getPortIdentity(&sourcePortId);
+		ClockIdentity clockId = sourcePortId.getClockIdentity();
+		uint16_t portNum;
+		sourcePortId.getPortNumber(&portNum);
+		
+		uint8_t clockBytes[PTP_CLOCK_IDENTITY_LENGTH];
+		clockId.getIdentityString(clockBytes);
+		GPTP_LOG_STATUS("*** PDELAY DEBUG: Source Clock ID: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x, Port: %u",
+			clockBytes[0], clockBytes[1], clockBytes[2], clockBytes[3], 
+			clockBytes[4], clockBytes[5], clockBytes[6], clockBytes[7], portNum);
+		
+		// Log reception timestamp
+		if (msg->isEvent()) {
+			Timestamp rxTime = msg->getTimestamp();
+			GPTP_LOG_STATUS("*** PDELAY DEBUG: RX timestamp: %llu.%09u", 
+				(unsigned long long)rxTime.seconds_ls, rxTime.nanoseconds);
+		}
+		
+		// Log port state
+		GPTP_LOG_STATUS("*** PDELAY DEBUG: Port state: %d, asCapable: %s", 
+			getPortState(), getAsCapable() ? "true" : "false");
+	}
+
+	// Enhanced debug for PDelay Response messages
+	if (msg->getMessageType() == PATH_DELAY_RESP_MESSAGE) {
+		GPTP_LOG_INFO("*** RECEIVED PDelay Response - calling processMessage");
+		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Received PDelay Response seq=%u from source", msg->getSequenceId());
+		
+		// Log source port identity
+		PortIdentity sourcePortId;
+		msg->getPortIdentity(&sourcePortId);
+		ClockIdentity clockId = sourcePortId.getClockIdentity();
+		uint16_t portNum;
+		sourcePortId.getPortNumber(&portNum);
+		
+		uint8_t clockBytes[PTP_CLOCK_IDENTITY_LENGTH];
+		clockId.getIdentityString(clockBytes);
+		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Source Clock ID: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x, Port: %u",
+			clockBytes[0], clockBytes[1], clockBytes[2], clockBytes[3], 
+			clockBytes[4], clockBytes[5], clockBytes[6], clockBytes[7], portNum);
+		
+		// Log reception timestamp
+		if (msg->isEvent()) {
+			Timestamp rxTime = msg->getTimestamp();
+			GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: RX timestamp: %llu.%09u", 
+				(unsigned long long)rxTime.seconds_ls, rxTime.nanoseconds);
+		}
+		
+		// Log port state
+		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Port state: %d, asCapable: %s", 
+			getPortState(), getAsCapable() ? "true" : "false");
 	}
 
 	if( msg->isEvent() )
