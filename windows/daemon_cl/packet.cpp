@@ -51,10 +51,10 @@ extern EtherPort *gptp_ether_port;
 void update_network_thread_heartbeat() {
     if (gptp_ether_port) {
         gptp_ether_port->network_thread_heartbeat++;
-        time_t now = time(NULL);
-        printf("DEBUG: update_network_thread_heartbeat: time(NULL) returned %lld\n", (long long)now);
+        ULONGLONG now = GetTickCount64();
+        printf("DEBUG: update_network_thread_heartbeat: GetTickCount64() returned %llu ms\n", now);
         gptp_ether_port->network_thread_last_activity = (uint64_t)now;
-        printf("DEBUG: update_network_thread_heartbeat: gptp_ether_port=%p, heartbeat=%llu, last_activity=%llu\n",
+        printf("DEBUG: update_network_thread_heartbeat: gptp_ether_port=%p, heartbeat=%llu, last_activity=%llu (ms since boot)\n",
                gptp_ether_port, gptp_ether_port->network_thread_heartbeat, gptp_ether_port->network_thread_last_activity);
     } else {
         printf("DEBUG: update_network_thread_heartbeat: gptp_ether_port=NULL\n");
