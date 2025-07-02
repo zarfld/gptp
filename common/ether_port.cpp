@@ -49,6 +49,10 @@
 
 #include <math.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <stdlib.h>
 
 #ifdef _WIN32
@@ -344,7 +348,9 @@ void *EtherPort::openPort( EtherPort *port )
 
     // Heartbeat: set initial value
     network_thread_heartbeat.store(0, std::memory_order_relaxed);
-    network_thread_last_activity.store((uint64_t)time(NULL), std::memory_order_relaxed); // Use Unix time for watchdog compatibility
+    LARGE_INTEGER qpc_init;
+    QueryPerformanceCounter(&qpc_init);
+    network_thread_last_activity.store((uint64_t)qpc_init.QuadPart, std::memory_order_relaxed); // Use QPC ticks for consistency with watchdog
 
     GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
     uint64_t loop_counter = 0;
@@ -362,7 +368,9 @@ void *EtherPort::openPort( EtherPort *port )
 
             // Heartbeat: update on every loop
             network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
-            network_thread_last_activity.store((uint64_t)time(NULL), std::memory_order_relaxed);
+            LARGE_INTEGER qpc_loop;
+            QueryPerformanceCounter(&qpc_loop);
+            network_thread_last_activity.store((uint64_t)qpc_loop.QuadPart, std::memory_order_relaxed);
 
             // Log thread activity every 100 loops to prove thread is alive
             if (loop_counter % 100 == 0) {
