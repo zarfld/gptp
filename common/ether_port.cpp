@@ -51,6 +51,10 @@
 
 #include <stdlib.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 LinkLayerAddress EtherPort::other_multicast(OTHER_MULTICAST);
 LinkLayerAddress EtherPort::pdelay_multicast(PDELAY_MULTICAST);
 LinkLayerAddress EtherPort::test_status_multicast
@@ -347,7 +351,7 @@ void *EtherPort::openPort( EtherPort *port )
     Timestamp last_activity_time = clock->getTime();
     try {
         while ( getListeningThreadRunning() ) {
-            GPTP_LOG_DEBUG("*** NETWORK THREAD: LOOP START (loop_counter=%llu, thread_id=%lu, stack_ptr=%p) ***", loop_counter, (unsigned long)OSThread::getCurrentThreadId(), (void*)&loop_counter);
+            GPTP_LOG_DEBUG("*** NETWORK THREAD: LOOP START (loop_counter=%llu, thread_id=%lu, stack_ptr=%p) ***", loop_counter, (unsigned long)GetCurrentThreadId(), (void*)&loop_counter);
             uint8_t buf[128];
             LinkLayerAddress remote;
             net_result rrecv;
@@ -414,7 +418,7 @@ void *EtherPort::openPort( EtherPort *port )
                 GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop (loop #%llu) ***", loop_counter);
                 break;
             }
-            GPTP_LOG_DEBUG("*** NETWORK THREAD: LOOP END (loop_counter=%llu, thread_id=%lu, stack_ptr=%p) ***", loop_counter, (unsigned long)OSThread::getCurrentThreadId(), (void*)&loop_counter);
+            GPTP_LOG_DEBUG("*** NETWORK THREAD: LOOP END (loop_counter=%llu, thread_id=%lu, stack_ptr=%p) ***", loop_counter, (unsigned long)GetCurrentThreadId(), (void*)&loop_counter);
         }
     } catch (const std::exception& ex) {
         GPTP_LOG_ERROR("*** NETWORK THREAD: Unhandled std::exception caught: %s (loop_counter=%llu) ***", ex.what(), loop_counter);
@@ -539,7 +543,7 @@ bool EtherPort::_processEvent( Event e )
 		}
 
 		port_ready_condition->wait_prelock();
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait_prelock() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&ret);
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait_prelock() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&ret);
 
 		GPTP_LOG_STATUS("*** ATTEMPTING TO START LINK WATCH THREAD ***");
 		if( !linkWatch(watchNetLinkWrapper, (void *)this) )
@@ -559,7 +563,7 @@ bool EtherPort::_processEvent( Event e )
 		}
 
 		port_ready_condition->wait();
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&ret);
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&ret);
 
 		if( getProfile().automotive_test_status )
 		{
@@ -883,9 +887,9 @@ bool EtherPort::_processEvent( Event e )
 		}
 		break;
 	case PDELAY_DEFERRED_PROCESSING:
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&e);
 		pdelay_rx_lock->lock();
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&e);
 		if (last_pdelay_resp_fwup == NULL) {
 			GPTP_LOG_ERROR("PDelay Response Followup is NULL!");
 			abort();
@@ -895,9 +899,9 @@ bool EtherPort::_processEvent( Event e )
 			delete last_pdelay_resp_fwup;
 			this->setLastPDelayRespFollowUp(NULL);
 		}
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&e);
 		pdelay_rx_lock->unlock();
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&e);
 		break;
 	case PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES:
 		{
@@ -1163,14 +1167,14 @@ void EtherPort::startPDelayIntervalTimer
 {
 	GPTP_LOG_STATUS("*** DEBUG: startPDelayIntervalTimer() called with waitTime=%llu ns (%.3f ms) ***", 
 		waitTime, waitTime / 1000000.0);
-    GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
     pDelayIntervalTimerLock->lock();
-    GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
 	clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
 	clock->addEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES, waitTime);
-    GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
     pDelayIntervalTimerLock->unlock();
-    GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
 	GPTP_LOG_STATUS("*** DEBUG: PDelay interval timer set successfully ***");
 }
 
