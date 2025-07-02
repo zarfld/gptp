@@ -66,9 +66,15 @@ VOID CALLBACK WindowsTimerQueueHandler( PVOID arg_in, BOOLEAN ignore ) {
         GPTP_LOG_ERROR("Timer queue handler: callback function is NULL for type %d", arg->type);
     }
     
-    // Add to retired timers list for cleanup if needed
-    if (arg->queue && arg->rm) {
-        arg->queue->retiredTimers.push_back(arg);
+    // Mark timer as completed - this will be cleaned up later
+    // We do this atomically to avoid race conditions with cleanup
+    arg->completed = true;
+    
+    // For one-shot timers that completed normally, clean up the inner argument immediately
+    // (This matches the Linux implementation behavior)
+    if (arg->rm && arg->inner_arg) {
+        delete arg->inner_arg;
+        arg->inner_arg = nullptr;  // Prevent double deletion
     }
 }
 

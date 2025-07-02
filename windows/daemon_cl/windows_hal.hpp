@@ -428,6 +428,7 @@ struct WindowsTimerQueueHandlerArg {
 	bool rm;				/*!< Flag that signalizes the argument deletion*/
 	WindowsTimerQueue *queue;	/*!< Windows Timer queue */
 	TimerQueue_t *timer_queue;	/*!< Timer queue*/
+	bool completed;			/*!< Flag indicating the timer has fired and completed */
 };
 
 /**
@@ -494,6 +495,28 @@ private:
 			delete arg;
 		}
 	}
+	
+	void cleanupCompletedTimers() {
+		// Clean up completed timers from all timer queues
+		for( TimerQueueMap_t::iterator queue_it = timerQueueMap.begin(); queue_it != timerQueueMap.end(); ++queue_it ) {
+			AcquireSRWLockExclusive( &queue_it->second.lock );
+			
+			TimerArgList_t::iterator it = queue_it->second.arg_list.begin();
+			while( it != queue_it->second.arg_list.end() ) {
+				WindowsTimerQueueHandlerArg *arg = *it;
+				
+				if( arg->completed ) {
+					// Timer has completed, remove it from the list and delete it
+					it = queue_it->second.arg_list.erase( it );
+					delete arg;
+				} else {
+					++it;
+				}
+			}
+			
+			ReleaseSRWLockExclusive( &queue_it->second.lock );
+		}
+	}
 protected:
 	/**
 	 * @brief Default constructor. Initializes timers lock
@@ -515,6 +538,7 @@ public:
 	bool addEvent( unsigned long micros, int type, ostimerq_handler func, event_descriptor_t *arg, bool rm, unsigned *event ) {
 		WindowsTimerQueueHandlerArg *outer_arg = new WindowsTimerQueueHandlerArg();
 		cleanupRetiredTimers();
+		cleanupCompletedTimers();  // Clean up any completed timers first
 		if( timerQueueMap.find(type) == timerQueueMap.end() ) {
 			timerQueueMap[type].queue_handle = CreateTimerQueue();
 			InitializeSRWLock( &timerQueueMap[type].lock );
@@ -525,6 +549,7 @@ public:
 		outer_arg->queue = this;
 		outer_arg->type = type;
 		outer_arg->rm = rm;
+		outer_arg->completed = false;  // Initialize as not completed
 		outer_arg->timer_queue = &timerQueueMap[type];
 		AcquireSRWLockExclusive( &timerQueueMap[type].lock );
 		CreateTimerQueueTimer( &outer_arg->timer_handle, timerQueueMap[type].queue_handle, WindowsTimerQueueHandler, (void *) outer_arg, micros/1000, 0, 0 );
@@ -562,6 +587,8 @@ public:
 
 		// Clean up any retired timers that are safe to delete
 		cleanupRetiredTimers();
+		// Also clean up completed timers to prevent memory leaks
+		cleanupCompletedTimers();
 		return true;
 	}
 };
