@@ -202,17 +202,20 @@ void WindowsWatchdogHandler::run_update()
         if (gptp_ether_port) {
             uint64_t current_heartbeat = gptp_ether_port->network_thread_heartbeat.load(std::memory_order_relaxed);
             uint64_t current_activity = gptp_ether_port->network_thread_last_activity.load(std::memory_order_relaxed);
-            ULONGLONG now = GetTickCount64();
-            ULONGLONG activity_age_ms = now - current_activity;
+            LARGE_INTEGER qpc_now, qpc_freq;
+            QueryPerformanceCounter(&qpc_now);
+            QueryPerformanceFrequency(&qpc_freq);
+            uint64_t activity_age_ticks = qpc_now.QuadPart - current_activity;
+            double activity_age_ms = (double)activity_age_ticks * 1000.0 / (double)qpc_freq.QuadPart;
             DWORD watchdog_tid = GetCurrentThreadId();
             if (current_heartbeat == last_heartbeat || activity_age_ms > NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS) {
                 // Debug print for diagnosis
-                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity=%llu, now=%llu, activity_age_ms=%llu, watchdog_thread_id=%lu\n",
+                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity(QPC)=%llu, now(QPC)=%lld, activity_age_ms=%.2f, watchdog_thread_id=%lu\n",
                     gptp_ether_port,
                     last_heartbeat,
                     current_heartbeat,
                     current_activity,
-                    now,
+                    qpc_now.QuadPart,
                     activity_age_ms,
                     watchdog_tid);
                 fflush(stdout);
@@ -222,8 +225,8 @@ void WindowsWatchdogHandler::run_update()
                     last_heartbeat, current_heartbeat, activity_age_ms / 1000.0, update_count);
             } else {
                 snprintf(health_message, sizeof(health_message),
-                    "gPTP daemon healthy - network thread heartbeat OK (heartbeat=%llu, activity=%llu, now=%llu) [update #%lu]",
-                    current_heartbeat, current_activity, now, update_count);
+                    "gPTP daemon healthy - network thread heartbeat OK (heartbeat=%llu, activity(QPC)=%llu, now(QPC)=%lld) [update #%lu]",
+                    current_heartbeat, current_activity, qpc_now.QuadPart, update_count);
             }
             last_heartbeat = current_heartbeat;
             last_activity = current_activity;
