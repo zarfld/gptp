@@ -189,22 +189,31 @@ bool WindowsWirelessTimestamper::HWTimestamper_init
 	uint8_t mac_addr_local[ETHER_ADDR_OCTETS];
 
 	if (!initialized) {
-		if (!adapter->initialize()) return false;
-		if (getPort()->getLocalAddr() == NULL)
+		if (!adapter->initialize()) {
+			GPTP_LOG_ERROR("WindowsEtherTimestamper: adapter->initialize() failed, returning false");
 			return false;
+		}
+		if (getPort()->getLocalAddr() == NULL) {
+			GPTP_LOG_ERROR("WindowsEtherTimestamper: getPort()->getLocalAddr() returned NULL, returning false");
+			return false;
+		}
 
 		getPort()->getLocalAddr()->toOctetArray(mac_addr_local);
 		if (!adapter->attachAdapter(mac_addr_local)) {
+			GPTP_LOG_ERROR("WindowsEtherTimestamper: attachAdapter failed, returning false");
 			return false;
 		}
 
 		tsc_hz.QuadPart = getTSCFrequency(false);
 		if (tsc_hz.QuadPart == 0) {
+			GPTP_LOG_ERROR("WindowsEtherTimestamper: getTSCFrequency returned 0, returning false");
 			return false;
 		}
 
-		if (!adapter->registerTimestamper(this))
+		if (!adapter->registerTimestamper(this)) {
+			GPTP_LOG_ERROR("WindowsEtherTimestamper: registerTimestamper failed, returning false");
 			return false;
+		}
 	}
 
 	initialized = true;
@@ -221,13 +230,19 @@ WindowsWirelessTimestamper::~WindowsWirelessTimestamper() {
 bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, OSNetworkInterface *net_iface ) {
 	char network_card_id[64];
 	LinkLayerAddress *addr = dynamic_cast<LinkLayerAddress *>(iface_label);
-	if( addr == NULL ) return false;
+	if( addr == NULL ) {
+		GPTP_LOG_ERROR("HWTimestamper_init: dynamic_cast<LinkLayerAddress*> failed, addr is NULL");
+		return false;
+	}
 	PIP_ADAPTER_INFO pAdapterInfo;
 	IP_ADAPTER_INFO AdapterInfo[32];       // Allocate information for up to 32 NICs
 	DWORD dwBufLen = sizeof(AdapterInfo);  // Save memory size of buffer
 
 	DWORD dwStatus = GetAdaptersInfo( AdapterInfo, &dwBufLen );
-	if( dwStatus != ERROR_SUCCESS ) return false;
+	if( dwStatus != ERROR_SUCCESS ) {
+		GPTP_LOG_ERROR("HWTimestamper_init: GetAdaptersInfo failed with status %lu", dwStatus);
+		return false;
+	}
 
 	for( pAdapterInfo = AdapterInfo; pAdapterInfo != NULL; pAdapterInfo = pAdapterInfo->Next ) {
 		if( pAdapterInfo->AddressLength == ETHER_ADDR_OCTETS && *addr == LinkLayerAddress( pAdapterInfo->Address )) {
@@ -235,7 +250,10 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 		}
 	}
 
-	if( pAdapterInfo == NULL ) return false;
+	if( pAdapterInfo == NULL ) {
+		GPTP_LOG_ERROR("HWTimestamper_init: No matching adapter found, returning false");
+		return false;
+	}
 
 	// Use the modular hardware clock rate detection
 	// This tries IPHLPAPI first, then NDIS, then falls back to legacy mapping
