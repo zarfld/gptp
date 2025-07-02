@@ -40,7 +40,7 @@ jobs:
       shell: powershell
 
     - name: Run gptp.exe with timeout and log capture
-      shell: pwsh
+      shell: powershell
       run: |
         $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
         $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*I211*" }) | Select-Object -First 1 -ExpandProperty MacAddress
