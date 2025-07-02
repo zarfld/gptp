@@ -190,28 +190,25 @@ bool WindowsWirelessTimestamper::HWTimestamper_init
 
 	if (!initialized) {
 		if (!adapter->initialize()) {
-			GPTP_LOG_ERROR("WindowsEtherTimestamper: adapter->initialize() failed, returning false");
+			GPTP_LOG_ERROR("WindowsWirelessTimestamper: adapter->initialize() failed, returning false");
 			return false;
 		}
 		if (getPort()->getLocalAddr() == NULL) {
-			GPTP_LOG_ERROR("WindowsEtherTimestamper: getPort()->getLocalAddr() returned NULL, returning false");
+			GPTP_LOG_ERROR("WindowsWirelessTimestamper: getPort()->getLocalAddr() returned NULL, returning false");
 			return false;
 		}
-
 		getPort()->getLocalAddr()->toOctetArray(mac_addr_local);
 		if (!adapter->attachAdapter(mac_addr_local)) {
-			GPTP_LOG_ERROR("WindowsEtherTimestamper: attachAdapter failed, returning false");
+			GPTP_LOG_ERROR("WindowsWirelessTimestamper: attachAdapter failed, returning false");
 			return false;
 		}
-
 		tsc_hz.QuadPart = getTSCFrequency(false);
 		if (tsc_hz.QuadPart == 0) {
-			GPTP_LOG_ERROR("WindowsEtherTimestamper: getTSCFrequency returned 0, returning false");
+			GPTP_LOG_ERROR("WindowsWirelessTimestamper: getTSCFrequency returned 0, returning false");
 			return false;
 		}
-
 		if (!adapter->registerTimestamper(this)) {
-			GPTP_LOG_ERROR("WindowsEtherTimestamper: registerTimestamper failed, returning false");
+			GPTP_LOG_ERROR("WindowsWirelessTimestamper: registerTimestamper failed, returning false");
 			return false;
 		}
 	}
@@ -286,7 +283,7 @@ bool WindowsEtherTimestamper::HWTimestamper_init( InterfaceLabel *iface_label, O
 				rate_map->clock_rate, pAdapterInfo->Description);
 		}
 		else {
-			GPTP_LOG_ERROR("Unable to determine clock rate for interface %s", pAdapterInfo->Description);
+			GPTP_LOG_ERROR("HWTimestamper_init: Unable to determine clock rate for interface %s", pAdapterInfo->Description);
 			return false;
 		}
 	}
