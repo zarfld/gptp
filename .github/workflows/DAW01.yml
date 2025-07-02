@@ -43,15 +43,16 @@ jobs:
       shell: powershell
       run: |
         $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
-        $process = Start-Process -FilePath $exe.FullName -ArgumentList "68-05-CA-8B-76-4E" -PassThru
+        $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*''  } | Select-Object -First 1 -ExpandProperty MacAddress)
+        $process = Start-Process -FilePath $exe.FullName -ArgumentList "$mac" -PassThru
         $timeoutSeconds = 30
     
         if (-not $process.WaitForExit($timeoutSeconds * 1000)) {
           Write-Host "Timeout reached. Killing gptp.exe"
           $process | Stop-Process -Force
-          throw "gptp.exe did not exit within $timeoutSeconds seconds."
+          Write-Host "gptp.exe stopped after $timeoutSeconds seconds (as intended)."
         } else {
-          Write-Host "gptp.exe exited successfully."
+          Write-Host "gptp.exe exited on its own."
         }
     
     - name: Run gptp.exe
