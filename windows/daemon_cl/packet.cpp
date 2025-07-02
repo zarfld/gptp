@@ -255,6 +255,22 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
         goto fnexit;
     }
 
+    // --- Robust recovery: If iface is NULL, try to re-open before proceeding ---
+    if (handle->iface == NULL) {
+        printf("ERROR: recvFrame: Interface handle is NULL, attempting to re-open...\n");
+        packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
+        if (reopen_ret != PACKET_NO_ERROR) {
+            printf("ERROR: recvFrame: Failed to re-open interface (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+            ReleaseMutex(handle->capture_lock);
+            Sleep(100);
+            goto fnexit;
+        } else {
+            printf("INFO: recvFrame: Interface re-opened successfully after being NULL.\n");
+            consecutive_timeouts = 0;
+            consecutive_errors = 0;
+        }
+    }
+
     pcap_result = pcap_next_ex( handle->iface, &hdr_r, (const u_char **) &data );
     if( pcap_result == 0 ) {
         ret = PACKET_RECVTIMEOUT_ERROR;
@@ -265,9 +281,17 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
         if (consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
             printf("ERROR: recvFrame: Too many consecutive timeouts (%d), closing and reopening interface!\n", consecutive_timeouts);
             closeInterface(handle);
-            // Hier könnte ein Re-Open erfolgen, falls handle->iface_addr bekannt ist
-            // openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
-            consecutive_timeouts = 0;
+            packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
+            if (reopen_ret != PACKET_NO_ERROR) {
+                printf("ERROR: recvFrame: Failed to re-open interface after timeout (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+                ReleaseMutex(handle->capture_lock);
+                Sleep(100);
+                goto fnexit;
+            } else {
+                printf("INFO: recvFrame: Interface re-opened successfully after timeout.\n");
+                consecutive_timeouts = 0;
+                consecutive_errors = 0;
+            }
         }
     } else if( pcap_result < 0 ) {
         ret = PACKET_RECVFAILED_ERROR;
@@ -277,9 +301,17 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
         if (consecutive_errors >= MAX_CONSECUTIVE_ERRORS) {
             printf("ERROR: recvFrame: Too many consecutive errors (%d), closing and reopening interface!\n", consecutive_errors);
             closeInterface(handle);
-            // Hier könnte ein Re-Open erfolgen, falls handle->iface_addr bekannt ist
-            // openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
-            consecutive_errors = 0;
+            packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
+            if (reopen_ret != PACKET_NO_ERROR) {
+                printf("ERROR: recvFrame: Failed to re-open interface after error (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+                ReleaseMutex(handle->capture_lock);
+                Sleep(100);
+                goto fnexit;
+            } else {
+                printf("INFO: recvFrame: Interface re-opened successfully after error.\n");
+                consecutive_timeouts = 0;
+                consecutive_errors = 0;
+            }
         }
     } else {
         packet_count++;
