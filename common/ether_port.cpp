@@ -357,7 +357,7 @@ void *EtherPort::openPort( EtherPort *port )
 
 		// Heartbeat: update on every loop
 		network_thread_heartbeat++;
-		network_thread_last_activity = clock->getTime().seconds_ls;
+		network_thread_last_activity = (uint64_t)time(NULL);
 
         // Log thread activity every 100 loops to prove thread is alive
         if (loop_counter % 100 == 0) {
@@ -903,7 +903,7 @@ bool EtherPort::_processEvent( Event e )
 		if( !response_received ) {
 			// Truly missing response
 			unsigned missing_count = getConsecutiveMissingResponses() + 1;
-			setConsecutiveMissingResponses(missing_count);
+		 setConsecutiveMissingResponses(missing_count);
 			setConsecutiveLateResponses(0); // Reset late count
 			
 			GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay response missing (consecutive missing: %d) ***", 
