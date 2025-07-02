@@ -788,9 +788,9 @@ void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 		initial_as_capable = true;
 		GPTP_LOG_STATUS("*** AUTOMOTIVE PROFILE: Setting asCapable=true on link up ***");
 	} else if (pPort->getMilanProfile()) {
-		// Milan profile: asCapable=true immediately for fast convergence
-		initial_as_capable = true;
-		GPTP_LOG_STATUS("*** MILAN PROFILE: Setting asCapable=true for fast convergence ***");
+		// Milan profile: asCapable=false initially, must earn it via 2-5 PDelay exchanges  
+		initial_as_capable = false;
+		GPTP_LOG_STATUS("*** MILAN PROFILE: Starting with asCapable=false - must earn via 2-5 PDelay exchanges ***");
 	} else if (pPort->getAvnuBaseProfile()) {
 		// AVnu Base/ProAV profile: asCapable=false, must earn it via 2-10 PDelay exchanges
 		initial_as_capable = false;

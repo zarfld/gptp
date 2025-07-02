@@ -249,9 +249,12 @@ void EtherPort::startPDelay()
 			}
 		}
 		else {
-			GPTP_LOG_STATUS("*** DEBUG: Non-automotive profile - starting PDelay timer with 32ms interval ***");
+			// Non-automotive profile - use profile-configured PDelay interval
+			uint64_t pdelay_interval_ns = (uint64_t)(pow(2.0, (double)getPDelayInterval()) * 1000000000.0);
+			GPTP_LOG_STATUS("*** DEBUG: Non-automotive profile - starting PDelay timer with %llu ns interval (%.3f s) ***", 
+				pdelay_interval_ns, pdelay_interval_ns / 1000000000.0);
 			pdelay_started = true;
-			startPDelayIntervalTimer(32000000);
+			startPDelayIntervalTimer(pdelay_interval_ns);
 		}
 	} else {
 		GPTP_LOG_WARNING("*** DEBUG: PDelay is halted, not starting timer ***");

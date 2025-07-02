@@ -79,6 +79,11 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	// Configure asCapable initial state from profile
 	asCapable = active_profile.initial_as_capable;
 	
+	// Configure timing intervals from profile
+	log_min_mean_pdelay_req_interval = active_profile.pdelay_interval_log;
+	log_mean_sync_interval = active_profile.sync_interval_log;
+	log_mean_announce_interval = active_profile.announce_interval_log;
+	
 	GPTP_LOG_INFO("Port initialized with %s profile: %s", 
 		active_profile.profile_name.c_str(),
 		active_profile.profile_description.c_str());
