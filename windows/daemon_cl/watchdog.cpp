@@ -194,6 +194,14 @@ void WindowsWatchdogHandler::run_update()
             uint64_t current_activity = gptp_ether_port->network_thread_last_activity;
             uint64_t now = time(NULL);
             if (current_heartbeat == last_heartbeat || (now - current_activity) > NETWORK_THREAD_HEARTBEAT_TIMEOUT) {
+                // Debug print for diagnosis
+                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity=%llu, now=%llu, activity_age=%llu\n",
+                    gptp_ether_port,
+                    last_heartbeat,
+                    current_heartbeat,
+                    current_activity,
+                    now,
+                    (unsigned long long)(now - current_activity));
                 healthy = false;
                 snprintf(health_message, sizeof(health_message),
                     "gPTP daemon ERROR: Network thread heartbeat lost (last=%llu, now=%llu, activity_age=%llu s) [update #%lu]",
