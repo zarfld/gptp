@@ -100,7 +100,7 @@
             "-NoProfile",
             "-Command",
             "$mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*''  } | Select-Object -First 1 -ExpandProperty MacAddress);",
-            "& 'build\\Debug\\gptp.exe' $mac"
+            "& 'build\\Debug\\gptp.exe' $mac -debug-packets"
           ]
         },
         "dependsOn": [
@@ -118,7 +118,7 @@
             "-NoProfile",
             "-Command",
             "$mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*''  } | Select-Object -First 1 -ExpandProperty MacAddress);",
-            "& 'build\\Debug\\gptp.exe' -Milan $mac"
+            "& 'build\\Debug\\gptp.exe' -Milan $mac -debug-packets"
           ]
         },
         "dependsOn": [
