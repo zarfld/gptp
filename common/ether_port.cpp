@@ -279,6 +279,9 @@ void EtherPort::processMessage
 		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Port state: %d, asCapable: %s", 
 			getPortState(), getAsCapable() ? "true" : "false");
 	}
+	else {
+		GPTP_LOG_DEBUG("Received message type: %d", msg->getMessageType());
+	}
 
 	if( msg->isEvent() )
 	{

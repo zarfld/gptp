@@ -171,6 +171,14 @@ PTPMessageCommon *buildPTPMessage
 		goto abort;
 	}
  
+	uint8_t clock_id_str[8];
+	uint16_t port_num;
+	sourcePortIdentity->getClockIdentityString(clock_id_str);
+	sourcePortIdentity->getPortNumber(&port_num);
+	GPTP_LOG_STATUS("Received message type %d, sequenceId %u, sourcePortIdentity %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%u",
+		messageType, sequenceId, 
+		clock_id_str[0], clock_id_str[1], clock_id_str[2], clock_id_str[3],
+		clock_id_str[4], clock_id_str[5], clock_id_str[6], clock_id_str[7], port_num);
 	switch (messageType) {
 	case SYNC_MESSAGE:
 
