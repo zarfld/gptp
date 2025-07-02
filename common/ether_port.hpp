@@ -36,6 +36,7 @@
 
 #include <ieee1588.hpp>
 #include <avbap_message.hpp>
+#include <atomic>
 
 #include <avbts_ostimer.hpp>
 #include <avbts_oslock.hpp>
@@ -148,9 +149,9 @@ protected:
 
  public:
 	// Heartbeat timestamp for Network Thread monitoring
-	volatile uint64_t network_thread_heartbeat;
+	std::atomic<uint64_t> network_thread_heartbeat;
 	// Last time the network thread reported activity (for watchdog)
-	volatile uint64_t network_thread_last_activity;
+	std::atomic<uint64_t> network_thread_last_activity;
 
 	void becomeMaster( bool annc );
 	void becomeSlave( bool restart_syntonization );

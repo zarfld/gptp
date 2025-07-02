@@ -339,8 +339,8 @@ void *EtherPort::openPort( EtherPort *port )
     setListeningThreadRunning(true);
 
     // Heartbeat: set initial value
-    network_thread_heartbeat = 0;
-    network_thread_last_activity = (uint64_t)time(NULL); // Use Unix time for watchdog compatibility
+    network_thread_heartbeat.store(0, std::memory_order_relaxed);
+    network_thread_last_activity.store((uint64_t)time(NULL), std::memory_order_relaxed); // Use Unix time for watchdog compatibility
 
     GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
     uint64_t loop_counter = 0;
@@ -356,8 +356,8 @@ void *EtherPort::openPort( EtherPort *port )
         loop_counter++;
 
         // Heartbeat: update on every loop
-        network_thread_heartbeat++;
-        network_thread_last_activity = (uint64_t)time(NULL);
+        network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
+        network_thread_last_activity.store((uint64_t)time(NULL), std::memory_order_relaxed);
 
         // Log thread activity every 100 loops to prove thread is alive
         if (loop_counter % 100 == 0) {
@@ -365,7 +365,7 @@ void *EtherPort::openPort( EtherPort *port )
             Timestamp time_diff = current_time - last_activity_time;
             uint64_t time_diff_ms = (uint64_t)time_diff.seconds_ls * 1000 + time_diff.nanoseconds / 1000000;
             GPTP_LOG_STATUS("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago, heartbeat=%llu", 
-                loop_counter, time_diff_ms, network_thread_heartbeat);
+                loop_counter, time_diff_ms, network_thread_heartbeat.load(std::memory_order_relaxed));
         }
 
         // Log explizit beim ersten Eintritt in die Schleife

@@ -38,12 +38,22 @@
 #include <string.h>
 #include "ether_port.hpp"
 #include <atomic>
+#include <thread>
 
 // Global pointer to EtherPort for heartbeat monitoring
 extern EtherPort *gptp_ether_port;
 
 // Heartbeat timeout in milliseconds
 #define NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS 5000
+
+// Helper to get current thread ID as uint64_t
+static uint64_t get_current_thread_id() {
+#ifdef _WIN32
+    return (uint64_t)GetCurrentThreadId();
+#else
+    return (uint64_t)std::this_thread::get_id().hash();
+#endif
+}
 
 DWORD WINAPI watchdogUpdateThreadFunction(LPVOID arg)
 {
@@ -176,7 +186,7 @@ void WindowsWatchdogHandler::stopWatchdog()
 
 void WindowsWatchdogHandler::run_update()
 {
-    GPTP_LOG_INFO("Windows watchdog update thread started");
+    GPTP_LOG_INFO("Windows watchdog update thread started (thread id: %llu)", get_current_thread_id());
     unsigned long update_count = 0;
     uint64_t last_heartbeat = 0;
     uint64_t last_activity = 0;
@@ -190,19 +200,21 @@ void WindowsWatchdogHandler::run_update()
 
         // Heartbeat check: is the network thread alive?
         if (gptp_ether_port) {
-            uint64_t current_heartbeat = gptp_ether_port->network_thread_heartbeat;
-            uint64_t current_activity = gptp_ether_port->network_thread_last_activity;
+            uint64_t current_heartbeat = gptp_ether_port->network_thread_heartbeat.load(std::memory_order_relaxed);
+            uint64_t current_activity = gptp_ether_port->network_thread_last_activity.load(std::memory_order_relaxed);
             ULONGLONG now = GetTickCount64();
             ULONGLONG activity_age_ms = now - current_activity;
+            DWORD watchdog_tid = GetCurrentThreadId();
             if (current_heartbeat == last_heartbeat || activity_age_ms > NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS) {
                 // Debug print for diagnosis
-                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity=%llu, now=%llu, activity_age_ms=%llu\n",
+                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity=%llu, now=%llu, activity_age_ms=%llu, watchdog_thread_id=%lu\n",
                     gptp_ether_port,
                     last_heartbeat,
                     current_heartbeat,
                     current_activity,
                     now,
-                    activity_age_ms);
+                    activity_age_ms,
+                    watchdog_tid);
                 fflush(stdout);
                 healthy = false;
                 snprintf(health_message, sizeof(health_message),
