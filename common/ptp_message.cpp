@@ -1140,8 +1140,8 @@ void PTPMessageFollowUp::processMessage
 		 */
 		port->incSyncCount();
 		
-		// Milan profile: Update jitter statistics when receiving sync messages
-		if (port->getProfile().profile_name == "milan") {
+		// Profile-specific performance tracking: Update jitter statistics when receiving sync messages
+		if (port->getProfile().max_sync_jitter_ns > 0) {
 			uint64_t sync_timestamp = TIMESTAMP_TO_NS(sync_arrival);
 			port->updateProfileJitterStats(sync_timestamp);
 			port->checkProfileConvergence();
@@ -1709,8 +1709,8 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	port->getClock()->deleteEventTimerLocked
 		(port, PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES);
 
-	// Milan profile: mark that we received a response (even if late)
-	if( eport->getProfile().profile_name == "milan" ) {
+	// Profile-specific late response tracking: mark that we received a response (even if late)
+	if( eport->getProfile().late_response_threshold_ms > 0 ) {
 		eport->setPDelayResponseReceived(true);
 		
 		// Check if response is late based on expected timing
@@ -1863,44 +1863,28 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	{
 		if( eport->getProfile().profile_name != "automotive" )
 		{
-			// Milan Specification 5.6.2.4 compliance:
-			// asCapable should be TRUE after 2-5 successful PDelay exchanges
-			if( eport->getProfile().profile_name == "milan" ) {
-				unsigned int pdelay_count = port->getPdelayCount();
-				
-				// Reset consecutive late/missing response counters on successful processing
-				eport->setConsecutiveLateResponses(0);
-				eport->setConsecutiveMissingResponses(0);
-				
-				if( pdelay_count >= 2 && pdelay_count <= 5 ) {
-					// Milan: Set asCapable=true after 2-5 successful exchanges
-					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: Setting asCapable=true after %d successful PDelay exchanges (requirement: 2-5) ***", pdelay_count);
-					port->setAsCapable( true );
-				} else if( pdelay_count >= 2 ) {
-					// Milan: Keep asCapable=true after initial establishment
-					port->setAsCapable( true );
-				} else {
-					// Milan: Less than 2 successful exchanges, keep current state
-					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay success %d/2 - need %d more before setting asCapable=true ***", 
-						pdelay_count, 2 - pdelay_count);
-				}
-			} else if( eport->getProfile().profile_name == "avnu_base" ) {
-				unsigned int pdelay_count = port->getPdelayCount();
-				if( pdelay_count >= 2 && pdelay_count <= 10 ) {
-					// AVnu Base/ProAV: Set asCapable=true after 2-10 successful exchanges
-					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: Setting asCapable=true after %d successful PDelay exchanges (requirement: 2-10) ***", pdelay_count);
-					port->setAsCapable( true );
-				} else if( pdelay_count >= 2 ) {
-					// AVnu Base/ProAV: Keep asCapable=true after initial establishment
-					port->setAsCapable( true );
-				} else {
-					// AVnu Base/ProAV: Less than 2 successful exchanges, keep current state
-					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: PDelay success %d/2 - need %d more before setting asCapable=true ***", 
-						pdelay_count, 2 - pdelay_count);
-				}
-			} else {
-				// Standard profile: set asCapable immediately on successful PDelay
+			// Profile-specific PDelay success handling based on configuration
+			unsigned int pdelay_count = port->getPdelayCount();
+			unsigned int min_successes = eport->getProfile().min_pdelay_successes;
+			unsigned int max_successes = eport->getProfile().max_pdelay_successes;
+			
+			// Reset consecutive late/missing response counters on successful processing
+			eport->setConsecutiveLateResponses(0);
+			eport->setConsecutiveMissingResponses(0);
+			
+			if( pdelay_count >= min_successes && (max_successes == 0 || pdelay_count <= max_successes) ) {
+				// Profile: Set asCapable=true after required successful exchanges
+				GPTP_LOG_STATUS("*** %s COMPLIANCE: Setting asCapable=true after %d successful PDelay exchanges (requirement: %d-%s) ***", 
+					eport->getProfile().profile_name.c_str(), pdelay_count, min_successes, 
+					(max_successes == 0) ? "unlimited" : std::to_string(max_successes).c_str());
 				port->setAsCapable( true );
+			} else if( pdelay_count >= min_successes ) {
+				// Profile: Keep asCapable=true after initial establishment
+				port->setAsCapable( true );
+			} else {
+				// Profile: Less than required successful exchanges, keep current state
+				GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay success %d/%d - need %d more before setting asCapable=true ***", 
+					eport->getProfile().profile_name.c_str(), pdelay_count, min_successes, min_successes - pdelay_count);
 			}
 		}
 	}

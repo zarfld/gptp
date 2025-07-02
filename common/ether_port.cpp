@@ -426,7 +426,7 @@ bool EtherPort::_processEvent( Event e )
 
 		port_ready_condition->wait();
 
-		if( getAutomotiveProfile( ))
+		if( getProfile().automotive_test_status )
 		{
 			setStationState(STATION_STATE_ETHERNET_READY);
 			if (getTestMode())
@@ -476,15 +476,11 @@ bool EtherPort::_processEvent( Event e )
 		haltPdelay(false);
 		startPDelay();
 		
-		// Profile-specific link up handling
-		if (getProfile().profile_name == "automotive") {
-			// Automotive profile: Set asCapable immediately on link up
-			if (getProfile().as_capable_on_link_up) {
-				setAsCapable(true);
-				GPTP_LOG_STATUS("*** AUTOMOTIVE LINKUP *** (asCapable set TRUE immediately)");
-			} else {
-				GPTP_LOG_STATUS("*** AUTOMOTIVE LINKUP ***");
-			}
+		// Profile-specific link up handling - use property-driven logic
+		if (getProfile().as_capable_on_link_up) {
+			setAsCapable(true);
+			GPTP_LOG_STATUS("*** %s LINKUP *** (asCapable set TRUE immediately per profile config)", 
+				getProfile().profile_name.c_str());
 		} else if (getProfile().max_convergence_time_ms > 0) {
 			GPTP_LOG_STATUS("*** %s LINKUP *** (Target convergence: %dms)", 
 				getProfile().profile_name.c_str(), getProfile().max_convergence_time_ms);
@@ -509,10 +505,15 @@ bool EtherPort::_processEvent( Event e )
 				( this, ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES, timeout_ns );
 		}
 
-		if( getAutomotiveProfile( ))
+		// Profile-specific behavior: set asCapable based on profile configuration
+		if( getProfile().initial_as_capable )
 		{
 			setAsCapable( true );
+		}
 
+		// Profile-specific behavior: send test status messages if enabled
+		if( getProfile().automotive_test_status )
+		{
 			setStationState(STATION_STATE_ETHERNET_READY);
 			if (getTestMode())
 			{
@@ -566,13 +567,17 @@ bool EtherPort::_processEvent( Event e )
 		break;
 	case LINKDOWN:
 		stopPDelay();
-		if( getAutomotiveProfile( ))
+		
+		// Profile-specific link down behavior: use property to control asCapable setting
+		if( getProfile().as_capable_on_link_down )
 		{
-			GPTP_LOG_EXCEPTION("LINK DOWN");
+			// Profile maintains asCapable state on link down (e.g., automotive)
+			GPTP_LOG_EXCEPTION("LINK DOWN (maintaining asCapable per profile config)");
 		}
 		else {
+			// Standard behavior: set asCapable=false on link down
 			setAsCapable(false);
-			GPTP_LOG_STATUS("LINK DOWN");
+			GPTP_LOG_STATUS("LINK DOWN (asCapable set to false)");
 		}
 		if (getTestMode())
 		{
@@ -583,15 +588,16 @@ bool EtherPort::_processEvent( Event e )
 		break;
 	case ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES:
 	case SYNC_RECEIPT_TIMEOUT_EXPIRES:
-		if( !getAutomotiveProfile( ))
+		// Profile-specific timeout handling: strict timeout handling for some profiles
+		if( !getProfile().requires_strict_timeouts )
 		{
 			ret = false;
 			break;
 		}
 
-		// Automotive Profile specific action
+		// Profile-specific action for strict timeout handling
 		if (e == SYNC_RECEIPT_TIMEOUT_EXPIRES) {
-			GPTP_LOG_EXCEPTION("SYNC receipt timeout");
+			GPTP_LOG_EXCEPTION("SYNC receipt timeout (strict timeout handling enabled)");
 
 			startSyncReceiptTimer((unsigned long long)
 					      (SYNC_RECEIPT_TIMEOUT_MULTIPLIER *
@@ -626,11 +632,12 @@ bool EtherPort::_processEvent( Event e )
 			pdelay_req->sendPort(this, NULL);
 			GPTP_LOG_DEBUG("*** Sent PDelay Request message");
 			
-			// Milan profile: track when PDelay request was sent and reset response flag
-			if( getProfile().profile_name == "milan" ) {
+			// Profile-specific late response tracking: track when PDelay request was sent
+			if( getProfile().late_response_threshold_ms > 0 ) {
 				setLastPDelayReqTimestamp(clock->getTime());
 				setPDelayResponseReceived(false);
-				GPTP_LOG_DEBUG("*** MILAN: Tracking PDelay request sent at timestamp for late response detection ***");
+				GPTP_LOG_DEBUG("*** %s: Tracking PDelay request sent at timestamp for late response detection ***", 
+					getProfile().profile_name.c_str());
 			}
 			
 			putTxLock();
@@ -677,13 +684,14 @@ bool EtherPort::_processEvent( Event e )
 			tx_succeed = sync->sendPort(this, NULL);
 			GPTP_LOG_DEBUG("Sent SYNC message");
 
-			if( getAutomotiveProfile() &&
+			// Profile-specific sync state and test status handling
+			if( getProfile().automotive_test_status &&
 			    getPortState() == PTP_MASTER )
 			{
 				if (avbSyncState > 0) {
 					avbSyncState--;
 					if (avbSyncState == 0) {
-						// Send Avnu Automotive Profile status message
+						// Send profile-specific status message
 						setStationState(STATION_STATE_AVB_SYNC);
 						if (getTestMode()) {
 							APMessageTestStatus *testStatusMsg = new APMessageTestStatus(this);
@@ -727,9 +735,16 @@ bool EtherPort::_processEvent( Event e )
 		break;
 	case FAULT_DETECTED:
 		GPTP_LOG_ERROR("Received FAULT_DETECTED event");
-		if( !getAutomotiveProfile( ))
+		// Profile-specific fault handling: some profiles maintain asCapable on faults
+		if( getProfile().as_capable_on_link_down )
 		{
+			// Profile maintains asCapable state on faults (e.g., automotive)
+			GPTP_LOG_STATUS("FAULT_DETECTED - maintaining asCapable per profile config");
+		}
+		else {
+			// Standard behavior: set asCapable=false on fault
 			setAsCapable(false);
+			GPTP_LOG_STATUS("FAULT_DETECTED - asCapable set to false");
 		}
 		break;
 	case PDELAY_DEFERRED_PROCESSING:
@@ -747,73 +762,71 @@ bool EtherPort::_processEvent( Event e )
 		pdelay_rx_lock->unlock();
 		break;
 	case PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES:
-		if( !getAutomotiveProfile( ))
 		{
-			GPTP_LOG_EXCEPTION("PDelay Response Receipt Timeout");
-			
-			// Milan Specification 5.6.2.4 compliance:
-			// asCapable should be TRUE after 2-5 successful PDelay exchanges
-			// Only disable asCapable if we haven't met the Milan requirement
-			if( getMilanProfile() ) {
-				// Check if this is a truly missing response vs a late one that never arrived
-				bool response_received = getPDelayResponseReceived();
-				if( !response_received ) {
-					// Truly missing response
-					unsigned missing_count = getConsecutiveMissingResponses() + 1;
-					setConsecutiveMissingResponses(missing_count);
-					setConsecutiveLateResponses(0); // Reset late count
-					
-					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay response missing (consecutive missing: %d) ***", missing_count);
-					
-					// Milan: Only set asCapable=false after multiple consecutive missing responses
-					// AND only if we haven't established the minimum 2 successful exchanges
-					if( getPdelayCount() < 2 ) {
-						// Haven't reached minimum requirement yet
-						GPTP_LOG_STATUS("*** MILAN COMPLIANCE: asCapable remains false - need %d more successful PDelay exchanges (current: %d/2 minimum) ***", 
-							2 - getPdelayCount(), getPdelayCount());
-					} else if( missing_count >= 3 ) {
-						// Had successful exchanges before, but now 3+ consecutive missing - this indicates link failure
-						GPTP_LOG_STATUS("*** MILAN COMPLIANCE: %d consecutive missing responses after %d successful exchanges - setting asCapable=false ***", 
-							missing_count, getPdelayCount());
-						setAsCapable(false);
-					} else {
-						// Had successful exchanges, temporary missing response - maintain asCapable
-						GPTP_LOG_STATUS("*** MILAN COMPLIANCE: %d missing response(s) after %d successful exchanges - maintaining asCapable=true ***", 
-							missing_count, getPdelayCount());
-					}
-				} else {
-					// Response was received but processed as late - don't count as missing
-					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay response was late but received - not counting as missing ***");
-				}
-			} else if( getAvnuBaseProfile() ) {
-				if( getPdelayCount() < 2 ) {
-					// AVnu Base/ProAV: Haven't reached minimum 2 successful PDelay exchanges yet
-					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: asCapable remains false - need %d more successful PDelay exchanges (current: %d/2 minimum) ***", 
-						2 - getPdelayCount(), getPdelayCount());
-					setAsCapable(false);  // Keep asCapable=false until requirement met
-				} else {
-					// AVnu Base/ProAV: Had successful exchanges before, temporary timeout - don't immediately disable
-					GPTP_LOG_STATUS("*** AVNU BASE/PROAV COMPLIANCE: PDelay timeout after %d successful exchanges - maintaining asCapable=true ***", getPdelayCount());
-				}
-			} else {
-				// Standard profile: disable asCapable on timeout
-				setAsCapable(false);
-			}
-		}
+		// Profile-agnostic PDelay timeout handling based on profile configuration
+		GPTP_LOG_EXCEPTION("PDelay Response Receipt Timeout");
 		
-		// Reset pdelay_count based on profile behavior
-		if( getMilanProfile() ) {
-			// Milan: Only reset pdelay_count if we're losing asCapable or haven't established it yet
-			if( !getAsCapable() || getPdelayCount() < 2 ) {
-				setPdelayCount( 0 );
-				GPTP_LOG_STATUS("*** MILAN: Resetting pdelay_count due to asCapable=false or insufficient exchanges ***");
+		// Use profile properties to determine timeout behavior
+		unsigned min_pdelay_required = getProfile().min_pdelay_successes;
+		bool maintain_on_timeout = getProfile().maintain_as_capable_on_timeout;
+		bool reset_count_on_timeout = getProfile().reset_pdelay_count_on_timeout;
+		
+		// Check if this is a truly missing response vs a late one that never arrived
+		bool response_received = getPDelayResponseReceived();
+		if( !response_received ) {
+			// Truly missing response
+			unsigned missing_count = getConsecutiveMissingResponses() + 1;
+			setConsecutiveMissingResponses(missing_count);
+			setConsecutiveLateResponses(0); // Reset late count
+			
+			GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay response missing (consecutive missing: %d) ***", 
+				getProfile().profile_name.c_str(), missing_count);
+			
+			// Use profile configuration to determine asCapable behavior
+			if( getPdelayCount() < min_pdelay_required ) {
+				// Haven't reached minimum requirement yet
+				GPTP_LOG_STATUS("*** %s COMPLIANCE: asCapable remains false - need %d more successful PDelay exchanges (current: %d/%d minimum) ***", 
+					getProfile().profile_name.c_str(), min_pdelay_required - getPdelayCount(), getPdelayCount(), min_pdelay_required);
+			} else if( missing_count >= 3 && !maintain_on_timeout ) {
+				// Had successful exchanges before, but now 3+ consecutive missing - this indicates link failure
+				GPTP_LOG_STATUS("*** %s COMPLIANCE: %d consecutive missing responses after %d successful exchanges - setting asCapable=false ***", 
+					getProfile().profile_name.c_str(), missing_count, getPdelayCount());
+				setAsCapable(false);
 			} else {
-				GPTP_LOG_STATUS("*** MILAN: Maintaining pdelay_count=%d with asCapable=true ***", getPdelayCount());
+				// Had successful exchanges, temporary missing response - behavior based on profile
+				if( maintain_on_timeout ) {
+					GPTP_LOG_STATUS("*** %s COMPLIANCE: %d missing response(s) after %d successful exchanges - maintaining asCapable=true (profile config) ***", 
+						getProfile().profile_name.c_str(), missing_count, getPdelayCount());
+				} else {
+					GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay timeout after %d successful exchanges - disabling asCapable (profile config) ***", 
+						getProfile().profile_name.c_str(), getPdelayCount());
+					setAsCapable(false);
+				}
 			}
 		} else {
-			// Other profiles: always reset on timeout
-			setPdelayCount( 0 );
+			// Response was received but processed as late - don't count as missing
+			GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay response was late but received - not counting as missing ***", 
+				getProfile().profile_name.c_str());
 		}
+		
+		// Reset pdelay_count based on profile configuration
+		if( reset_count_on_timeout ) {
+			// Profile requires reset on timeout (most profiles)
+			if( !getAsCapable() || getPdelayCount() < min_pdelay_required ) {
+				setPdelayCount( 0 );
+				GPTP_LOG_STATUS("*** %s: Resetting pdelay_count due to asCapable=false or insufficient exchanges ***", 
+					getProfile().profile_name.c_str());
+			} else {
+				GPTP_LOG_STATUS("*** %s: Maintaining pdelay_count=%d with asCapable=true ***", 
+					getProfile().profile_name.c_str(), getPdelayCount());
+			}
+		} else {
+			// Profile doesn't reset count on timeout
+			setPdelayCount( 0 );
+			GPTP_LOG_STATUS("*** %s: Always resetting pdelay_count on timeout (profile config) ***", 
+				getProfile().profile_name.c_str());
+		}
+		}  // End of case block scope
 		break;
 
 	case PDELAY_RESP_PEER_MISBEHAVING_TIMEOUT_EXPIRES:
@@ -851,7 +864,8 @@ bool EtherPort::_processEvent( Event e )
 				// Send operational signalling message
 					PTPMessageSignalling *sigMsg = new PTPMessageSignalling(this);
 					if (sigMsg) {
-						if( getAutomotiveProfile( ))
+						// Profile-specific signaling intervals: some profiles don't change PDelay interval
+						if( getProfile().automotive_test_status )
 							sigMsg->setintervals(PTPMessageSignalling::sigMsgInterval_NoChange, getSyncInterval(), PTPMessageSignalling::sigMsgInterval_NoChange);
 						else
 							sigMsg->setintervals(getPDelayInterval(), getSyncInterval(), PTPMessageSignalling::sigMsgInterval_NoChange);
@@ -893,9 +907,14 @@ void EtherPort::becomeMaster( bool annc ) {
 	stopSyncReceiptTimer();
 
 	if( annc ) {
-		if( !getAutomotiveProfile( ))
+		// Profile-specific announce behavior: some profiles disable announce messages
+		if( getProfile().supports_bmca )
 		{
 			startAnnounce();
+		}
+		else
+		{
+			GPTP_LOG_STATUS("BMCA/Announce disabled per profile configuration");
 		}
 	}
 	startSyncIntervalTimer(16000000);
@@ -912,13 +931,18 @@ void EtherPort::becomeSlave( bool restart_syntonization ) {
 
 	setPortState( PTP_SLAVE );
 
-	if( !getAutomotiveProfile( ))
+	// Profile-specific announce receipt timeout: only for profiles with BMCA support
+	if( getProfile().supports_bmca )
 	{
 		clock->addEventTimerLocked
 		  (this, ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES,
 		   (ANNOUNCE_RECEIPT_TIMEOUT_MULTIPLIER*
 			(unsigned long long)
 			(pow((double)2,getAnnounceInterval())*1000000000.0)));
+	}
+	else
+	{
+		GPTP_LOG_STATUS("BMCA/Announce receipt timeout disabled per profile configuration");
 	}
 
 	GPTP_LOG_STATUS("Switching to Slave" );
@@ -1011,7 +1035,8 @@ void EtherPort::startPDelayIntervalTimer
 void EtherPort::syncDone() {
 	GPTP_LOG_VERBOSE("Sync complete");
 
-	if( getAutomotiveProfile() && getPortState() == PTP_SLAVE )
+	// Profile-specific sync state handling for test status messages
+	if( getProfile().automotive_test_status && getPortState() == PTP_SLAVE )
 	{
 		if (avbSyncState > 0) {
 			avbSyncState--;
@@ -1029,7 +1054,8 @@ void EtherPort::syncDone() {
 		}
 	}
 
-	if( getAutomotiveProfile( ))
+	// Profile-specific sync rate interval timer for test status messages
+	if( getProfile().automotive_test_status )
 	{
 		if (!sync_rate_interval_timer_started) {
 			if ( getSyncInterval() != operLogSyncInterval )
