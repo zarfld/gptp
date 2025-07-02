@@ -245,8 +245,12 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     static int packet_count = 0;
     static int consecutive_timeouts = 0;
     static int consecutive_errors = 0;
-    const int MAX_CONSECUTIVE_TIMEOUTS = 1000; // z.B. 10s bei 10ms Timeout
+    const int MAX_CONSECUTIVE_TIMEOUTS = 50; // Lowered for faster recovery
     const int MAX_CONSECUTIVE_ERRORS = 10;
+
+    // --- Heartbeat update: call on every receive attempt ---
+    extern void update_network_thread_heartbeat();
+    update_network_thread_heartbeat();
 
     wait_result = WaitForSingleObject( handle->capture_lock, 1000 );
     if( wait_result != WAIT_OBJECT_0 ) {
@@ -353,3 +357,8 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
 fnexit:
     return ret;
 }
+
+// Provide a weak stub for update_network_thread_heartbeat if not defined elsewhere
+#ifndef HAVE_UPDATE_NETWORK_THREAD_HEARTBEAT
+void update_network_thread_heartbeat() {}
+#endif
