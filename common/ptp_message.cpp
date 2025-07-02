@@ -1139,8 +1139,8 @@ void PTPMessageFollowUp::processMessage
 		// Milan profile: Update jitter statistics when receiving sync messages
 		if (port->getMilanProfile()) {
 			uint64_t sync_timestamp = TIMESTAMP_TO_NS(sync_arrival);
-			port->updateMilanJitterStats(sync_timestamp);
-			port->checkMilanConvergence();
+			port->updateProfileJitterStats(sync_timestamp);
+			port->checkProfileConvergence();
 		}
 
 		// ...existing code...

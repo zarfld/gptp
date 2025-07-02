@@ -96,6 +96,7 @@ struct gPTPProfile {
     mutable struct {
         uint64_t convergence_start_time;    // When convergence started (ns)
         uint64_t last_convergence_time;     // Last measured convergence time (ns)
+        uint64_t last_sync_time;            // Last sync message timestamp (ns)
         uint32_t current_sync_jitter_ns;    // Current sync jitter (ns)
         uint32_t current_path_delay_variation_ns; // Current path delay variation (ns)
         uint64_t total_sync_messages;       // Total sync messages received

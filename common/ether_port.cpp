@@ -116,55 +116,77 @@ EtherPort::EtherPort( PortInit_t *portInit ) :
 		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
 			operLogSyncInterval = 0;           // 1 second
 	} 
-	else if (getMilanProfile())
+	else	if (getProfile().profile_name == "milan")
 	{
-		setAsCapable( true );  // Milan profile should be immediately capable
+		// Milan profile asCapable initialization per specification
+		setAsCapable(getProfile().initial_as_capable);  // Milan starts FALSE, earns via PDelay
 		
 		// Milan-specific timing requirements for fast convergence
 		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
-			setInitSyncInterval( getMilanConfig().milan_sync_interval_log );  // 125ms default
+			setInitSyncInterval(getProfile().sync_interval_log);  // 125ms (-3) default
 		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval( getMilanConfig().milan_pdelay_interval_log );  // 1 second default
+			setInitPDelayInterval(getProfile().pdelay_interval_log);  // 1 second (0) default
 		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = getMilanConfig().milan_pdelay_interval_log;
+			operLogPdelayReqInterval = getProfile().pdelay_interval_log;
 		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = getMilanConfig().milan_sync_interval_log;
+			operLogSyncInterval = getProfile().sync_interval_log;
 			
 		// Set announce interval for Milan profile
-		setAnnounceInterval( getMilanConfig().milan_announce_interval_log );
+		setAnnounceInterval(getProfile().announce_interval_log);
 		
 		GPTP_LOG_STATUS("*** MILAN PROFILE ENABLED *** (convergence target: %dms, sync interval: %.3fms)", 
-			getMilanConfig().max_convergence_time_ms,
-			pow(2.0, getMilanConfig().milan_sync_interval_log) * 1000.0);
+			getProfile().max_convergence_time_ms,
+			pow(2.0, (double)getProfile().sync_interval_log) * 1000.0);
 	}
-	else if (getAvnuBaseProfile())
+	else if (getProfile().profile_name == "avnu_base")
 	{
-		setAsCapable( false );  // AVnu Base profile starts with asCapable=false
+		// AVnu Base profile asCapable initialization per specification
+		setAsCapable(getProfile().initial_as_capable);  // AVnu Base starts FALSE, earns via 2-10 PDelay
 		
 		// AVnu Base/ProAV profile timing settings
 		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
-			setInitSyncInterval( -3 );       // 125 ms (similar to standard)
+			setInitSyncInterval(getProfile().sync_interval_log);       // 1s (0) 
 		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval( 0 );      // 1 second
+			setInitPDelayInterval(getProfile().pdelay_interval_log);      // 1 second (0)
 		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = 0;    // 1 second
+			operLogPdelayReqInterval = getProfile().pdelay_interval_log;    // 1 second (0)
 		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = 0;         // 1 second
+			operLogSyncInterval = getProfile().sync_interval_log;         // 1 second (0)
 			
 		GPTP_LOG_STATUS("*** AVNU BASE/PROAV PROFILE ENABLED *** (asCapable requires 2-10 successful PDelay exchanges)");
 	}
+	else if (getProfile().profile_name == "automotive")
+	{
+		// Automotive profile asCapable initialization per specification
+		setAsCapable(getProfile().initial_as_capable);  // Automotive starts FALSE, becomes TRUE on link up
+		
+		// Automotive profile timing settings
+		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
+			setInitSyncInterval(getProfile().sync_interval_log);       // 1s (0) 
+		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
+			setInitPDelayInterval(getProfile().pdelay_interval_log);      // 1 second (0)
+		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
+			operLogPdelayReqInterval = getProfile().pdelay_interval_log;    // 1 second (0)
+		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
+			operLogSyncInterval = getProfile().sync_interval_log;         // 1 second (0)
+			
+		GPTP_LOG_STATUS("*** AUTOMOTIVE PROFILE ENABLED *** (asCapable immediately on link up, test status messages)");
+	}
 	else
 	{
-		setAsCapable( false );
+		// Standard IEEE 802.1AS profile
+		setAsCapable(getProfile().initial_as_capable);  // Standard starts FALSE
 
-		if ( getInitSyncInterval() == LOG2_INTERVAL_INVALID )
-			setInitSyncInterval( -3 );       // 125 ms
+		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
+			setInitSyncInterval(getProfile().sync_interval_log);       // Use profile default
 		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval( 0 );  // 1 second
+			setInitPDelayInterval(getProfile().pdelay_interval_log);  // Use profile default
 		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = 0;      // 1 second
+			operLogPdelayReqInterval = getProfile().pdelay_interval_log;      // Use profile default
 		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = 0;           // 1 second
+			operLogSyncInterval = getProfile().sync_interval_log;           // Use profile default
+			
+		GPTP_LOG_STATUS("*** %s PROFILE ENABLED ***", getProfile().profile_description.c_str());
 	}
 
 	/*TODO: Add intervals below to a config interface*/
@@ -449,35 +471,40 @@ bool EtherPort::_processEvent( Event e )
 		ret = true;
 		break;
 	case STATE_CHANGE_EVENT:
-		// If the automotive profile is enabled, handle the event by
-		// doing nothing and returning true, preventing the default
-		// action from executing
-		if( getAutomotiveProfile( ))
-			ret = true;
-		else if( getMilanProfile( ))
+		// Profile-specific handling of state change events
+		if (getProfile().bmca_enabled == false)
 		{
-			// Milan profile allows BMCA but with enhanced convergence requirements
-			ret = false;  // Allow default BMCA processing
-			GPTP_LOG_STATUS("*** MILAN BMCA: STATE_CHANGE_EVENT - Enhanced convergence mode ***");
+			// Profiles with BMCA disabled (e.g., Automotive) do nothing
+			ret = true;
+			GPTP_LOG_STATUS("*** %s PROFILE: STATE_CHANGE_EVENT - BMCA disabled ***", 
+				getProfile().profile_name.c_str());
 		}
 		else
-			ret = false;
-
+		{
+			// Profiles with BMCA enabled allow default processing
+			ret = false;  // Allow default BMCA processing
+			GPTP_LOG_STATUS("*** %s PROFILE: STATE_CHANGE_EVENT - BMCA enabled ***", 
+				getProfile().profile_name.c_str());
+		}
 		break;
 	case LINKUP:
 		haltPdelay(false);
 		startPDelay();
-		if( getAutomotiveProfile( ))
-		{
-			GPTP_LOG_EXCEPTION("LINKUP");
-		}
-		else if( getMilanProfile( ))
-		{
-			GPTP_LOG_STATUS("*** MILAN LINKUP *** (Target convergence: %dms)", 
-				getMilanConfig().max_convergence_time_ms);
-		}
-		else {
-			GPTP_LOG_STATUS("LINKUP");
+		
+		// Profile-specific link up handling
+		if (getProfile().profile_name == "automotive") {
+			// Automotive profile: Set asCapable immediately on link up
+			if (getProfile().as_capable_on_link_up) {
+				setAsCapable(true);
+				GPTP_LOG_STATUS("*** AUTOMOTIVE LINKUP *** (asCapable set TRUE immediately)");
+			} else {
+				GPTP_LOG_STATUS("*** AUTOMOTIVE LINKUP ***");
+			}
+		} else if (getProfile().max_convergence_time_ms > 0) {
+			GPTP_LOG_STATUS("*** %s LINKUP *** (Target convergence: %dms)", 
+				getProfile().profile_name.c_str(), getProfile().max_convergence_time_ms);
+		} else {
+			GPTP_LOG_STATUS("*** %s LINKUP ***", getProfile().profile_name.c_str());
 		}
 
 		GPTP_LOG_STATUS("*** LINKUP BMCA DECISION: Priority1=%d, PortState=%d ***", 

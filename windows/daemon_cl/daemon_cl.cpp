@@ -41,6 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "windows_hal.hpp"
 #include "avbts_message.hpp"
 #include "gptp_cfg.hpp"
+#include "gptp_profile.hpp"  // Add unified profile support
 #include "watchdog.hpp"
 #include <tchar.h>
 #include <iphlpapi.h>
@@ -84,13 +85,14 @@ static bool debug_packet_reception = false;
 void print_usage( char *arg0 ) {
 	fprintf( stderr,
 		"%s "
-		"[-R <priority 1>] [-debug-packets] [-Milan] <network interface>\n"
+		"[-R <priority 1>] [-debug-packets] [-profile <name>] <network interface>\n"
 		"where <network interface> is a MAC address entered as xx-xx-xx-xx-xx-xx\n"
 		"Options:\n"
 		"  -R <priority>     Set priority1 value\n"
 		"  -debug-packets    Enable enhanced packet reception debugging\n"
-		"  -Milan            Enable Milan Baseline Interoperability Profile\n"
-		"  -AvnuBase         Enable AVnu Base/ProAV Functional Interoperability Profile\n",
+		"  -profile <name>   Use specific profile: milan, avnu_base, automotive, standard\n"
+		"  -Milan            Enable Milan profile (legacy option)\n"
+		"  -AvnuBase         Enable AVnu Base profile (legacy option)\n",
 		arg0 );
 }
 
@@ -149,17 +151,9 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	PortInit_t portInit;
 	
-	// Initialize Milan profile configuration with defaults first
-	portInit.milan_config.milan_profile = false;
-	portInit.milan_config.max_convergence_time_ms = 100;
-	portInit.milan_config.max_sync_jitter_ns = 1000;
-	portInit.milan_config.max_path_delay_variation_ns = 10000;
-	portInit.milan_config.stream_aware_bmca = false;
-	portInit.milan_config.redundant_gm_support = false;
-	portInit.milan_config.milan_sync_interval_log = -3;  // 125ms
-	portInit.milan_config.milan_announce_interval_log = 0; // 1s
-	portInit.milan_config.milan_pdelay_interval_log = 0;  // 1s
-
+	// Initialize with standard profile as default
+	portInit.profile = gPTPProfileFactory::createStandardProfile();
+	
 	phy_delay_map_t ether_phy_delay;
 	ether_phy_delay[LINKSPEED_1G].set_delay
 	(PHY_DELAY_GB_TX_PCH, PHY_DELAY_GB_RX_PCH);
@@ -171,8 +165,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	portInit.index = 1;
 	portInit.timestamper = NULL;
 	portInit.net_label = NULL;
-	portInit.automotive_profile = false;
-	portInit.avnu_base_profile = false;
 	portInit.isGM = false;
 	portInit.testMode = false;
 	portInit.initialLogSyncInterval = LOG2_INTERVAL_INVALID;
@@ -232,18 +224,30 @@ int _tmain(int argc, _TCHAR* argv[])
 				enablePacketReceptionDebug(true);
 				printf("Enhanced packet reception debugging enabled\n");
 			}
+			else if (strcmp(argv[i], "-profile") == 0) {
+				if (i + 1 >= argc) {
+					printf("Profile name must be specified after -profile option\n");
+					return -1;
+				}
+				std::string profile_name = argv[++i];
+				portInit.profile = gPTPProfileFactory::createProfileByName(profile_name);
+				printf("Profile '%s' enabled: %s\n", 
+					profile_name.c_str(), 
+					gPTPProfileFactory::getProfileDescription(portInit.profile).c_str());
+			}
 			else if (strcmp(argv[i], "-Milan") == 0) {
-				portInit.milan_config.milan_profile = true;
-				printf("Milan Baseline Interoperability Profile enabled\n");
-				printf("  - Max convergence time: %dms\n", portInit.milan_config.max_convergence_time_ms);
-				printf("  - Sync interval: %.3fms\n", pow(2.0, portInit.milan_config.milan_sync_interval_log) * 1000.0);
-				printf("  - Enhanced BMCA with fast convergence\n");
+				// Legacy Milan option for backward compatibility
+				portInit.profile = gPTPProfileFactory::createMilanProfile();
+				printf("Milan Baseline Interoperability Profile enabled (legacy option)\n");
+				printf("  - 125ms sync interval, 100ms convergence target\n");
+				printf("  - Enhanced asCapable behavior (2-5 PDelay requirement)\n");
 			}
 			else if (strcmp(argv[i], "-AvnuBase") == 0) {
-				portInit.avnu_base_profile = true;
-				printf("AVnu Base/ProAV Functional Interoperability Profile enabled\n");
+				// Legacy AVnu Base option for backward compatibility
+				portInit.profile = gPTPProfileFactory::createAvnuBaseProfile();
+				printf("AVnu Base/ProAV Functional Interoperability Profile enabled (legacy option)\n");
 				printf("  - asCapable requires 2-10 successful PDelay exchanges\n");
-				printf("  - Enhanced link detection and timeout handling\n");
+				printf("  - Standard 1s timing intervals\n");
 			}
 			else if (toupper(argv[i][1]) == 'W')
 			{
@@ -338,27 +342,20 @@ int _tmain(int argc, _TCHAR* argv[])
 			GPTP_LOG_INFO("profile = %s", config_profile.c_str());
 			
 			// Profile priority: Command line options override configuration file
-			if (portInit.milan_config.milan_profile) {
-				// Milan profile was explicitly set via command line
-				GPTP_LOG_INFO("Milan profile enabled via command line (overrides config file)");
-			} else if (portInit.avnu_base_profile) {
-				// AVnu Base profile was explicitly set via command line
-				GPTP_LOG_INFO("AVnu Base/ProAV profile enabled via command line (overrides config file)");
-			} else if (portInit.automotive_profile) {
-				// Automotive profile was explicitly set via command line
-				GPTP_LOG_INFO("Automotive profile enabled via command line (overrides config file)");
-			} else if (config_profile == "milan") {
-				// Use Milan profile from configuration file
-				portInit.milan_config.milan_profile = true;
-				GPTP_LOG_INFO("Milan profile enabled via configuration file");
-			} else if (config_profile == "avnu_base") {
-				// Use AVnu Base profile from configuration file
-				portInit.avnu_base_profile = true;
-				GPTP_LOG_INFO("AVnu Base/ProAV profile enabled via configuration file");
-			} else if (config_profile == "automotive") {
-				// Use automotive profile from configuration file
-				portInit.automotive_profile = true;
-				GPTP_LOG_INFO("Automotive profile enabled via configuration file");
+			if (portInit.profile.profile_name != "standard") {
+				// Profile was explicitly set via command line - keep it
+				GPTP_LOG_INFO("Profile '%s' explicitly set via command line (overrides config file)", 
+					portInit.profile.profile_name.c_str());
+			} else {
+				// Use profile from configuration file
+				if (!config_profile.empty() && config_profile != "standard") {
+					portInit.profile = gPTPProfileFactory::createProfileByName(config_profile);
+					GPTP_LOG_INFO("Profile '%s' loaded from configuration file: %s", 
+						config_profile.c_str(),
+						gPTPProfileFactory::getProfileDescription(portInit.profile).c_str());
+				} else {
+					GPTP_LOG_INFO("Using standard profile from configuration file");
+				}
 			}
 		}
 	} else {
@@ -367,21 +364,28 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 	portInit.clock = new IEEE1588Clock(false, false, priority1, timerq_factory, ipc, portInit.lock_factory);  // Do not force slave
 	
-	// Configure clock quality based on profile and configuration
+	// Configure clock quality based on unified profile system
+	ClockQuality quality;
 	if (use_config_file) {
-		// Apply configuration file settings directly
-		ClockQuality quality;
+		// Config file values override profile defaults
 		quality.cq_class = config_clockClass;
 		quality.clockAccuracy = config_clockAccuracy;
 		quality.offsetScaledLogVariance = config_offsetScaledLogVariance;
-		portInit.clock->setClockQuality(quality);
 		
 		GPTP_LOG_INFO("Clock quality configured from file: class=%d, accuracy=0x%02X, variance=0x%04X",
 			quality.cq_class, quality.clockAccuracy, quality.offsetScaledLogVariance);
 	} else {
-		// Apply profile-specific clock quality
-		portInit.clock->setProfileClockQuality(portInit.milan_config.milan_profile, portInit.automotive_profile);
+		// Use profile-specific clock quality
+		quality.cq_class = portInit.profile.clock_class;
+		quality.clockAccuracy = portInit.profile.clock_accuracy;
+		quality.offsetScaledLogVariance = portInit.profile.offset_scaled_log_variance;
+		
+		GPTP_LOG_INFO("Clock quality configured from profile '%s': class=%d, accuracy=0x%02X, variance=0x%04X",
+			portInit.profile.profile_name.c_str(),
+			quality.cq_class, quality.clockAccuracy, quality.offsetScaledLogVariance);
 	}
+	
+	portInit.clock->setClockQuality(quality);
 
 	if (!wireless)
 	{

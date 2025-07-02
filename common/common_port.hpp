@@ -42,6 +42,7 @@
 #include <avbts_oslock.hpp>
 #include <avbts_osnet.hpp>
 #include <unordered_map>
+#include <gptp_profile.hpp>  // Unified gPTP profile support
 
 #include <math.h>
 
@@ -220,33 +221,7 @@ private:
 
 typedef std::unordered_map<uint32_t, phy_delay_spec_t> phy_delay_map_t;
 
-/**
- * @brief Milan Baseline Interoperability Profile configuration
- */
-typedef struct {
-	bool milan_profile;                    // Enable Milan compliance mode
-	uint32_t max_convergence_time_ms;      // < 100ms requirement
-	uint32_t max_sync_jitter_ns;          // Stricter jitter limits
-	uint32_t max_path_delay_variation_ns;  // Path delay stability
-	bool stream_aware_bmca;               // Consider traffic in BMCA
-	bool redundant_gm_support;            // Multiple GM support
-	int8_t milan_sync_interval_log;       // Milan-specific sync interval (log2 signed)
-	int8_t milan_announce_interval_log;    // Milan-specific announce interval (log2 signed)
-	int8_t milan_pdelay_interval_log;     // Milan-specific pdelay interval (log2 signed)
-} MilanProfileConfig_t;
 
-/**
- * @brief Milan profile timing statistics for monitoring compliance
- */
-typedef struct {
-	uint64_t convergence_start_time;       // When convergence started (ns)
-	uint64_t last_sync_time;              // Last sync message timestamp (ns)
-	uint32_t sync_jitter_sum;             // Running sum for jitter calculation
-	uint32_t sync_jitter_count;           // Number of samples for jitter
-	uint32_t max_observed_jitter_ns;      // Maximum jitter observed
-	uint32_t path_delay_variation_ns;     // Current path delay variation
-	bool convergence_achieved;            // Whether we've met convergence target
-} MilanProfileStats_t;
 
 /**
  * @brief Structure for initializing the port class
@@ -266,15 +241,6 @@ typedef struct {
 
 	/* Virtual Network label (e.g. WiFi Direct network MAC) */
 	InterfaceLabel *virtual_label;
-
-	/* automotive_profile set the AVnu automotive profile */
-	bool automotive_profile;
-
-	/* milan_profile set the Milan Baseline Interoperability Profile */
-	bool milan_profile;
-
-	/* avnu_base_profile set the AVnu Base/ProAV Functional Interoperability Profile */
-	bool avnu_base_profile;
 
 	/* Set to true if the port is the grandmaster. Used for fixed GM in
 	 * the the AVnu automotive profile */
@@ -325,9 +291,8 @@ typedef struct {
 	 * negative correction field */
 	bool allowNegativeCorrField;
 
-	/* Milan Baseline Interoperability Profile configuration */
-	MilanProfileConfig_t milan_config;
-	MilanProfileStats_t milan_stats;       // Milan profile runtime statistics
+	/* Unified gPTP Profile configuration - replaces individual profile flags */
+	gPTPProfile profile;                   // Unified profile configuration
 } PortInit_t;
 
 
@@ -380,12 +345,10 @@ private:
 
 	PortState port_state;
 	bool testMode;
-	bool automotive_profile;
-	bool milan_profile;
-	bool avnu_base_profile;
-	MilanProfileConfig_t milan_config;
-	MilanProfileStats_t milan_stats;       // Milan profile runtime statistics
-
+	
+	/* Unified gPTP Profile - replaces individual profile flags */
+	gPTPProfile active_profile;            // Current active profile configuration
+	
 	bool allow_negative_correction_field;
 
 	signed char log_mean_sync_interval;
@@ -1294,15 +1257,19 @@ public:
 	 */
 	virtual void becomeSlave( bool restart_syntonization ) = 0;
 
-	// Milan and profile accessors
-	bool getMilanProfile() const { return milan_profile; }
-	bool getAvnuBaseProfile() const { return avnu_base_profile; }
-	bool getAutomotiveProfile() const { return automotive_profile; }
-	const MilanProfileConfig_t &getMilanConfig() const { return milan_config; }
-	MilanProfileStats_t &getMilanStats() { return milan_stats; }
-	const MilanProfileStats_t &getMilanStats() const { return milan_stats; }
-	void updateMilanJitterStats(uint64_t jitter_ns);
-	bool checkMilanConvergence();
+	// Unified profile accessors
+	const gPTPProfile& getProfile() const { return active_profile; }
+	gPTPProfile& getProfile() { return active_profile; }
+	void setProfile(const gPTPProfile& profile) { active_profile = profile; }
+	
+	// Legacy profile compatibility getters (for migration)
+	bool getMilanProfile() const { return active_profile.profile_name == "milan"; }
+	bool getAvnuBaseProfile() const { return active_profile.profile_name == "avnu_base"; }
+	bool getAutomotiveProfile() const { return active_profile.profile_name == "automotive"; }
+	
+	// Profile statistics and monitoring
+	void updateProfileJitterStats(uint64_t jitter_ns);
+	bool checkProfileConvergence();
 
 	// Counter and interval accessors
 	unsigned int getSyncCount() const { return sync_count; }

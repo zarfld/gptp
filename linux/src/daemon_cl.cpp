@@ -38,6 +38,7 @@
 #include "avbts_persist.hpp"
 #include "gptp_cfg.hpp"
 #include "ether_port.hpp"
+#include "gptp_profile.hpp"
 
 #ifdef ARCH_INTELCE
 #include "linux_hal_intelce.hpp"
@@ -90,6 +91,7 @@ void print_usage( char *arg0 ) {
 		  "\t-L force slave (ignored when Automotive Profile set)\n"
 		  "\t-E enable test mode (as defined in AVnu automotive profile)\n"
 		  "\t-V enable AVnu Automotive Profile\n"
+		  "\t-profile <profile> set gPTP profile (standard|automotive|milan|avnu_base)\n"
 		  "\t-N allow processing SyncFollowUp with negative correction field\n"
 		  "\t-GM set grandmaster for Automotive Profile\n"
 		  "\t-INITSYNC <value> initial sync interval (Log base 2. 0 = 1 second)\n"
@@ -182,7 +184,7 @@ int main(int argc, char **argv)
 	portInit.index = 0;
 	portInit.timestamper = NULL;
 	portInit.net_label = NULL;
-	portInit.automotive_profile = false;
+	portInit.profile = createStandardProfile(); // Initialize with default standard profile
 	portInit.isGM = false;
 	portInit.testMode = false;
 	portInit.linkUp = false;
@@ -306,13 +308,35 @@ int main(int argc, char **argv)
 					( phy_delay[2], phy_delay[3] );
 			}
 			else if (strcmp(argv[i] + 1, "V") == 0) {
-				portInit.automotive_profile = true;
+				portInit.profile = createAutomotiveProfile();
 			}
 			else if (strcmp(argv[i] + 1, "GM") == 0) {
 				portInit.isGM = true;
 			}
 			else if (strcmp(argv[i] + 1, "E") == 0) {
 				portInit.testMode = true;
+			}
+			else if (strcmp(argv[i] + 1, "profile") == 0) {
+				if (i + 1 < argc) {
+					++i;
+					if (strcmp(argv[i], "standard") == 0) {
+						portInit.profile = createStandardProfile();
+					} else if (strcmp(argv[i], "automotive") == 0) {
+						portInit.profile = createAutomotiveProfile();
+					} else if (strcmp(argv[i], "milan") == 0) {
+						portInit.profile = createMilanProfile();
+					} else if (strcmp(argv[i], "avnu_base") == 0) {
+						portInit.profile = createAvnuBaseProfile();
+					} else {
+						fprintf(stderr, "Invalid profile: %s. Supported: standard, automotive, milan, avnu_base\n", argv[i]);
+						print_usage(argv[0]);
+						return -1;
+					}
+				} else {
+					fprintf(stderr, "Profile name must be specified.\n");
+					print_usage(argv[0]);
+					return -1;
+				}
 			}
 			else if (strcmp(argv[i] + 1, "N") == 0) {
 				portInit.allowNegativeCorrField = true;
@@ -461,7 +485,7 @@ int main(int argc, char **argv)
 		restoredataptr = ((char *)restoredata) + (restoredatalength - restoredatacount);
 	}
 
-	if (portInit.automotive_profile) {
+	if (portInit.profile.type == GPTP_PROFILE_AUTOMOTIVE) {
 		if (portInit.isGM) {
 			port_state = PTP_MASTER;
 		}

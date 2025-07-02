@@ -62,20 +62,26 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	port_state = PTP_INITIALIZING;
 	clock->registerPort(this, ifindex);
 	qualified_announce = NULL;
-	automotive_profile = portInit->automotive_profile;
-	milan_profile = portInit->milan_config.milan_profile;
-	avnu_base_profile = portInit->avnu_base_profile;
-	milan_config = portInit->milan_config;
 	
-	// Configure clock quality based on profile
-	clock->setProfileClockQuality(milan_profile, automotive_profile);
+	// Initialize unified profile system
+	active_profile = portInit->profile;
 	
-	// Initialize Milan profile statistics
-	memset(&milan_stats, 0, sizeof(milan_stats));
-	if (milan_profile) {
-		Timestamp start_time = clock->getTime();
-		milan_stats.convergence_start_time = TIMESTAMP_TO_NS(start_time);
+	// Configure neighbor delay threshold from profile
+	if (active_profile.neighbor_prop_delay_thresh != 0) {
+		neighbor_prop_delay_thresh = active_profile.neighbor_prop_delay_thresh;
 	}
+	
+	// Configure sync receipt threshold from profile
+	if (active_profile.sync_receipt_thresh != 0) {
+		sync_receipt_thresh = active_profile.sync_receipt_thresh;
+	}
+	
+	// Configure asCapable initial state from profile
+	asCapable = active_profile.initial_as_capable;
+	
+	GPTP_LOG_INFO("Port initialized with %s profile: %s", 
+		active_profile.profile_name.c_str(),
+		active_profile.profile_description.c_str());
 	
 	announce_sequence_id = 0;
 	signal_sequence_id = 0;
@@ -84,11 +90,18 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	initialLogSyncInterval = portInit->initialLogSyncInterval;
 	log_mean_announce_interval = 0;
 	pdelay_count = 0;
-	asCapable = false;
+	asCapable = active_profile.initial_as_capable;  // Initialize from profile
 	link_speed = INVALID_LINKSPEED;
-	allow_negative_correction_field = portInit->allowNegativeCorrField;
+	allow_negative_correction_field = active_profile.allows_negative_correction_field;
 	
-	// Milan profile: initialize late response tracking
+	// Initialize profile statistics
+	memset(&active_profile.stats, 0, sizeof(active_profile.stats));
+	if (active_profile.max_convergence_time_ms > 0) {
+		Timestamp start_time = clock->getTime();
+		active_profile.stats.convergence_start_time = TIMESTAMP_TO_NS(start_time);
+	}
+	
+	// Profile-specific initialization for late response tracking
 	_consecutive_late_responses = 0;
 	_consecutive_missing_responses = 0;
 	_last_pdelay_req_timestamp = Timestamp(0, 0, 0);
@@ -101,57 +114,56 @@ CommonPort::~CommonPort()
 	delete qualified_announce;
 }
 
-void CommonPort::updateMilanJitterStats(uint64_t sync_timestamp)
+void CommonPort::updateProfileJitterStats(uint64_t sync_timestamp)
 {
-	if (!milan_profile) return;
+	if (active_profile.max_sync_jitter_ns == 0) return;  // No jitter monitoring configured
 	
-	if (milan_stats.last_sync_time != 0) {
-		uint64_t interval = sync_timestamp - milan_stats.last_sync_time;
-		uint64_t expected_interval = (uint64_t)(pow(2.0, milan_config.milan_sync_interval_log) * 1000000000.0);
+	if (active_profile.stats.last_sync_time != 0) {
+		uint64_t interval = sync_timestamp - active_profile.stats.last_sync_time;
+		uint64_t expected_interval = (uint64_t)(pow(2.0, (double)active_profile.sync_interval_log) * 1000000000.0);
 		uint32_t jitter = (interval > expected_interval) ? 
 			(uint32_t)(interval - expected_interval) : 
 			(uint32_t)(expected_interval - interval);
 		
-		milan_stats.sync_jitter_sum += jitter;
-		milan_stats.sync_jitter_count++;
-		if (jitter > milan_stats.max_observed_jitter_ns) {
-			milan_stats.max_observed_jitter_ns = jitter;
-		}
+		active_profile.stats.current_sync_jitter_ns = jitter;
+		active_profile.stats.total_sync_messages++;
 		
-		// Check compliance with Milan jitter requirements
-		if (jitter > milan_config.max_sync_jitter_ns) {
-			GPTP_LOG_ERROR("MILAN COMPLIANCE: Sync jitter %u ns exceeds limit %u ns", 
-				jitter, milan_config.max_sync_jitter_ns);
+		// Check compliance with profile jitter requirements
+		if (jitter > active_profile.max_sync_jitter_ns) {
+			GPTP_LOG_ERROR("PROFILE COMPLIANCE (%s): Sync jitter %u ns exceeds limit %u ns", 
+				active_profile.profile_name.c_str(), jitter, active_profile.max_sync_jitter_ns);
 		}
 	}
-	milan_stats.last_sync_time = sync_timestamp;
+	active_profile.stats.last_sync_time = sync_timestamp;
 }
 
-bool CommonPort::checkMilanConvergence()
+bool CommonPort::checkProfileConvergence()
 {
-	if (!milan_profile) return false;
+	if (active_profile.max_convergence_time_ms == 0) return true;  // No convergence requirement
 	
 	Timestamp current_timestamp = clock->getTime();
 	uint64_t current_time = TIMESTAMP_TO_NS(current_timestamp);
-	uint64_t convergence_time = current_time - milan_stats.convergence_start_time;
+	uint64_t convergence_time = current_time - active_profile.stats.convergence_start_time;
 	
 	// Check if we've exceeded the convergence time limit
-	if (convergence_time > (milan_config.max_convergence_time_ms * 1000000ULL)) {
-		if (!milan_stats.convergence_achieved) {
-			GPTP_LOG_ERROR("MILAN COMPLIANCE: Convergence time %llu ms exceeds target %u ms", 
-				convergence_time / 1000000ULL, milan_config.max_convergence_time_ms);
+	if (convergence_time > (active_profile.max_convergence_time_ms * 1000000ULL)) {
+		if (!active_profile.stats.convergence_achieved) {
+			GPTP_LOG_ERROR("PROFILE COMPLIANCE (%s): Convergence time %llu ms exceeds target %u ms", 
+				active_profile.profile_name.c_str(),
+				convergence_time / 1000000ULL, active_profile.max_convergence_time_ms);
 		}
 		return false;
 	}
 	
 	// Mark convergence achieved if we have sync within the time limit
-	if (milan_stats.last_sync_time != 0 && !milan_stats.convergence_achieved) {
-		milan_stats.convergence_achieved = true;
-		GPTP_LOG_STATUS("MILAN COMPLIANCE: Convergence achieved in %llu ms (target: %u ms)", 
-			convergence_time / 1000000ULL, milan_config.max_convergence_time_ms);
+	if (active_profile.stats.last_sync_time != 0 && !active_profile.stats.convergence_achieved) {
+		active_profile.stats.convergence_achieved = true;
+		GPTP_LOG_STATUS("PROFILE COMPLIANCE (%s): Convergence achieved in %llu ms (target: %u ms)", 
+			active_profile.profile_name.c_str(),
+			convergence_time / 1000000ULL, active_profile.max_convergence_time_ms);
 	}
 	
-	return milan_stats.convergence_achieved;
+	return active_profile.stats.convergence_achieved;
 }
 
 bool CommonPort::init_port( void )
