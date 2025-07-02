@@ -202,6 +202,7 @@ void WindowsWatchdogHandler::run_update()
                     current_activity,
                     now,
                     (unsigned long long)(now - current_activity));
+                fflush(stdout);
                 healthy = false;
                 snprintf(health_message, sizeof(health_message),
                     "gPTP daemon ERROR: Network thread heartbeat lost (last=%llu, now=%llu, activity_age=%llu s) [update #%lu]",
