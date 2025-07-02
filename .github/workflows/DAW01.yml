@@ -40,7 +40,7 @@ jobs:
       shell: powershell
 
     - name: Run gptp.exe with timeout
-      shell: pwsh
+      shell: powershell
       run: |
         $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
         $process = Start-Process -FilePath $exe.FullName -ArgumentList "68-05-CA-8B-76-4E" -PassThru
