@@ -345,79 +345,84 @@ void *EtherPort::openPort( EtherPort *port )
     GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
     uint64_t loop_counter = 0;
     Timestamp last_activity_time = clock->getTime();
+    try {
+        while ( getListeningThreadRunning() ) {
+            uint8_t buf[128];
+            LinkLayerAddress remote;
+            net_result rrecv;
+            size_t length = sizeof(buf);
+            uint32_t link_speed;
+            
+            loop_counter++;
 
-    while ( getListeningThreadRunning() ) {
-        uint8_t buf[128];
-        LinkLayerAddress remote;
-        net_result rrecv;
-        size_t length = sizeof(buf);
-        uint32_t link_speed;
-        
-        loop_counter++;
+            // Heartbeat: update on every loop
+            network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
+            network_thread_last_activity.store((uint64_t)time(NULL), std::memory_order_relaxed);
 
-        // Heartbeat: update on every loop
-        network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
-        network_thread_last_activity.store((uint64_t)time(NULL), std::memory_order_relaxed);
+            // Log thread activity every 100 loops to prove thread is alive
+            if (loop_counter % 100 == 0) {
+                Timestamp current_time = clock->getTime();
+                Timestamp time_diff = current_time - last_activity_time;
+                uint64_t time_diff_ms = (uint64_t)time_diff.seconds_ls * 1000 + time_diff.nanoseconds / 1000000;
+                GPTP_LOG_STATUS("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago, heartbeat=%llu", 
+                    loop_counter, time_diff_ms, network_thread_heartbeat.load(std::memory_order_relaxed));
+            }
 
-        // Log thread activity every 100 loops to prove thread is alive
-        if (loop_counter % 100 == 0) {
-            Timestamp current_time = clock->getTime();
-            Timestamp time_diff = current_time - last_activity_time;
-            uint64_t time_diff_ms = (uint64_t)time_diff.seconds_ls * 1000 + time_diff.nanoseconds / 1000000;
-            GPTP_LOG_STATUS("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago, heartbeat=%llu", 
-                loop_counter, time_diff_ms, network_thread_heartbeat.load(std::memory_order_relaxed));
-        }
+            // Log explizit beim ersten Eintritt in die Schleife
+            if (loop_counter == 1) {
+                GPTP_LOG_STATUS("*** NETWORK THREAD: First entry into receive loop (loop_counter=1) ***");
+            }
 
-        // Log explizit beim ersten Eintritt in die Schleife
-        if (loop_counter == 1) {
-            GPTP_LOG_STATUS("*** NETWORK THREAD: First entry into receive loop (loop_counter=1) ***");
-        }
+            // Log vor jedem recv call
+            GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call recv() - loop #%llu", loop_counter);
+            rrecv = recv( &remote, buf, length, link_speed );
+            GPTP_LOG_DEBUG("*** NETWORK THREAD: recv() returned %d - loop #%llu", rrecv, loop_counter);
 
-        // Log vor jedem recv call
-        GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call recv() - loop #%llu", loop_counter);
-        rrecv = recv( &remote, buf, length, link_speed );
-        GPTP_LOG_DEBUG("*** NETWORK THREAD: recv() returned %d - loop #%llu", rrecv, loop_counter);
-
-        if ( rrecv == net_succeed )
-        {
-            last_activity_time = clock->getTime();
+            if ( rrecv == net_succeed )
+            {
+                last_activity_time = clock->getTime();
 			
-			// Log all incoming packets at network level
-			GPTP_LOG_DEBUG("*** NETWORK RX: Received %zu bytes from network, link_speed=%u", 
-				length, link_speed);
-			
-			// Log raw packet header info if it looks like PTP
-			if (length >= 34) { // Minimum PTP packet size
-				uint16_t messageType = buf[0] & 0x0F;
-				uint16_t seqId = (buf[30] << 8) | buf[31];
-				GPTP_LOG_DEBUG("*** NETWORK RX: PTP-like packet - messageType=%u, seqId=%u, length=%zu", 
-					messageType, seqId, length);
-			}
-			
-			// Log before calling processMessage to check if it blocks
-			GPTP_LOG_DEBUG("*** NETWORK RX: About to call processMessage for %zu bytes", length);
-			
-			processMessage
-				((char *)buf, (int)length, &remote, link_speed );
+				// Log all incoming packets at network level
+				GPTP_LOG_DEBUG("*** NETWORK RX: Received %zu bytes from network, link_speed=%u", 
+					length, link_speed);
 				
-			GPTP_LOG_DEBUG("*** NETWORK RX: processMessage completed successfully");
+				// Log raw packet header info if it looks like PTP
+				if (length >= 34) { // Minimum PTP packet size
+					uint16_t messageType = buf[0] & 0x0F;
+					uint16_t seqId = (buf[30] << 8) | buf[31];
+					GPTP_LOG_DEBUG("*** NETWORK RX: PTP-like packet - messageType=%u, seqId=%u, length=%zu", 
+						messageType, seqId, length);
+				}
+				
+				// Log before calling processMessage to check if it blocks
+				GPTP_LOG_DEBUG("*** NETWORK RX: About to call processMessage for %zu bytes", length);
+				
+				processMessage
+					((char *)buf, (int)length, &remote, link_speed );
+					
+				GPTP_LOG_DEBUG("*** NETWORK RX: processMessage completed successfully");
+				
+            } else if (rrecv == net_fatal) {
+                GPTP_LOG_ERROR("*** NETWORK THREAD: Fatal error in network receive - terminating (loop #%llu) ***", loop_counter);
+                this->processEvent(FAULT_DETECTED);
+                break;
+            } else if (rrecv == net_trfail) {
+                GPTP_LOG_DEBUG("*** NETWORK RX: Temporary receive failure (net_trfail) (loop #%llu)", loop_counter);
+            } else {
+                GPTP_LOG_DEBUG("*** NETWORK RX: Receive returned: %d (loop #%llu)", rrecv, loop_counter);
+            }
 			
-        } else if (rrecv == net_fatal) {
-            GPTP_LOG_ERROR("*** NETWORK THREAD: Fatal error in network receive - terminating (loop #%llu) ***", loop_counter);
-            this->processEvent(FAULT_DETECTED);
-            break;
-        } else if (rrecv == net_trfail) {
-            GPTP_LOG_DEBUG("*** NETWORK RX: Temporary receive failure (net_trfail) (loop #%llu)", loop_counter);
-        } else {
-            GPTP_LOG_DEBUG("*** NETWORK RX: Receive returned: %d (loop #%llu)", rrecv, loop_counter);
+			// Check if getListeningThreadRunning() changed
+			if (!getListeningThreadRunning()) {
+				GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop (loop #%llu) ***", loop_counter);
+				break;
+			}
         }
-		
-		// Check if getListeningThreadRunning() changed
-		if (!getListeningThreadRunning()) {
-			GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop (loop #%llu) ***", loop_counter);
-			break;
-		}
-	}
+    } catch (const std::exception& ex) {
+        GPTP_LOG_ERROR("*** NETWORK THREAD: Unhandled std::exception caught: %s (loop_counter=%llu) ***", ex.what(), loop_counter);
+    } catch (...) {
+        GPTP_LOG_ERROR("*** NETWORK THREAD: Unhandled unknown exception caught (loop_counter=%llu) ***", loop_counter);
+    }
     GPTP_LOG_ERROR("*** NETWORK THREAD: Listening thread terminated - loop_counter=%llu (reason: loop exit) ***", loop_counter);
     setListeningThreadRunning(false);
     return NULL;
