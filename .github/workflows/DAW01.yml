@@ -39,9 +39,45 @@ jobs:
           }
       shell: powershell
 
-    - name: Run gptp.exe
+    - name: Run gptp.exe with timeout and log capture
+      shell: powershell
       run: |
         $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
-        & $exe.FullName "68-05-CA-8B-76-4E"
+        $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*I21*" }) | Select-Object -First 1 -ExpandProperty MacAddress
+        $logFile = "$env:GITHUB_WORKSPACE\gptp.log"
+         $errFile = "$env:GITHUB_WORKSPACE\gptp_err.log"
+    
+        $process = Start-Process -FilePath $exe.FullName `
+                                 -ArgumentList $mac `
+                                 -RedirectStandardOutput $logFile `
+                                 -RedirectStandardError $errFile `
+                                 -NoNewWindow `
+                                 -PassThru
+    
+        $timeoutSeconds = 30
+    
+        if (-not $process.WaitForExit($timeoutSeconds * 1000)) {
+          Write-Host "Timeout reached. Killing gptp.exe"
+          $process | Stop-Process -Force
+          Write-Host "gptp.exe stopped after $timeoutSeconds seconds (as intended)."
+        } else {
+          Write-Host "gptp.exe exited on its own."
+        }
+
+    - name: Run gptp.exe with timeout
       shell: powershell
+      run: |
+        $exe = Get-ChildItem -Recurse -Filter gptp.exe | Select-Object -First 1
+        $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*I21*"  } | Select-Object -First 1 -ExpandProperty MacAddress)
+        $process = Start-Process -FilePath $exe.FullName -ArgumentList "$mac" -PassThru
+        $timeoutSeconds = 30
+    
+        if (-not $process.WaitForExit($timeoutSeconds * 1000)) {
+          Write-Host "Timeout reached. Killing gptp.exe"
+          $process | Stop-Process -Force
+          Write-Host "gptp.exe stopped after $timeoutSeconds seconds (as intended)."
+        } else {
+          Write-Host "gptp.exe exited on its own."
+        }
+
 
