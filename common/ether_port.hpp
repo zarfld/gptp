@@ -147,6 +147,11 @@ protected:
 	static const unsigned int DUPLICATE_RESP_THRESH = 3;
 
  public:
+	// Heartbeat timestamp for Network Thread monitoring
+	volatile uint64_t network_thread_heartbeat;
+	// Last time the network thread reported activity (for watchdog)
+	volatile uint64_t network_thread_last_activity;
+
 	void becomeMaster( bool annc );
 	void becomeSlave( bool restart_syntonization );
 

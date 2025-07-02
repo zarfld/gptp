@@ -36,6 +36,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ether_port.hpp"
+#include <atomic>
+
+// Global pointer to EtherPort for heartbeat monitoring
+extern EtherPort *gptp_ether_port;
+
+// Heartbeat timeout in seconds
+#define NETWORK_THREAD_HEARTBEAT_TIMEOUT 5
 
 DWORD WINAPI watchdogUpdateThreadFunction(LPVOID arg)
 {
@@ -169,44 +177,63 @@ void WindowsWatchdogHandler::stopWatchdog()
 void WindowsWatchdogHandler::run_update()
 {
     GPTP_LOG_INFO("Windows watchdog update thread started");
-    
     unsigned long update_count = 0;
-    
+    uint64_t last_heartbeat = 0;
+    uint64_t last_activity = 0;
+    bool last_healthy = true;
+
     while (!stop_watchdog)
     {
         update_count++;
-        GPTP_LOG_DEBUG("NOTIFYING WINDOWS WATCHDOG (update #%lu)", update_count);
-        
-        // Perform health checks and report status
+        bool healthy = true;
         char health_message[256];
-        snprintf(health_message, sizeof(health_message), 
-                "gPTP daemon healthy - watchdog update #%lu", update_count);
-        
-        // Report health to appropriate Windows mechanism
+
+        // Heartbeat check: is the network thread alive?
+        if (gptp_ether_port) {
+            uint64_t current_heartbeat = gptp_ether_port->network_thread_heartbeat;
+            uint64_t current_activity = gptp_ether_port->network_thread_last_activity;
+            uint64_t now = time(NULL);
+            if (current_heartbeat == last_heartbeat || (now - current_activity) > NETWORK_THREAD_HEARTBEAT_TIMEOUT) {
+                healthy = false;
+                snprintf(health_message, sizeof(health_message),
+                    "gPTP daemon ERROR: Network thread heartbeat lost (last=%llu, now=%llu, activity_age=%llu s) [update #%lu]",
+                    last_heartbeat, current_heartbeat, (unsigned long long)(now - current_activity), update_count);
+            } else {
+                snprintf(health_message, sizeof(health_message),
+                    "gPTP daemon healthy - network thread heartbeat OK (heartbeat=%llu, activity=%llu, now=%llu) [update #%lu]",
+                    current_heartbeat, current_activity, now, update_count);
+            }
+            last_heartbeat = current_heartbeat;
+            last_activity = current_activity;
+        } else {
+            snprintf(health_message, sizeof(health_message), "gPTP daemon healthy - watchdog update #%lu", update_count);
+        }
+
+        // Report health to Windows
         if (service_mode) {
             reportServiceStatus(SERVICE_RUNNING);
-            reportHealth(health_message, true);
+            reportHealth(health_message, healthy);
         } else {
-            reportHealth(health_message, true);
+            reportHealth(health_message, healthy);
         }
-        
-        // Periodic extended health reporting (every 10 updates)
+
+        if (!healthy && last_healthy) {
+            GPTP_LOG_ERROR("Network thread heartbeat lost - reporting unhealthy to watchdog");
+        }
+        last_healthy = healthy;
+
         if (update_count % 10 == 0) {
-            snprintf(health_message, sizeof(health_message), 
-                    "gPTP daemon extended health check - %lu updates completed", update_count);
-            reportHealth(health_message, true);
+            snprintf(health_message, sizeof(health_message),
+                "gPTP daemon extended health check - %lu updates completed", update_count);
+            reportHealth(health_message, healthy);
         }
-        
+
         GPTP_LOG_DEBUG("GOING TO SLEEP %lu microseconds", update_interval);
-        
-        // Sleep for watchdog interval (convert microseconds to milliseconds)
         DWORD sleep_ms = (DWORD)(update_interval / 1000);
-        if (sleep_ms < 100) sleep_ms = 100; // Minimum 100ms sleep to avoid excessive CPU
+        if (sleep_ms < 100) sleep_ms = 100;
         Sleep(sleep_ms);
-        
         GPTP_LOG_DEBUG("WATCHDOG WAKE UP");
     }
-    
     GPTP_LOG_INFO("Windows watchdog update thread stopped after %lu updates", update_count);
 }
 

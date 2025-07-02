@@ -334,31 +334,39 @@ void EtherPort::processMessage
 
 void *EtherPort::openPort( EtherPort *port )
 {
-	port_ready_condition->signal();
+    port_ready_condition->signal();
 
-	setListeningThreadRunning(true);
-	
-	GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
-	uint64_t loop_counter = 0;
-	Timestamp last_activity_time = clock->getTime();
+    setListeningThreadRunning(true);
 
-	while ( getListeningThreadRunning() ) {
-		uint8_t buf[128];
-		LinkLayerAddress remote;
-		net_result rrecv;
-		size_t length = sizeof(buf);
-		uint32_t link_speed;
+    // Heartbeat: set initial value
+    network_thread_heartbeat = 0;
+    network_thread_last_activity = clock->getTime().seconds_ls;
+
+    GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
+    uint64_t loop_counter = 0;
+    Timestamp last_activity_time = clock->getTime();
+
+    while ( getListeningThreadRunning() ) {
+        uint8_t buf[128];
+        LinkLayerAddress remote;
+        net_result rrecv;
+        size_t length = sizeof(buf);
+        uint32_t link_speed;
 		
 		loop_counter++;
-		
-		// Log thread activity every 100 loops to prove thread is alive
-		if (loop_counter % 100 == 0) {
-			Timestamp current_time = clock->getTime();
-			Timestamp time_diff = current_time - last_activity_time;
-			uint64_t time_diff_ms = (uint64_t)time_diff.seconds_ls * 1000 + time_diff.nanoseconds / 1000000;
-			GPTP_LOG_STATUS("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago", 
-				loop_counter, time_diff_ms);
-		}
+
+		// Heartbeat: update on every loop
+		network_thread_heartbeat++;
+		network_thread_last_activity = clock->getTime().seconds_ls;
+
+        // Log thread activity every 100 loops to prove thread is alive
+        if (loop_counter % 100 == 0) {
+            Timestamp current_time = clock->getTime();
+            Timestamp time_diff = current_time - last_activity_time;
+            uint64_t time_diff_ms = (uint64_t)time_diff.seconds_ls * 1000 + time_diff.nanoseconds / 1000000;
+            GPTP_LOG_STATUS("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago, heartbeat=%llu", 
+                loop_counter, time_diff_ms, network_thread_heartbeat);
+        }
 
 		// Log every 10th recv call attempt to see if recv is blocking
 		if (loop_counter % 10 == 0) {

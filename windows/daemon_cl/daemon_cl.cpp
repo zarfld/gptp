@@ -48,7 +48,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iphlpapi.h>
 #include <cmath>
 
-#include <ether_port.hpp>
 #include <wireless_port.hpp>
 #include <intel_wireless.hpp>
 
@@ -60,6 +59,13 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "IPCListener.hpp"
 #include "tsc.hpp"
 #include "packet.hpp"
+
+// Global pointer for watchdog heartbeat monitoring
+#ifndef GPTP_DAEMON_CL_ETHER_PORT_SINGLETON
+#define GPTP_DAEMON_CL_ETHER_PORT_SINGLETON
+#include "../../common/ether_port.hpp"
+EtherPort *gptp_ether_port = nullptr;
+#endif
 
 /* Generic PCH delays */
 #define PHY_DELAY_GB_TX_PCH 7750  //1G delay
@@ -396,6 +402,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		// Create Port Object linked to clock and low level
 		portInit.phy_delay = &ether_phy_delay;
 		EtherPort *eport = new EtherPort(&portInit);
+		gptp_ether_port = eport; // Set global pointer for watchdog
 		eport->setLinkSpeed( findLinkSpeed( static_cast <LinkLayerAddress *> ( portInit.net_label )));
 		port = eport;
 		if (!eport->init_port()) {
