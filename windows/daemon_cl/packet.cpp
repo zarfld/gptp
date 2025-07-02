@@ -50,6 +50,7 @@
 extern EtherPort *gptp_ether_port;
 
 void update_network_thread_heartbeat() {
+    printf("DEBUG: update_network_thread_heartbeat: ENTER (thread_id=%lu, gptp_ether_port=%p)\n", GetCurrentThreadId(), gptp_ether_port);
     if (gptp_ether_port) {
         auto tid = GetCurrentThreadId();
         gptp_ether_port->network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
@@ -61,7 +62,7 @@ void update_network_thread_heartbeat() {
         printf("DEBUG: update_network_thread_heartbeat: thread_id=%lu, GetTickCount64()=%llu ms, QPC=%lld, gptp_ether_port=%p, heartbeat=%llu, last_activity(QPC)=%llu\n",
                tid, now_gk, qpc.QuadPart, gptp_ether_port, gptp_ether_port->network_thread_heartbeat.load(), gptp_ether_port->network_thread_last_activity.load());
     } else {
-        printf("DEBUG: update_network_thread_heartbeat: gptp_ether_port=NULL\n");
+        printf("DEBUG: update_network_thread_heartbeat: gptp_ether_port=NULL (thread_id=%lu)\n", GetCurrentThreadId());
     }
 }
 
@@ -261,6 +262,7 @@ fnexit:
 // Call to recvFrame must be thread-safe.  However call to pcap_next_ex() isn't because of somewhat undefined memory management semantics.
 // Wrap call to pcap library with mutex
 packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uint8_t *payload, size_t &length ) {
+    printf("DEBUG: recvFrame: ENTER (thread_id=%lu, handle=%p)\n", GetCurrentThreadId(), handle);
     packet_error_t ret = PACKET_NO_ERROR;
     struct pcap_pkthdr *hdr_r;
     u_char *data;
@@ -277,7 +279,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
 
     // --- Heartbeat update: call on every receive attempt ---
     extern void update_network_thread_heartbeat();
-
+    printf("DEBUG: recvFrame: Calling update_network_thread_heartbeat (thread_id=%lu)\n", GetCurrentThreadId());
     update_network_thread_heartbeat();
 
     // --- DEBUG: Before WaitForSingleObject ---
@@ -286,6 +288,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     // --- DEBUG: After WaitForSingleObject ---
     printf("DEBUG: recvFrame: After WaitForSingleObject (thread_id=%lu, wait_result=%lu, WAIT_OBJECT_0=%lu, WAIT_TIMEOUT=%lu, WAIT_FAILED=%lu, GetLastError()=%lu)\n", GetCurrentThreadId(), wait_result, WAIT_OBJECT_0, WAIT_TIMEOUT, WAIT_FAILED, GetLastError());
     if( wait_result != WAIT_OBJECT_0 ) {
+        printf("DEBUG: recvFrame: Early return - failed to get capture_lock mutex (thread_id=%lu)\n", GetCurrentThreadId());
         ret = PACKET_GETMUTEX_ERROR;
         printf("ERROR: recvFrame: Failed to get capture_lock mutex\n");
         goto fnexit;
@@ -293,6 +296,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
 
     // --- Robust recovery: If iface is NULL, try to re-open before proceeding ---
     if (handle->iface == NULL) {
+        printf("DEBUG: recvFrame: Early return - iface is NULL (thread_id=%lu)\n", GetCurrentThreadId());
         printf("ERROR: recvFrame: Interface handle is NULL, attempting to re-open...\n");
         packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
         if (reopen_ret != PACKET_NO_ERROR) {
@@ -314,6 +318,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     printf("DEBUG: recvFrame: After pcap_next_ex (thread_id=%lu, pcap_result=%d)\n", GetCurrentThreadId(), pcap_result);
 
     if( pcap_result == 0 ) {
+        printf("DEBUG: recvFrame: Early return - pcap_result == 0 (thread_id=%lu)\n", GetCurrentThreadId());
         ret = PACKET_RECVTIMEOUT_ERROR;
         timeout_count++;
         consecutive_timeouts++;
@@ -335,6 +340,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
             }
         }
     } else if( pcap_result < 0 ) {
+        printf("DEBUG: recvFrame: Early return - pcap_result < 0 (thread_id=%lu)\n", GetCurrentThreadId());
         ret = PACKET_RECVFAILED_ERROR;
         consecutive_errors++;
         consecutive_timeouts = 0;
@@ -386,13 +392,12 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     }
     
     if( !ReleaseMutex( handle->capture_lock )) {
+        printf("DEBUG: recvFrame: Early return - failed to release capture_lock mutex (thread_id=%lu)\n", GetCurrentThreadId());
         ret = PACKET_RLSMUTEX_ERROR;
         printf("ERROR: recvFrame: Failed to release capture_lock mutex\n");
         goto fnexit;
     }
-
 fnexit:
-    // --- DEBUG: Exiting recvFrame ---
     printf("DEBUG: recvFrame: EXIT (thread_id=%lu, ret=%d)\n", GetCurrentThreadId(), ret);
     return ret;
 }
