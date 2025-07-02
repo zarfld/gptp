@@ -42,8 +42,8 @@
 // Global pointer to EtherPort for heartbeat monitoring
 extern EtherPort *gptp_ether_port;
 
-// Heartbeat timeout in seconds
-#define NETWORK_THREAD_HEARTBEAT_TIMEOUT 5
+// Heartbeat timeout in milliseconds
+#define NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS 5000
 
 DWORD WINAPI watchdogUpdateThreadFunction(LPVOID arg)
 {
@@ -192,21 +192,22 @@ void WindowsWatchdogHandler::run_update()
         if (gptp_ether_port) {
             uint64_t current_heartbeat = gptp_ether_port->network_thread_heartbeat;
             uint64_t current_activity = gptp_ether_port->network_thread_last_activity;
-            uint64_t now = time(NULL);
-            if (current_heartbeat == last_heartbeat || (now - current_activity) > NETWORK_THREAD_HEARTBEAT_TIMEOUT) {
+            ULONGLONG now = GetTickCount64();
+            ULONGLONG activity_age_ms = now - current_activity;
+            if (current_heartbeat == last_heartbeat || activity_age_ms > NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS) {
                 // Debug print for diagnosis
-                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity=%llu, now=%llu, activity_age=%llu\n",
+                printf("DEBUG: watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity=%llu, now=%llu, activity_age_ms=%llu\n",
                     gptp_ether_port,
                     last_heartbeat,
                     current_heartbeat,
                     current_activity,
                     now,
-                    (unsigned long long)(now - current_activity));
+                    activity_age_ms);
                 fflush(stdout);
                 healthy = false;
                 snprintf(health_message, sizeof(health_message),
-                    "gPTP daemon ERROR: Network thread heartbeat lost (last=%llu, now=%llu, activity_age=%llu s) [update #%lu]",
-                    last_heartbeat, current_heartbeat, (unsigned long long)(now - current_activity), update_count);
+                    "gPTP daemon ERROR: Network thread heartbeat lost (last=%llu, now=%llu, activity_age=%.2f s) [update #%lu]",
+                    last_heartbeat, current_heartbeat, activity_age_ms / 1000.0, update_count);
             } else {
                 snprintf(health_message, sizeof(health_message),
                     "gPTP daemon healthy - network thread heartbeat OK (heartbeat=%llu, activity=%llu, now=%llu) [update #%lu]",
