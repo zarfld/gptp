@@ -177,8 +177,10 @@ bool CommonPort::init_port( void )
 
 	if (!OSNetworkInterfaceFactory::buildInterface
 	    ( &net_iface, factory_name_t("default"), net_label,
-	      _hw_timestamper))
+	      _hw_timestamper)) {
+		GPTP_LOG_ERROR("init_port: OSNetworkInterfaceFactory::buildInterface failed");
 		return false;
+	}
 
 	this->net_iface->getLinkLayerAddress(&local_addr);
 	clock->setClockIdentity(&local_addr);
