@@ -127,6 +127,26 @@ int GptpIniParser::iniCallBack(void *user, const char *section, const char *name
             valOK = true;
             parser->_config.profile = std::string(value);
         }
+        else if( parseMatch(name, "priority2") )
+        {
+            errno = 0;
+            char *pEnd;
+            unsigned char p2 = (unsigned char) strtoul(value, &pEnd, 10);
+            if( *pEnd == '\0' && errno == 0) {
+                valOK = true;
+                parser->_config.priority2 = p2;
+            }
+        }
+        else if( parseMatch(name, "watchdog_interval") )
+        {
+            errno = 0;
+            char *pEnd;
+            unsigned int wdi = strtoul(value, &pEnd, 10);
+            if( *pEnd == '\0' && errno == 0) {
+                valOK = true;
+                parser->_config.watchdog_interval = wdi;
+            }
+        }
     }
     else if( parseMatch(section, "port") )
     {

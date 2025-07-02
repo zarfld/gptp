@@ -85,6 +85,10 @@ class GptpIniParser
             /*ethernet adapter data set*/
 	    std::string ifname;
 		phy_delay_map_t phy_delay;
+
+            /* additional parameters */
+            unsigned char priority2;
+            unsigned int watchdog_interval;
         } gptp_cfg_t;
 
         /*public methods*/
