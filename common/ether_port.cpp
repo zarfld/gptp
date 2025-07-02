@@ -340,7 +340,7 @@ void *EtherPort::openPort( EtherPort *port )
 
     // Heartbeat: set initial value
     network_thread_heartbeat = 0;
-    network_thread_last_activity = clock->getTime().seconds_ls;
+    network_thread_last_activity = (uint64_t)time(NULL); // Use Unix time for watchdog compatibility
 
     GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
     uint64_t loop_counter = 0;
