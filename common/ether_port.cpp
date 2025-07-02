@@ -347,6 +347,7 @@ void *EtherPort::openPort( EtherPort *port )
     Timestamp last_activity_time = clock->getTime();
     try {
         while ( getListeningThreadRunning() ) {
+            GPTP_LOG_DEBUG("*** NETWORK THREAD: LOOP START (loop_counter=%llu, thread_id=%lu, stack_ptr=%p) ***", loop_counter, (unsigned long)OSThread::getCurrentThreadId(), (void*)&loop_counter);
             uint8_t buf[128];
             LinkLayerAddress remote;
             net_result rrecv;
@@ -368,12 +369,15 @@ void *EtherPort::openPort( EtherPort *port )
                     loop_counter, time_diff_ms, network_thread_heartbeat.load(std::memory_order_relaxed));
             }
 
-            // Log explizit beim ersten Eintritt in die Schleife
             if (loop_counter == 1) {
                 GPTP_LOG_STATUS("*** NETWORK THREAD: First entry into receive loop (loop_counter=1) ***");
             }
 
-            // Log vor jedem recv call
+            // Log before every lock/unlock/wait/timer operation
+            GPTP_LOG_DEBUG("*** NETWORK THREAD: About to check port_ready_condition (signal) (loop_counter=%llu) ***", loop_counter);
+            // port_ready_condition->signal(); // Already signaled at top
+
+            // Log before every recv call
             GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call recv() - loop #%llu", loop_counter);
             rrecv = recv( &remote, buf, length, link_speed );
             GPTP_LOG_DEBUG("*** NETWORK THREAD: recv() returned %d - loop #%llu", rrecv, loop_counter);
@@ -381,27 +385,20 @@ void *EtherPort::openPort( EtherPort *port )
             if ( rrecv == net_succeed )
             {
                 last_activity_time = clock->getTime();
-			
-				// Log all incoming packets at network level
-				GPTP_LOG_DEBUG("*** NETWORK RX: Received %zu bytes from network, link_speed=%u", 
-					length, link_speed);
-				
-				// Log raw packet header info if it looks like PTP
-				if (length >= 34) { // Minimum PTP packet size
-					uint16_t messageType = buf[0] & 0x0F;
-					uint16_t seqId = (buf[30] << 8) | buf[31];
-					GPTP_LOG_DEBUG("*** NETWORK RX: PTP-like packet - messageType=%u, seqId=%u, length=%zu", 
-						messageType, seqId, length);
-				}
-				
-				// Log before calling processMessage to check if it blocks
-				GPTP_LOG_DEBUG("*** NETWORK RX: About to call processMessage for %zu bytes", length);
-				
-				processMessage
-					((char *)buf, (int)length, &remote, link_speed );
-					
-				GPTP_LOG_DEBUG("*** NETWORK RX: processMessage completed successfully");
-				
+            	// Log all incoming packets at network level
+            	GPTP_LOG_DEBUG("*** NETWORK RX: Received %zu bytes from network, link_speed=%u", 
+            		length, link_speed);
+            	// Log raw packet header info if it looks like PTP
+            	if (length >= 34) { // Minimum PTP packet size
+            		uint16_t messageType = buf[0] & 0x0F;
+            		uint16_t seqId = (buf[30] << 8) | buf[31];
+            		GPTP_LOG_DEBUG("*** NETWORK RX: PTP-like packet - messageType=%u, seqId=%u, length=%zu", 
+            			messageType, seqId, length);
+            	}
+            	// Log before calling processMessage to check if it blocks
+            	GPTP_LOG_DEBUG("*** NETWORK RX: About to call processMessage for %zu bytes (loop_counter=%llu) ***", length, loop_counter);
+                processMessage((char *)buf, (int)length, &remote, link_speed );
+                GPTP_LOG_DEBUG("*** NETWORK RX: processMessage completed successfully (loop_counter=%llu) ***", loop_counter);
             } else if (rrecv == net_fatal) {
                 GPTP_LOG_ERROR("*** NETWORK THREAD: Fatal error in network receive - terminating (loop #%llu) ***", loop_counter);
                 this->processEvent(FAULT_DETECTED);
@@ -411,12 +408,13 @@ void *EtherPort::openPort( EtherPort *port )
             } else {
                 GPTP_LOG_DEBUG("*** NETWORK RX: Receive returned: %d (loop #%llu)", rrecv, loop_counter);
             }
-			
-			// Check if getListeningThreadRunning() changed
-			if (!getListeningThreadRunning()) {
-				GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop (loop #%llu) ***", loop_counter);
-				break;
-			}
+
+            // Check if getListeningThreadRunning() changed
+            if (!getListeningThreadRunning()) {
+                GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop (loop #%llu) ***", loop_counter);
+                break;
+            }
+            GPTP_LOG_DEBUG("*** NETWORK THREAD: LOOP END (loop_counter=%llu, thread_id=%lu, stack_ptr=%p) ***", loop_counter, (unsigned long)OSThread::getCurrentThreadId(), (void*)&loop_counter);
         }
     } catch (const std::exception& ex) {
         GPTP_LOG_ERROR("*** NETWORK THREAD: Unhandled std::exception caught: %s (loop_counter=%llu) ***", ex.what(), loop_counter);
@@ -541,6 +539,7 @@ bool EtherPort::_processEvent( Event e )
 		}
 
 		port_ready_condition->wait_prelock();
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait_prelock() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&ret);
 
 		GPTP_LOG_STATUS("*** ATTEMPTING TO START LINK WATCH THREAD ***");
 		if( !linkWatch(watchNetLinkWrapper, (void *)this) )
@@ -560,6 +559,7 @@ bool EtherPort::_processEvent( Event e )
 		}
 
 		port_ready_condition->wait();
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&ret);
 
 		if( getProfile().automotive_test_status )
 		{
@@ -883,8 +883,9 @@ bool EtherPort::_processEvent( Event e )
 		}
 		break;
 	case PDELAY_DEFERRED_PROCESSING:
-		GPTP_LOG_DEBUG("PDELAY_DEFERRED_PROCESSING occured");
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
 		pdelay_rx_lock->lock();
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
 		if (last_pdelay_resp_fwup == NULL) {
 			GPTP_LOG_ERROR("PDelay Response Followup is NULL!");
 			abort();
@@ -894,7 +895,9 @@ bool EtherPort::_processEvent( Event e )
 			delete last_pdelay_resp_fwup;
 			this->setLastPDelayRespFollowUp(NULL);
 		}
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
 		pdelay_rx_lock->unlock();
+		GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&e);
 		break;
 	case PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES:
 		{
@@ -1160,10 +1163,14 @@ void EtherPort::startPDelayIntervalTimer
 {
 	GPTP_LOG_STATUS("*** DEBUG: startPDelayIntervalTimer() called with waitTime=%llu ns (%.3f ms) ***", 
 		waitTime, waitTime / 1000000.0);
-	pDelayIntervalTimerLock->lock();
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
+    pDelayIntervalTimerLock->lock();
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
 	clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
 	clock->addEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES, waitTime);
-	pDelayIntervalTimerLock->unlock();
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
+    pDelayIntervalTimerLock->unlock();
+    GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)OSThread::getCurrentThreadId(), (void*)&waitTime);
 	GPTP_LOG_STATUS("*** DEBUG: PDelay interval timer set successfully ***");
 }
 
