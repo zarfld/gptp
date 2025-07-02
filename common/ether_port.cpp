@@ -172,7 +172,7 @@ bool EtherPort::_init_port( void )
 
 void EtherPort::startPDelay()
 {
-	GPTP_LOG_STATUS("*** DEBUG: startPDelay() called, pdelayHalted=%s, active_profile=%s ***", 
+	GPTP_LOG_DEBUG("startPDelay() called, pdelayHalted=%s, active_profile=%s ***", 
 		pdelayHalted() ? "true" : "false",
 		getProfile().profile_name.c_str());
 	
@@ -180,7 +180,7 @@ void EtherPort::startPDelay()
 		if( getPDelayInterval() != PTPMessageSignalling::sigMsgInterval_NoSend) {
 			// Use profile-configured PDelay interval for all profiles
 			uint64_t pdelay_interval_ns = (uint64_t)(pow(2.0, (double)getPDelayInterval()) * 1000000000.0);
-			GPTP_LOG_STATUS("*** DEBUG: %s profile - starting PDelay timer with %llu ns interval (%.3f s) ***", 
+			GPTP_LOG_DEBUG("%s profile - starting PDelay timer with %llu ns interval (%.3f s) ***", 
 				getProfile().profile_name.c_str(), pdelay_interval_ns, pdelay_interval_ns / 1000000000.0);
 			pdelay_started = true;
 			startPDelayIntervalTimer(pdelay_interval_ns);
@@ -746,7 +746,7 @@ bool EtherPort::_processEvent( Event e )
 		ret = true;
 		break;
 	case PDELAY_INTERVAL_TIMEOUT_EXPIRES:
-		GPTP_LOG_STATUS("*** DEBUG: PDELAY_INTERVAL_TIMEOUT_EXPIRES occurred - sending PDelay request ***");
+		GPTP_LOG_DEBUG("PDELAY_INTERVAL_TIMEOUT_EXPIRES occurred - sending PDelay request ***");
 		{
 			Timestamp req_timestamp;
 
@@ -802,7 +802,7 @@ bool EtherPort::_processEvent( Event e )
 					 (pow((double)2,getPDelayInterval())*1000000000.0));
 				interval = interval > EVENT_TIMER_GRANULARITY ?
 					interval : EVENT_TIMER_GRANULARITY;
-				GPTP_LOG_STATUS("*** DEBUG: Restarting PDelay timer with interval=%lld ns (%.3f ms) ***", 
+				GPTP_LOG_DEBUG("Restarting PDelay timer with interval=%lld ns (%.3f ms) ***", 
 					interval, interval / 1000000.0);
 				startPDelayIntervalTimer(interval);
 			}
@@ -1165,7 +1165,7 @@ int EtherPort::getRxTimestamp
 void EtherPort::startPDelayIntervalTimer
 ( long long unsigned int waitTime )
 {
-	GPTP_LOG_STATUS("*** DEBUG: startPDelayIntervalTimer() called with waitTime=%llu ns (%.3f ms) ***", 
+	GPTP_LOG_DEBUG("startPDelayIntervalTimer() called with waitTime=%llu ns (%.3f ms) ***", 
 		waitTime, waitTime / 1000000.0);
     GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
     pDelayIntervalTimerLock->lock();
@@ -1175,7 +1175,7 @@ void EtherPort::startPDelayIntervalTimer
     GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
     pDelayIntervalTimerLock->unlock();
     GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
-	GPTP_LOG_STATUS("*** DEBUG: PDelay interval timer set successfully ***");
+	GPTP_LOG_DEBUG("PDelay interval timer set successfully ***");
 }
 
 void EtherPort::stopPDelayIntervalTimer()
