@@ -469,7 +469,8 @@ private:
 			WindowsTimerQueueHandlerArg *retired_arg = retiredTimers.front();
 			retiredTimers.pop_front();
 			ReleaseSRWLockExclusive( &retiredTimersLock );
-			DeleteTimerQueueTimer( retired_arg->queue_handle, retired_arg->timer_handle, INVALID_HANDLE_VALUE );
+			// Use NULL instead of INVALID_HANDLE_VALUE to avoid deadlock
+			DeleteTimerQueueTimer( retired_arg->queue_handle, retired_arg->timer_handle, NULL );
 			if( retired_arg->rm ) delete retired_arg->inner_arg;
 			delete retired_arg;
 			AcquireSRWLockExclusive( &retiredTimersLock );
@@ -529,7 +530,9 @@ public:
 			WindowsTimerQueueHandlerArg *del_arg = timerQueueMap[type].arg_list.front();
 			timerQueueMap[type].arg_list.pop_front();
 			ReleaseSRWLockExclusive( &timerQueueMap[type].lock );
-			DeleteTimerQueueTimer( del_arg->queue_handle, del_arg->timer_handle, INVALID_HANDLE_VALUE );
+			// Use NULL instead of INVALID_HANDLE_VALUE to avoid deadlock
+			// This makes the timer cancellation asynchronous
+			DeleteTimerQueueTimer( del_arg->queue_handle, del_arg->timer_handle, NULL );
 			if( del_arg->rm ) delete del_arg->inner_arg;
 			delete del_arg;
 			AcquireSRWLockExclusive( &timerQueueMap[type].lock );
@@ -928,16 +931,26 @@ public:
 			GPTP_LOG_WARNING("Cannot read system time: miniport handle is invalid");
 			return false;
 		}
+		else{
+			GPTP_LOG_DEBUG("miniport handle is valid");
+		}
 
 		if(( result = readOID( OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned )) != ERROR_SUCCESS ) {
 			GPTP_LOG_WARNING("Failed to read Intel system time OID: error %d (0x%08X)", result, result);
 			return false;
+		}
+		else{
+			GPTP_LOG_DEBUG("Intel system time OID read successfully, returned %d bytes", returned);
 		}
 		
 		if( returned != sizeof(buf) ) {
 			GPTP_LOG_WARNING("Intel system time OID returned insufficient data: %d bytes, expected %d", 
 				returned, sizeof(buf));
 			return false;
+		}
+		else{
+			GPTP_LOG_DEBUG("Intel system time OID returned sufficient data: %d bytes, expected %d", 
+				returned, sizeof(buf));
 		}
 
 		now_net = (((uint64_t)buf[1]) << 32) | buf[0];
