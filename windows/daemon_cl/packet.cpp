@@ -243,32 +243,49 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     
     static int timeout_count = 0;
     static int packet_count = 0;
+    static int consecutive_timeouts = 0;
+    static int consecutive_errors = 0;
+    const int MAX_CONSECUTIVE_TIMEOUTS = 1000; // z.B. 10s bei 10ms Timeout
+    const int MAX_CONSECUTIVE_ERRORS = 10;
 
     wait_result = WaitForSingleObject( handle->capture_lock, 1000 );
     if( wait_result != WAIT_OBJECT_0 ) {
         ret = PACKET_GETMUTEX_ERROR;
+        printf("ERROR: recvFrame: Failed to get capture_lock mutex\n");
         goto fnexit;
     }
 
     pcap_result = pcap_next_ex( handle->iface, &hdr_r, (const u_char **) &data );
     if( pcap_result == 0 ) {
         ret = PACKET_RECVTIMEOUT_ERROR;
-        if (g_debug_mode) {
-            timeout_count++;
-            // Report periodically to show the system is actively polling and any packet stats
-            if (timeout_count % 5000 == 0) {  // Every 5000 timeouts (~5 seconds at 1ms)
-                printf("DEBUG: PACKET STATS - Total: %u, PTP: %u, Timeouts: %u (Polling active)\n", 
-                       total_packet_count, ptp_packet_count, timeout_count);
-            }
+        timeout_count++;
+        consecutive_timeouts++;
+        consecutive_errors = 0;
+        printf("DEBUG: recvFrame: Timeout occurred (total timeouts: %d, consecutive: %d)\n", timeout_count, consecutive_timeouts);
+        if (consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
+            printf("ERROR: recvFrame: Too many consecutive timeouts (%d), closing and reopening interface!\n", consecutive_timeouts);
+            closeInterface(handle);
+            // Hier könnte ein Re-Open erfolgen, falls handle->iface_addr bekannt ist
+            // openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
+            consecutive_timeouts = 0;
         }
     } else if( pcap_result < 0 ) {
         ret = PACKET_RECVFAILED_ERROR;
-        if (g_debug_mode) {
-            printf("DEBUG: pcap_next_ex failed with result %d\n", pcap_result);
+        consecutive_errors++;
+        consecutive_timeouts = 0;
+        printf("ERROR: recvFrame: pcap_next_ex failed with result %d (consecutive errors: %d)\n", pcap_result, consecutive_errors);
+        if (consecutive_errors >= MAX_CONSECUTIVE_ERRORS) {
+            printf("ERROR: recvFrame: Too many consecutive errors (%d), closing and reopening interface!\n", consecutive_errors);
+            closeInterface(handle);
+            // Hier könnte ein Re-Open erfolgen, falls handle->iface_addr bekannt ist
+            // openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
+            consecutive_errors = 0;
         }
     } else {
         packet_count++;
         total_packet_count++;
+        consecutive_timeouts = 0;
+        consecutive_errors = 0;
         if (g_debug_mode) {
             printf("DEBUG: Packet #%d received, size=%d bytes\n", total_packet_count, hdr_r->len);
             
@@ -297,6 +314,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     
     if( !ReleaseMutex( handle->capture_lock )) {
         ret = PACKET_RLSMUTEX_ERROR;
+        printf("ERROR: recvFrame: Failed to release capture_lock mutex\n");
         goto fnexit;
     }
 
