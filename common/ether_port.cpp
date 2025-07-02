@@ -210,33 +210,60 @@ void EtherPort::processMessage
 {
 	GPTP_LOG_VERBOSE("Processing network buffer");
 
+	// Log incoming message details at entry
+	GPTP_LOG_DEBUG("*** MSG PROCESSING: Processing %d bytes from network", length);
+	
 	PTPMessageCommon *msg =
 		buildPTPMessage( buf, (int)length, remote, this );
 
 	if (msg == NULL)
 	{
-		GPTP_LOG_ERROR("Discarding invalid message");
+		GPTP_LOG_ERROR("*** MSG PROCESSING: Discarding invalid message (%d bytes)", length);
+		// Log first few bytes for debugging
+		if (length >= 8) {
+			GPTP_LOG_DEBUG("*** MSG PROCESSING: Invalid packet header: %02x %02x %02x %02x %02x %02x %02x %02x", 
+				buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+		}
 		return;
 	}
+	
+	// Log all message types with details
+	const char* msgTypeStr = "UNKNOWN";
+	switch(msg->getMessageType()) {
+		case SYNC_MESSAGE: msgTypeStr = "SYNC"; break;
+		case DELAY_REQ_MESSAGE: msgTypeStr = "DELAY_REQ"; break;
+		case PATH_DELAY_REQ_MESSAGE: msgTypeStr = "PDELAY_REQ"; break;
+		case PATH_DELAY_RESP_MESSAGE: msgTypeStr = "PDELAY_RESP"; break;
+		case FOLLOWUP_MESSAGE: msgTypeStr = "FOLLOWUP"; break;
+		case DELAY_RESP_MESSAGE: msgTypeStr = "DELAY_RESP"; break;
+		case PATH_DELAY_FOLLOWUP_MESSAGE: msgTypeStr = "PDELAY_FOLLOWUP"; break;
+		case ANNOUNCE_MESSAGE: msgTypeStr = "ANNOUNCE"; break;
+		case SIGNALLING_MESSAGE: msgTypeStr = "SIGNALLING"; break;
+		case MANAGEMENT_MESSAGE: msgTypeStr = "MANAGEMENT"; break;
+	}
+	
+	GPTP_LOG_STATUS("*** MSG RX: %s (type=%d, seq=%u, len=%d)", 
+		msgTypeStr, msg->getMessageType(), msg->getSequenceId(), length);
+	
+	// Log source identity for all messages
+	PortIdentity sourcePortId;
+	msg->getPortIdentity(&sourcePortId);
+	ClockIdentity clockId = sourcePortId.getClockIdentity();
+	uint16_t portNum;
+	sourcePortId.getPortNumber(&portNum);
+	
+	uint8_t clockBytes[PTP_CLOCK_IDENTITY_LENGTH];
+	clockId.getIdentityString(clockBytes);
+	GPTP_LOG_DEBUG("*** MSG RX: Source: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%u", 
+		clockBytes[0], clockBytes[1], clockBytes[2], clockBytes[3], 
+		clockBytes[4], clockBytes[5], clockBytes[6], clockBytes[7], portNum);
+	
 	GPTP_LOG_VERBOSE("Processing message type: %d", msg->getMessageType());
 	
 	// Enhanced debug for PDelay Request messages
 	if (msg->getMessageType() == PATH_DELAY_REQ_MESSAGE) {
 		GPTP_LOG_INFO("*** RECEIVED PDelay Request - calling processMessage");
 		GPTP_LOG_STATUS("*** PDELAY DEBUG: Received PDelay Request seq=%u from source", msg->getSequenceId());
-		
-		// Log source port identity
-		PortIdentity sourcePortId;
-		msg->getPortIdentity(&sourcePortId);
-		ClockIdentity clockId = sourcePortId.getClockIdentity();
-		uint16_t portNum;
-		sourcePortId.getPortNumber(&portNum);
-		
-		uint8_t clockBytes[PTP_CLOCK_IDENTITY_LENGTH];
-		clockId.getIdentityString(clockBytes);
-		GPTP_LOG_STATUS("*** PDELAY DEBUG: Source Clock ID: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x, Port: %u",
-			clockBytes[0], clockBytes[1], clockBytes[2], clockBytes[3], 
-			clockBytes[4], clockBytes[5], clockBytes[6], clockBytes[7], portNum);
 		
 		// Log reception timestamp
 		if (msg->isEvent()) {
@@ -255,19 +282,6 @@ void EtherPort::processMessage
 		GPTP_LOG_INFO("*** RECEIVED PDelay Response - calling processMessage");
 		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Received PDelay Response seq=%u from source", msg->getSequenceId());
 		
-		// Log source port identity
-		PortIdentity sourcePortId;
-		msg->getPortIdentity(&sourcePortId);
-		ClockIdentity clockId = sourcePortId.getClockIdentity();
-		uint16_t portNum;
-		sourcePortId.getPortNumber(&portNum);
-		
-		uint8_t clockBytes[PTP_CLOCK_IDENTITY_LENGTH];
-		clockId.getIdentityString(clockBytes);
-		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Source Clock ID: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x, Port: %u",
-			clockBytes[0], clockBytes[1], clockBytes[2], clockBytes[3], 
-			clockBytes[4], clockBytes[5], clockBytes[6], clockBytes[7], portNum);
-		
 		// Log reception timestamp
 		if (msg->isEvent()) {
 			Timestamp rxTime = msg->getTimestamp();
@@ -279,8 +293,25 @@ void EtherPort::processMessage
 		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Port state: %d, asCapable: %s", 
 			getPortState(), getAsCapable() ? "true" : "false");
 	}
-	else {
-		GPTP_LOG_DEBUG("Received message type: %d", msg->getMessageType());
+
+	// Enhanced debug for Sync messages
+	if (msg->getMessageType() == SYNC_MESSAGE) {
+		GPTP_LOG_STATUS("*** SYNC DEBUG: Received Sync seq=%u", msg->getSequenceId());
+		if (msg->isEvent()) {
+			Timestamp rxTime = msg->getTimestamp();
+			GPTP_LOG_DEBUG("*** SYNC DEBUG: RX timestamp: %llu.%09u", 
+				(unsigned long long)rxTime.seconds_ls, rxTime.nanoseconds);
+		}
+	}
+
+	// Enhanced debug for Announce messages
+	if (msg->getMessageType() == ANNOUNCE_MESSAGE) {
+		GPTP_LOG_STATUS("*** ANNOUNCE DEBUG: Received Announce seq=%u", msg->getSequenceId());
+	}
+
+	// Enhanced debug for Signalling messages
+	if (msg->getMessageType() == SIGNALLING_MESSAGE) {
+		GPTP_LOG_STATUS("*** SIGNALLING DEBUG: Received Signalling seq=%u", msg->getSequenceId());
 	}
 
 	if( msg->isEvent() )
@@ -315,12 +346,28 @@ void *EtherPort::openPort( EtherPort *port )
 		if ( ( rrecv = recv( &remote, buf, length, link_speed ))
 		     == net_succeed )
 		{
+			// Log all incoming packets at network level
+			GPTP_LOG_DEBUG("*** NETWORK RX: Received %zu bytes from network, link_speed=%u", 
+				length, link_speed);
+			
+			// Log raw packet header info if it looks like PTP
+			if (length >= 34) { // Minimum PTP packet size
+				uint16_t messageType = buf[0] & 0x0F;
+				uint16_t seqId = (buf[30] << 8) | buf[31];
+				GPTP_LOG_DEBUG("*** NETWORK RX: PTP-like packet - messageType=%u, seqId=%u, length=%zu", 
+					messageType, seqId, length);
+			}
+			
 			processMessage
 				((char *)buf, (int)length, &remote, link_speed );
 		} else if (rrecv == net_fatal) {
 			GPTP_LOG_ERROR("read from network interface failed");
 			this->processEvent(FAULT_DETECTED);
 			break;
+		} else if (rrecv == net_trfail) {
+			GPTP_LOG_DEBUG("*** NETWORK RX: Temporary receive failure (net_trfail)");
+		} else {
+			GPTP_LOG_DEBUG("*** NETWORK RX: Receive returned: %d", rrecv);
 		}
 	}
 	GPTP_LOG_DEBUG("Listening thread terminated ...");
@@ -332,6 +379,26 @@ net_result EtherPort::port_send
   PortIdentity *destIdentity, bool timestamp )
 {
 	LinkLayerAddress dest;
+
+	// Log outgoing packet details
+	const char* mcastStr = "UNICAST";
+	switch(mcast_type) {
+		case MCAST_PDELAY: mcastStr = "PDELAY_MCAST"; break;
+		case MCAST_TEST_STATUS: mcastStr = "TEST_STATUS_MCAST"; break;
+		case MCAST_OTHER: mcastStr = "OTHER_MCAST"; break;
+		case MCAST_NONE: mcastStr = "UNICAST"; break;
+	}
+	
+	// Extract message type from buffer if it looks like PTP
+	uint8_t messageType = 0xFF;
+	uint16_t seqId = 0;
+	if (size >= 32) {
+		messageType = buf[0] & 0x0F;
+		seqId = (buf[30] << 8) | buf[31];
+	}
+	
+	GPTP_LOG_STATUS("*** MSG TX: Sending %d bytes, type=%u, seq=%u, %s, timestamp=%s", 
+		size, messageType, seqId, mcastStr, timestamp ? "true" : "false");
 
 	if (mcast_type != MCAST_NONE) {
 		if (mcast_type == MCAST_PDELAY) {
@@ -345,9 +412,27 @@ net_result EtherPort::port_send
 		}
 	} else {
 		mapSocketAddr(destIdentity, &dest);
+		if (destIdentity) {
+			ClockIdentity clockId = destIdentity->getClockIdentity();
+			uint16_t portNum;
+			destIdentity->getPortNumber(&portNum);
+			uint8_t clockBytes[PTP_CLOCK_IDENTITY_LENGTH];
+			clockId.getIdentityString(clockBytes);
+			GPTP_LOG_DEBUG("*** MSG TX: Dest: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%u", 
+				clockBytes[0], clockBytes[1], clockBytes[2], clockBytes[3], 
+				clockBytes[4], clockBytes[5], clockBytes[6], clockBytes[7], portNum);
+		}
 	}
 
-	return send(&dest, etherType, (uint8_t *) buf, size, timestamp);
+	net_result result = send(&dest, etherType, (uint8_t *) buf, size, timestamp);
+	
+	if (result != net_succeed) {
+		GPTP_LOG_ERROR("*** MSG TX: Send failed with result: %d", result);
+	} else {
+		GPTP_LOG_DEBUG("*** MSG TX: Send successful");
+	}
+	
+	return result;
 }
 
 void EtherPort::sendEventPort
