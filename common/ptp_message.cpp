@@ -1852,16 +1852,22 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	}
 	if( !port->setLinkDelay( link_delay ))
 	{
-		if( eport->getProfile().profile_name != "automotive" )
+		// Profile-specific neighbor delay threshold handling: some profiles don't enforce strict thresholds
+		if( eport->getProfile().neighbor_prop_delay_thresh > 0 )
 		{
 			GPTP_LOG_ERROR( "Link delay %ld beyond "
-					"neighborPropDelayThresh; "
-					"not AsCapable", link_delay );
+					"neighborPropDelayThresh %ld; "
+					"not AsCapable", link_delay, eport->getProfile().neighbor_prop_delay_thresh );
 			port->setAsCapable( false );
+		}
+		else
+		{
+			GPTP_LOG_STATUS( "Link delay %ld beyond threshold but profile allows flexible delay handling", link_delay );
 		}
 	} else
 	{
-		if( eport->getProfile().profile_name != "automotive" )
+		// Profile-specific PDelay success handling: only for profiles that enforce strict PDelay requirements
+		if( eport->getProfile().min_pdelay_successes > 0 )
 		{
 			// Profile-specific PDelay success handling based on configuration
 			unsigned int pdelay_count = port->getPdelayCount();
@@ -1886,6 +1892,10 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 				GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay success %d/%d - need %d more before setting asCapable=true ***", 
 					eport->getProfile().profile_name.c_str(), pdelay_count, min_successes, min_successes - pdelay_count);
 			}
+		}
+		else
+		{
+			GPTP_LOG_STATUS("PDelay success handling disabled - profile does not enforce strict PDelay requirements");
 		}
 	}
 	port->setPeerOffset( request_tx_timestamp, remote_req_rx_timestamp );
@@ -2068,7 +2078,8 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 		port->startSyncIntervalTimer(waitTime);
 	}
 
-	if (port->getProfile().profile_name != "automotive") {
+	// Profile-specific announce interval handling: only for profiles with BMCA support
+	if (port->getProfile().supports_bmca) {
 		if (announceInterval == PTPMessageSignalling::sigMsgInterval_Initial) {
 			// TODO: Needs implementation
 			GPTP_LOG_WARNING("Signal received to set Announce message to initial interval: Not implemented");
@@ -2087,5 +2098,8 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 			waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 			port->startAnnounceIntervalTimer(waitTime);
 		}
+	}
+	else {
+		GPTP_LOG_STATUS("Announce interval signaling ignored - BMCA disabled per profile configuration");
 	}
 }
