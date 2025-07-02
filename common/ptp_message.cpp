@@ -1591,6 +1591,8 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	PTPMessagePathDelayReq *req = NULL;
 	PTPMessagePathDelayResp *resp = NULL;
 
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Starting processMessage for seq=%u", sequenceId);
+
 	Timestamp remote_resp_tx_timestamp(0, 0, 0);
 	Timestamp request_tx_timestamp(0, 0, 0);
 	Timestamp remote_req_rx_timestamp(0, 0, 0);
@@ -1604,32 +1606,46 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		return;
 	}
 
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Port type check passed");
+
 	if (port->getPortState() == PTP_DISABLED) {
+		GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Port disabled - ignoring");
 		// Do nothing all messages should be ignored when in this state
 		return;
 	}
 	if (port->getPortState() == PTP_FAULTY) {
+		GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Port faulty - recovering");
 		// According to spec recovery is implementation specific
 		eport->recoverPort();
 		return;
 	}
 
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Port state check passed (state=%d)", port->getPortState());
+
 	port->incCounter_ieee8021AsPortStatRxPdelayResponseFollowUp();
 
-	if (eport->tryPDelayRxLock() != true)
+	if (eport->tryPDelayRxLock() != true) {
+		GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Could not acquire PDelay RX lock - returning");
 		return;
+	}
+
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: PDelay RX lock acquired");
 
 	req = eport->getLastPDelayReq();
 	resp = eport->getLastPDelayResp();
 
 	if (req == NULL) {
+		GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: No PDelay request exists - aborting");
 		/* Shouldn't happen */
 		GPTP_LOG_ERROR
 		    (">>> Received PDelay followup but no REQUEST exists");
 		goto abort;
 	}
 
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: PDelay request found (seq=%u)", req->getSequenceId());
+
 	if (resp == NULL) {
+		GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: No PDelay response exists - aborting");
 		/* Probably shouldn't happen either */
 		GPTP_LOG_ERROR
 		    (">>> Received PDelay followup but no RESPONSE exists");
@@ -1637,13 +1653,19 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		goto abort;
 	}
 
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: PDelay response found (seq=%u)", resp->getSequenceId());
+
 	if( req->getSequenceId() != sequenceId ) {
+		GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: Sequence ID mismatch req=%u, fup=%u", 
+			req->getSequenceId(), sequenceId);
 		GPTP_LOG_ERROR
 			( "Received PDelay FUP has different seqID than the "
 			  "PDelay request (%d/%d)",
 			  sequenceId, req->getSequenceId() );
 		goto abort;
 	}
+
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Sequence ID check passed (seq=%u)", sequenceId);
 
 	{
 		PortIdentity req_id;
@@ -1717,6 +1739,8 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	port->getClock()->deleteEventTimerLocked
 		(port, PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES);
 
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Timer cancelled successfully - PDelay exchange complete");
+
 	// Profile-specific late response tracking: mark that we received a response (even if late)
 	if( eport->getProfile().late_response_threshold_ms > 0 ) {
 		eport->setPDelayResponseReceived(true);
@@ -1751,7 +1775,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	int64_t link_delay;
 	unsigned long long turn_around;
 
-	/* Assume that we are a two step clock, otherwise originTimestamp
+	/* Assume that we are a two-step clock, otherwise originTimestamp
 	   may be used */
 	request_tx_timestamp = req->getTimestamp();
 	if( request_tx_timestamp.nanoseconds == INVALID_TIMESTAMP.nanoseconds )
@@ -1779,9 +1803,9 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	remote_resp_tx_timestamp = responseOriginTimestamp;
 
 	if( request_tx_timestamp._version != response_rx_timestamp._version ) {
-		GPTP_LOG_ERROR("RX timestamp version mismatch %d/%d",
-			    request_tx_timestamp._version, response_rx_timestamp._version );
-		goto abort;
+		GPTP_LOG_ERROR( "Received Follow Up but timestamp version "
+				"indicates Sync is out of date" );
+		goto done;
 	}
 
 	port->incPdelayCount();
@@ -1909,13 +1933,20 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	}
 	port->setPeerOffset( request_tx_timestamp, remote_req_rx_timestamp );
 
+done:
+	// Clean up and exit
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Done label reached - exiting processMessage");
+	goto defer;
+
  abort:
+	GPTP_LOG_ERROR("*** PDELAY FOLLOWUP DEBUG: Aborting PDelay followup processing - timer NOT cancelled");
 	delete resp;
 	eport->setLastPDelayResp(NULL);
 
 	_gc = true;
 
- defer:
+defer:
+	GPTP_LOG_STATUS("*** PDELAY FOLLOWUP DEBUG: Releasing PDelay RX lock and returning");
 	eport->putPDelayRxLock();
 
 	return;
