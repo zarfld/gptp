@@ -213,6 +213,8 @@ void EtherPort::processMessage
 	// Log incoming message details at entry
 	GPTP_LOG_DEBUG("*** MSG PROCESSING: Processing %d bytes from network", length);
 	
+	Timestamp process_start_time = clock->getTime();
+	
 	PTPMessageCommon *msg =
 		buildPTPMessage( buf, (int)length, remote, this );
 
@@ -335,6 +337,10 @@ void *EtherPort::openPort( EtherPort *port )
 	port_ready_condition->signal();
 
 	setListeningThreadRunning(true);
+	
+	GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
+	uint64_t loop_counter = 0;
+	Timestamp last_activity_time = clock->getTime();
 
 	while ( getListeningThreadRunning() ) {
 		uint8_t buf[128];
@@ -342,10 +348,28 @@ void *EtherPort::openPort( EtherPort *port )
 		net_result rrecv;
 		size_t length = sizeof(buf);
 		uint32_t link_speed;
+		
+		loop_counter++;
+		
+		// Log thread activity every 100 loops to prove thread is alive
+		if (loop_counter % 100 == 0) {
+			Timestamp current_time = clock->getTime();
+			Timestamp time_diff = current_time - last_activity_time;
+			uint64_t time_diff_ms = (uint64_t)time_diff.seconds_ls * 1000 + time_diff.nanoseconds / 1000000;
+			GPTP_LOG_STATUS("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago", 
+				loop_counter, time_diff_ms);
+		}
+
+		// Log every 10th recv call attempt to see if recv is blocking
+		if (loop_counter % 10 == 0) {
+			GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call recv() - loop #%llu", loop_counter);
+		}
 
 		if ( ( rrecv = recv( &remote, buf, length, link_speed ))
 		     == net_succeed )
 		{
+			last_activity_time = clock->getTime();
+			
 			// Log all incoming packets at network level
 			GPTP_LOG_DEBUG("*** NETWORK RX: Received %zu bytes from network, link_speed=%u", 
 				length, link_speed);
@@ -358,10 +382,16 @@ void *EtherPort::openPort( EtherPort *port )
 					messageType, seqId, length);
 			}
 			
+			// Log before calling processMessage to check if it blocks
+			GPTP_LOG_DEBUG("*** NETWORK RX: About to call processMessage for %zu bytes", length);
+			
 			processMessage
 				((char *)buf, (int)length, &remote, link_speed );
+				
+			GPTP_LOG_DEBUG("*** NETWORK RX: processMessage completed successfully");
+			
 		} else if (rrecv == net_fatal) {
-			GPTP_LOG_ERROR("read from network interface failed");
+			GPTP_LOG_ERROR("*** NETWORK THREAD: Fatal error in network receive - terminating");
 			this->processEvent(FAULT_DETECTED);
 			break;
 		} else if (rrecv == net_trfail) {
@@ -369,8 +399,16 @@ void *EtherPort::openPort( EtherPort *port )
 		} else {
 			GPTP_LOG_DEBUG("*** NETWORK RX: Receive returned: %d", rrecv);
 		}
+		
+		// Check if getListeningThreadRunning() changed
+		if (!getListeningThreadRunning()) {
+			GPTP_LOG_STATUS("*** NETWORK THREAD: getListeningThreadRunning() returned false - exiting loop");
+			break;
+		}
 	}
-	GPTP_LOG_DEBUG("Listening thread terminated ...");
+	
+	GPTP_LOG_ERROR("*** NETWORK THREAD: Listening thread terminated - loop_counter=%llu ***", loop_counter);
+	setListeningThreadRunning(false);
 	return NULL;
 }
 
