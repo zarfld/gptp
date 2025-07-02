@@ -56,8 +56,9 @@ void update_network_thread_heartbeat() {
         ULONGLONG now_gk = GetTickCount64();
         LARGE_INTEGER qpc;
         QueryPerformanceCounter(&qpc);
-        gptp_ether_port->network_thread_last_activity.store((uint64_t)now_gk, std::memory_order_relaxed);
-        printf("DEBUG: update_network_thread_heartbeat: thread_id=%lu, GetTickCount64()=%llu ms, QPC=%lld, gptp_ether_port=%p, heartbeat=%llu, last_activity=%llu (ms since boot)\n",
+        // Store QPC ticks for liveness/activity, not GetTickCount64
+        gptp_ether_port->network_thread_last_activity.store((uint64_t)qpc.QuadPart, std::memory_order_relaxed);
+        printf("DEBUG: update_network_thread_heartbeat: thread_id=%lu, GetTickCount64()=%llu ms, QPC=%lld, gptp_ether_port=%p, heartbeat=%llu, last_activity(QPC)=%llu\n",
                tid, now_gk, qpc.QuadPart, gptp_ether_port, gptp_ether_port->network_thread_heartbeat.load(), gptp_ether_port->network_thread_last_activity.load());
     } else {
         printf("DEBUG: update_network_thread_heartbeat: gptp_ether_port=NULL\n");
