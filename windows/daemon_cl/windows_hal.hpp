@@ -465,18 +465,34 @@ private:
 	SRWLOCK retiredTimersLock;
 	void cleanupRetiredTimers() {
 		AcquireSRWLockExclusive( &retiredTimersLock );
-		while( !retiredTimers.empty() ) {
-			WindowsTimerQueueHandlerArg *retired_arg = retiredTimers.front();
-			retiredTimers.pop_front();
-			ReleaseSRWLockExclusive( &retiredTimersLock );
-			// Use NULL instead of INVALID_HANDLE_VALUE to avoid deadlock
-			DeleteTimerQueueTimer( retired_arg->queue_handle, retired_arg->timer_handle, NULL );
-			if( retired_arg->rm ) delete retired_arg->inner_arg;
-			delete retired_arg;
-			AcquireSRWLockExclusive( &retiredTimersLock );
+		
+		// Use a temporary list to avoid holding the lock too long
+		TimerArgList_t toDelete;
+		TimerArgList_t::iterator it = retiredTimers.begin();
+		
+		while( it != retiredTimers.end() ) {
+			WindowsTimerQueueHandlerArg *retired_arg = *it;
+			
+			// Try to delete the timer again with a timeout to check if it's safe
+			// If it succeeds, the timer is definitely not running anymore
+			if( DeleteTimerQueueTimer( retired_arg->queue_handle, retired_arg->timer_handle, NULL ) ) {
+				// Timer successfully deleted, safe to clean up
+				toDelete.push_back( retired_arg );
+				it = retiredTimers.erase( it );
+			} else {
+				// Timer still active or callback running, leave it for next cleanup
+				++it;
+			}
 		}
+		
 		ReleaseSRWLockExclusive( &retiredTimersLock );
-
+		
+		// Clean up the structures outside the lock
+		for( TimerArgList_t::iterator deleteIt = toDelete.begin(); deleteIt != toDelete.end(); ++deleteIt ) {
+			WindowsTimerQueueHandlerArg *arg = *deleteIt;
+			if( arg->rm ) delete arg->inner_arg;
+			delete arg;
+		}
 	}
 protected:
 	/**
