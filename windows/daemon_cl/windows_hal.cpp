@@ -779,32 +779,26 @@ void WindowsPCAPNetworkInterface::watchNetLink( CommonPort *pPort)
 	GPTP_LOG_STATUS("Starting link monitoring for MAC: %02x:%02x:%02x:%02x:%02x:%02x", 
 		port_mac[0], port_mac[1], port_mac[2], port_mac[3], port_mac[4], port_mac[5]);
 
-	// **PROFILE-AWARE LINK MONITORING**: Set asCapable based on profile requirements
-	// Different profiles have different asCapable initialization requirements
-	bool initial_as_capable = false;
+	// **UNIFIED PROFILE-DRIVEN LINK MONITORING**: Set asCapable based on profile configuration
+	// Use the unified profile's asCapable configuration for complete data-driven behavior
+	const gPTPProfile& profile = pPort->getProfile();
+	bool initial_as_capable = profile.initial_as_capable;
 	
-	if (pPort->getAutomotiveProfile()) {
-		// Automotive profile: asCapable=true when link is up (immediate)
+	// For profiles that set asCapable=true on link up (e.g., Automotive), 
+	// override the initial state since link is now up
+	if (profile.as_capable_on_link_up) {
 		initial_as_capable = true;
-		GPTP_LOG_STATUS("*** AUTOMOTIVE PROFILE: Setting asCapable=true on link up ***");
-	} else if (pPort->getMilanProfile()) {
-		// Milan profile: asCapable=false initially, must earn it via 2-5 PDelay exchanges  
-		initial_as_capable = false;
-		GPTP_LOG_STATUS("*** MILAN PROFILE: Starting with asCapable=false - must earn via 2-5 PDelay exchanges ***");
-	} else if (pPort->getAvnuBaseProfile()) {
-		// AVnu Base/ProAV profile: asCapable=false, must earn it via 2-10 PDelay exchanges
-		initial_as_capable = false;
-		GPTP_LOG_STATUS("*** AVNU BASE PROFILE: Starting with asCapable=false - must earn via 2-10 PDelay exchanges ***");
-	} else {
-		// Standard IEEE 1588 profile: asCapable=false initially
-		initial_as_capable = false;
-		GPTP_LOG_STATUS("*** STANDARD PROFILE: Starting with asCapable=false ***");
+		GPTP_LOG_STATUS("*** %s PROFILE: Link up detected - setting asCapable=true per profile configuration ***", 
+						profile.profile_name.c_str());
 	}
 	
 	pPort->setAsCapable(initial_as_capable);
 	
-	GPTP_LOG_STATUS("*** PROFILE-AWARE INITIALIZATION: Setting asCapable=%s ***", 
-					initial_as_capable ? "true" : "false");
+	GPTP_LOG_STATUS("*** %s PROFILE: Setting asCapable=%s (initial=%s, link_up_behavior=%s) ***", 
+					profile.profile_name.c_str(), 
+					initial_as_capable ? "true" : "false",
+					profile.initial_as_capable ? "true" : "false",
+					profile.as_capable_on_link_up ? "true_on_link" : "false_initially");
 	
 	if (initial_as_capable) {
 		GPTP_LOG_STATUS("*** ANNOUNCE MESSAGES WILL START IMMEDIATELY ***");
