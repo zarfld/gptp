@@ -428,6 +428,13 @@ void CommonPort::startAnnounceIntervalTimer
 	announceIntervalTimerLock->unlock();
 }
 
+void CommonPort::stopAnnounceIntervalTimer()
+{
+	announceIntervalTimerLock->lock();
+	clock->deleteEventTimerLocked( this, ANNOUNCE_INTERVAL_TIMEOUT_EXPIRES );
+	announceIntervalTimerLock->unlock();
+}
+
 bool CommonPort::processStateChange( Event e )
 {
 	bool changed_external_master;

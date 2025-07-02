@@ -2081,12 +2081,21 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 	// Profile-specific announce interval handling: only for profiles with BMCA support
 	if (port->getProfile().supports_bmca) {
 		if (announceInterval == PTPMessageSignalling::sigMsgInterval_Initial) {
-			// TODO: Needs implementation
-			GPTP_LOG_WARNING("Signal received to set Announce message to initial interval: Not implemented");
+			// Set announce interval to profile's initial (default) value
+			int8_t initial_interval = port->getProfileAnnounceInterval();
+			port->setAnnounceInterval(initial_interval);
+			
+			waitTime = ((long long) (pow((double)2, port->getAnnounceInterval()) *  1000000000.0));
+			waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
+			port->startAnnounceIntervalTimer(waitTime);
+			
+			GPTP_LOG_STATUS("Announce interval reset to profile initial value: %d (%.3f seconds)", 
+				initial_interval, pow(2.0, (double)initial_interval));
 		}
 		else if (announceInterval == PTPMessageSignalling::sigMsgInterval_NoSend) {
-			// TODO: No send functionality needs to be implemented.
-			GPTP_LOG_WARNING("Signal received to stop sending Announce messages: Not implemented");
+			// Stop sending announce messages by stopping the timer
+			port->stopAnnounceIntervalTimer();
+			GPTP_LOG_STATUS("Announce message transmission stopped per signaling request");
 		}
 		else if (announceInterval == PTPMessageSignalling::sigMsgInterval_NoChange) {
 			// Nothing to do
