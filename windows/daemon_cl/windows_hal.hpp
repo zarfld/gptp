@@ -146,7 +146,10 @@ public:
 	virtual net_result nrecv( LinkLayerAddress *addr, uint8_t *payload, size_t &length )
 	{
 		packet_addr_t dest;
-		GPTP_LOG_DEBUG("nrecv: call recvFrame - Waiting for packet on interface %s", local_addr.toString().c_str());
+		uint8_t mac_addr[6];
+		local_addr.toOctetArray(mac_addr);
+		GPTP_LOG_DEBUG("nrecv: call recvFrame - Waiting for packet on interface %02x:%02x:%02x:%02x:%02x:%02x", 
+			mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 		packet_error_t pferror = recvFrame( handle, &dest, payload, length );
 		GPTP_LOG_DEBUG("nrecv: recvFrame returned with error %d", pferror);
 		if( pferror != PACKET_NO_ERROR && pferror != PACKET_RECVTIMEOUT_ERROR ) {
