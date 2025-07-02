@@ -533,12 +533,19 @@ public:
 			// Use NULL instead of INVALID_HANDLE_VALUE to avoid deadlock
 			// This makes the timer cancellation asynchronous
 			DeleteTimerQueueTimer( del_arg->queue_handle, del_arg->timer_handle, NULL );
-			if( del_arg->rm ) delete del_arg->inner_arg;
-			delete del_arg;
+			
+			// Don't delete immediately - move to retired list for deferred cleanup
+			// This prevents use-after-free if timer callback is still executing
+			AcquireSRWLockExclusive( &retiredTimersLock );
+			retiredTimers.push_back( del_arg );
+			ReleaseSRWLockExclusive( &retiredTimersLock );
+			
 			AcquireSRWLockExclusive( &timerQueueMap[type].lock );
 		}
 		ReleaseSRWLockExclusive( &timerQueueMap[type].lock );
 
+		// Clean up any retired timers that are safe to delete
+		cleanupRetiredTimers();
 		return true;
 	}
 };
