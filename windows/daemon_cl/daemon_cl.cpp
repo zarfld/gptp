@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "gptp_cfg.hpp"
 #include "gptp_profile.hpp"  // Add unified profile support
 #include "watchdog.hpp"
+#include "packet.hpp"  // For packet debug functions
 #include <tchar.h>
 #include <iphlpapi.h>
 #include <cmath>
@@ -150,6 +151,9 @@ int parseMacAddr( _TCHAR *macstr, uint8_t *octet_string ) {
 int _tmain(int argc, _TCHAR* argv[])
 {
 	PortInit_t portInit;
+	
+	// Enable enhanced packet debug to diagnose packet reception issues
+	enablePacketReceptionDebug(true);
 	
 	// Initialize with standard profile as default
 	portInit.profile = gPTPProfileFactory::createStandardProfile();
