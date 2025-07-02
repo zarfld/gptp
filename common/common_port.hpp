@@ -1262,11 +1262,21 @@ public:
 	gPTPProfile& getProfile() { return active_profile; }
 	void setProfile(const gPTPProfile& profile) { active_profile = profile; }
 	
-	// Legacy profile compatibility getters (for migration)
-	bool getMilanProfile() const { return active_profile.profile_name == "milan"; }
-	bool getAvnuBaseProfile() const { return active_profile.profile_name == "avnu_base"; }
-	bool getAutomotiveProfile() const { return active_profile.profile_name == "automotive"; }
-	
+	// Profile-specific behavior helpers (recommended approach)
+	bool shouldSetAsCapableOnStartup() const { return active_profile.initial_as_capable; }
+	bool shouldSetAsCapableOnLinkUp() const { return active_profile.as_capable_on_link_up; }
+	bool shouldSetAsCapableOnLinkDown() const { return active_profile.as_capable_on_link_down; }
+	bool shouldSendAnnounceWhenAsCapable() const { return active_profile.send_announce_when_as_capable_only; }
+	bool shouldProcessSyncRegardlessAsCapable() const { return active_profile.process_sync_regardless_as_capable; }
+	bool shouldStartPDelayOnLinkUp() const { return active_profile.start_pdelay_on_link_up; }
+	int8_t getProfileSyncInterval() const { return active_profile.sync_interval_log; }
+	int8_t getProfileAnnounceInterval() const { return active_profile.announce_interval_log; }
+	int8_t getProfilePDelayInterval() const { return active_profile.pdelay_interval_log; }
+	unsigned int getProfileSyncReceiptThreshold() const { return active_profile.sync_receipt_thresh; }
+	bool getAllowsNegativeCorrectionField() const { return active_profile.allows_negative_correction_field; }
+	bool getRequiresStrictTimeouts() const { return active_profile.requires_strict_timeouts; }
+	bool getSupportsBMCA() const { return active_profile.supports_bmca; }
+
 	// Profile statistics and monitoring
 	void updateProfileJitterStats(uint64_t jitter_ns);
 	bool checkProfileConvergence();

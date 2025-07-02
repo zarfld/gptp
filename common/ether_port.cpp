@@ -103,91 +103,27 @@ EtherPort::EtherPort( PortInit_t *portInit ) :
 	operLogPdelayReqInterval = portInit->operLogPdelayReqInterval;
 	operLogSyncInterval = portInit->operLogSyncInterval;
 
-	if (getAutomotiveProfile())
-	{
-		setAsCapable( true );
+	// Initialize asCapable based on profile configuration (PAL approach)
+	setAsCapable(shouldSetAsCapableOnStartup());
 
-		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
-			setInitSyncInterval( -5 );     // 31.25 ms
-		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval( 0 );  // 1 second
-		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = 0;      // 1 second
-		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = 0;           // 1 second
-	} 
-	else	if (getProfile().profile_name == "milan")
-	{
-		// Milan profile asCapable initialization per specification
-		setAsCapable(getProfile().initial_as_capable);  // Milan starts FALSE, earns via PDelay
+	// Set profile-specific intervals from profile configuration (unified approach)
+	if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
+		setInitSyncInterval(getProfileSyncInterval());
+	if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
+		setInitPDelayInterval(getProfilePDelayInterval());
+	if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
+		operLogPdelayReqInterval = getProfilePDelayInterval();
+	if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
+		operLogSyncInterval = getProfileSyncInterval();
 		
-		// Milan-specific timing requirements for fast convergence
-		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
-			setInitSyncInterval(getProfile().sync_interval_log);  // 125ms (-3) default
-		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval(getProfile().pdelay_interval_log);  // 1 second (0) default
-		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = getProfile().pdelay_interval_log;
-		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = getProfile().sync_interval_log;
-			
-		// Set announce interval for Milan profile
-		setAnnounceInterval(getProfile().announce_interval_log);
-		
-		GPTP_LOG_STATUS("*** MILAN PROFILE ENABLED *** (convergence target: %dms, sync interval: %.3fms)", 
-			getProfile().max_convergence_time_ms,
-			pow(2.0, (double)getProfile().sync_interval_log) * 1000.0);
-	}
-	else if (getProfile().profile_name == "avnu_base")
-	{
-		// AVnu Base profile asCapable initialization per specification
-		setAsCapable(getProfile().initial_as_capable);  // AVnu Base starts FALSE, earns via 2-10 PDelay
-		
-		// AVnu Base/ProAV profile timing settings
-		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
-			setInitSyncInterval(getProfile().sync_interval_log);       // 1s (0) 
-		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval(getProfile().pdelay_interval_log);      // 1 second (0)
-		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = getProfile().pdelay_interval_log;    // 1 second (0)
-		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = getProfile().sync_interval_log;         // 1 second (0)
-			
-		GPTP_LOG_STATUS("*** AVNU BASE/PROAV PROFILE ENABLED *** (asCapable requires 2-10 successful PDelay exchanges)");
-	}
-	else if (getProfile().profile_name == "automotive")
-	{
-		// Automotive profile asCapable initialization per specification
-		setAsCapable(getProfile().initial_as_capable);  // Automotive starts FALSE, becomes TRUE on link up
-		
-		// Automotive profile timing settings
-		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
-			setInitSyncInterval(getProfile().sync_interval_log);       // 1s (0) 
-		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval(getProfile().pdelay_interval_log);      // 1 second (0)
-		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = getProfile().pdelay_interval_log;    // 1 second (0)
-		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = getProfile().sync_interval_log;         // 1 second (0)
-			
-		GPTP_LOG_STATUS("*** AUTOMOTIVE PROFILE ENABLED *** (asCapable immediately on link up, test status messages)");
-	}
-	else
-	{
-		// Standard IEEE 802.1AS profile
-		setAsCapable(getProfile().initial_as_capable);  // Standard starts FALSE
-
-		if (getInitSyncInterval() == LOG2_INTERVAL_INVALID)
-			setInitSyncInterval(getProfile().sync_interval_log);       // Use profile default
-		if (getInitPDelayInterval() == LOG2_INTERVAL_INVALID)
-			setInitPDelayInterval(getProfile().pdelay_interval_log);  // Use profile default
-		if (operLogPdelayReqInterval == LOG2_INTERVAL_INVALID)
-			operLogPdelayReqInterval = getProfile().pdelay_interval_log;      // Use profile default
-		if (operLogSyncInterval == LOG2_INTERVAL_INVALID)
-			operLogSyncInterval = getProfile().sync_interval_log;           // Use profile default
-			
-		GPTP_LOG_STATUS("*** %s PROFILE ENABLED ***", getProfile().profile_description.c_str());
-	}
+	// Set announce interval from profile configuration
+	setAnnounceInterval(getProfileAnnounceInterval());
+	
+	// Log profile activation with configuration details
+	GPTP_LOG_STATUS("*** %s PROFILE ENABLED *** (sync: %.3fms, convergence target: %dms)", 
+		getProfile().profile_description.c_str(),
+		pow(2.0, (double)getProfileSyncInterval()) * 1000.0,
+		getProfile().max_convergence_time_ms);
 
 	/*TODO: Add intervals below to a config interface*/
 	resetInitPDelayInterval();
@@ -200,7 +136,8 @@ EtherPort::EtherPort( PortInit_t *portInit ) :
 	setPdelayCount(0);
 	setSyncCount(0);
 
-	if( getAutomotiveProfile( ))
+	// Initialize automotive-specific state if automotive test status is enabled
+	if( getProfile().automotive_test_status )
 	{
 		if (isGM) {
 			avbSyncState = 1;
@@ -231,28 +168,16 @@ bool EtherPort::_init_port( void )
 
 void EtherPort::startPDelay()
 {
-	GPTP_LOG_STATUS("*** DEBUG: startPDelay() called, pdelayHalted=%s, automotive=%s, milan=%s, avnu_base=%s ***", 
+	GPTP_LOG_STATUS("*** DEBUG: startPDelay() called, pdelayHalted=%s, active_profile=%s ***", 
 		pdelayHalted() ? "true" : "false",
-		getAutomotiveProfile() ? "true" : "false", 
-		getMilanProfile() ? "true" : "false",
-		getAvnuBaseProfile() ? "true" : "false");
+		getProfile().profile_name.c_str());
 	
 	if(!pdelayHalted()) {
-		if( getAutomotiveProfile( ))
-		{
-			if( getPDelayInterval() !=
-			    PTPMessageSignalling::sigMsgInterval_NoSend)
-			{
-				GPTP_LOG_STATUS("*** DEBUG: Automotive profile - starting PDelay timer with EVENT_TIMER_GRANULARITY ***");
-				pdelay_started = true;
-				startPDelayIntervalTimer(EVENT_TIMER_GRANULARITY);
-			}
-		}
-		else {
-			// Non-automotive profile - use profile-configured PDelay interval
+		if( getPDelayInterval() != PTPMessageSignalling::sigMsgInterval_NoSend) {
+			// Use profile-configured PDelay interval for all profiles
 			uint64_t pdelay_interval_ns = (uint64_t)(pow(2.0, (double)getPDelayInterval()) * 1000000000.0);
-			GPTP_LOG_STATUS("*** DEBUG: Non-automotive profile - starting PDelay timer with %llu ns interval (%.3f s) ***", 
-				pdelay_interval_ns, pdelay_interval_ns / 1000000000.0);
+			GPTP_LOG_STATUS("*** DEBUG: %s profile - starting PDelay timer with %llu ns interval (%.3f s) ***", 
+				getProfile().profile_name.c_str(), pdelay_interval_ns, pdelay_interval_ns / 1000000000.0);
 			pdelay_started = true;
 			startPDelayIntervalTimer(pdelay_interval_ns);
 		}
@@ -270,7 +195,8 @@ void EtherPort::stopPDelay()
 
 void EtherPort::startSyncRateIntervalTimer()
 {
-	if( getAutomotiveProfile( ))
+	// Start sync rate interval timer for profiles that require it (automotive profile)
+	if( getProfile().automotive_test_status )
 	{
 		sync_rate_interval_timer_started = true;
 		if (isGM) {
@@ -465,7 +391,8 @@ bool EtherPort::_processEvent( Event e )
 	switch (e) {
 	case POWERUP:
 	case INITIALIZE:
-		if( !getAutomotiveProfile( ))
+		// Start PDelay based on profile configuration
+		if( shouldStartPDelayOnLinkUp() )
 		{
 			if ( getPortState() != PTP_SLAVE &&
 			     getPortState() != PTP_MASTER )
@@ -700,7 +627,7 @@ bool EtherPort::_processEvent( Event e )
 			GPTP_LOG_DEBUG("*** Sent PDelay Request message");
 			
 			// Milan profile: track when PDelay request was sent and reset response flag
-			if( getMilanProfile() ) {
+			if( getProfile().profile_name == "milan" ) {
 				setLastPDelayReqTimestamp(clock->getTime());
 				setPDelayResponseReceived(false);
 				GPTP_LOG_DEBUG("*** MILAN: Tracking PDelay request sent at timestamp for late response detection ***");

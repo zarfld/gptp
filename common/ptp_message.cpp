@@ -1141,7 +1141,7 @@ void PTPMessageFollowUp::processMessage
 		port->incSyncCount();
 		
 		// Milan profile: Update jitter statistics when receiving sync messages
-		if (port->getMilanProfile()) {
+		if (port->getProfile().profile_name == "milan") {
 			uint64_t sync_timestamp = TIMESTAMP_TO_NS(sync_arrival);
 			port->updateProfileJitterStats(sync_timestamp);
 			port->checkProfileConvergence();
@@ -1710,7 +1710,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		(port, PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES);
 
 	// Milan profile: mark that we received a response (even if late)
-	if( eport->getMilanProfile() ) {
+	if( eport->getProfile().profile_name == "milan" ) {
 		eport->setPDelayResponseReceived(true);
 		
 		// Check if response is late based on expected timing
@@ -1852,7 +1852,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 	}
 	if( !port->setLinkDelay( link_delay ))
 	{
-		if( !eport->getAutomotiveProfile( ))
+		if( eport->getProfile().profile_name != "automotive" )
 		{
 			GPTP_LOG_ERROR( "Link delay %ld beyond "
 					"neighborPropDelayThresh; "
@@ -1861,11 +1861,11 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 		}
 	} else
 	{
-		if( !eport->getAutomotiveProfile( ))
+		if( eport->getProfile().profile_name != "automotive" )
 		{
 			// Milan Specification 5.6.2.4 compliance:
 			// asCapable should be TRUE after 2-5 successful PDelay exchanges
-			if( eport->getMilanProfile() ) {
+			if( eport->getProfile().profile_name == "milan" ) {
 				unsigned int pdelay_count = port->getPdelayCount();
 				
 				// Reset consecutive late/missing response counters on successful processing
@@ -1884,7 +1884,7 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 					GPTP_LOG_STATUS("*** MILAN COMPLIANCE: PDelay success %d/2 - need %d more before setting asCapable=true ***", 
 						pdelay_count, 2 - pdelay_count);
 				}
-			} else if( eport->getAvnuBaseProfile() ) {
+			} else if( eport->getProfile().profile_name == "avnu_base" ) {
 				unsigned int pdelay_count = port->getPdelayCount();
 				if( pdelay_count >= 2 && pdelay_count <= 10 ) {
 					// AVnu Base/ProAV: Set asCapable=true after 2-10 successful exchanges
@@ -2084,7 +2084,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 		port->startSyncIntervalTimer(waitTime);
 	}
 
-	if (!port->getAutomotiveProfile()) {
+	if (port->getProfile().profile_name != "automotive") {
 		if (announceInterval == PTPMessageSignalling::sigMsgInterval_Initial) {
 			// TODO: Needs implementation
 			GPTP_LOG_WARNING("Signal received to set Announce message to initial interval: Not implemented");
