@@ -1329,6 +1329,7 @@ public:
 	void startAnnounceIntervalTimer(uint64_t interval);
 	void stopAnnounceIntervalTimer();
 	void startPDelayIntervalTimer(uint64_t interval);
+	virtual void stopPDelayIntervalTimer();
 
 	// Event processing (stubs)
 	void processEvent();

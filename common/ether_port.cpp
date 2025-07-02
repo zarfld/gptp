@@ -186,13 +186,6 @@ void EtherPort::startPDelay()
 	}
 }
 
-void EtherPort::stopPDelay()
-{
-	haltPdelay(true);
-	pdelay_started = false;
-	clock->deleteEventTimerLocked( this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
-}
-
 void EtherPort::startSyncRateIntervalTimer()
 {
 	// Start sync rate interval timer for profiles that require it (automotive profile)
@@ -1030,6 +1023,14 @@ void EtherPort::startPDelayIntervalTimer
 	clock->addEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES, waitTime);
 	pDelayIntervalTimerLock->unlock();
 	GPTP_LOG_STATUS("*** DEBUG: PDelay interval timer set successfully ***");
+}
+
+void EtherPort::stopPDelayIntervalTimer()
+{
+	pDelayIntervalTimerLock->lock();
+	clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
+	pDelayIntervalTimerLock->unlock();
+	GPTP_LOG_STATUS("PDelay message transmission stopped per signaling request");
 }
 
 void EtherPort::syncDone() {

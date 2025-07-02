@@ -435,6 +435,11 @@ void CommonPort::stopAnnounceIntervalTimer()
 	announceIntervalTimerLock->unlock();
 }
 
+void CommonPort::stopPDelayIntervalTimer()
+{
+	// Default implementation: do nothing. Derived classes should override.
+}
+
 bool CommonPort::processStateChange( Event e )
 {
 	bool changed_external_master;
@@ -899,4 +904,8 @@ void CommonPort::sendGeneralPort(int etherType, uint8_t* buf, uint16_t len, Mult
 {
 	// Default implementation - derived classes should override
 	// This is a placeholder that does nothing
+}
+
+void CommonPort::stopSyncIntervalTimer() {
+	// Default implementation: do nothing. Derived classes should override if needed.
 }

@@ -160,7 +160,12 @@ protected:
 	 * @brief Stops PDelay event timer
 	 * @return void
 	 */
-	void stopPDelay();
+	void stopPDelayIntervalTimer() override;
+
+	/**
+	 * @brief Deprecated: Use stopPDelayIntervalTimer() instead
+	 */
+	void stopPDelay() { stopPDelayIntervalTimer(); }
 
 	/**
 	 * @brief Enable/Disable PDelay Request messages

@@ -1720,7 +1720,8 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 			uint64_t elapsed_ns = TIMESTAMP_TO_NS(now) - TIMESTAMP_TO_NS(req_time);
 			uint64_t expected_response_time_ns = (uint64_t)(pow(2.0, eport->getPDelayInterval()) * 1000000000.0);
 			
-			if( elapsed_ns > expected_response_time_ns + 10000000 ) { // More than 10ms late
+			if( elapsed_ns > expected_response_time_ns + 10000000 ) // More than 10ms late
+				{
 				unsigned late_count = eport->getConsecutiveLateResponses() + 1;
 				eport->setConsecutiveLateResponses(late_count);
 				eport->setConsecutiveMissingResponses(0); // Reset missing count
@@ -1970,7 +1971,10 @@ void PTPMessagePathDelayRespFollowUp::setRequestingPortIdentity
 }
 
 
- PTPMessageSignalling::PTPMessageSignalling(void)
+//
+// Signalling Message
+//
+PTPMessageSignalling::PTPMessageSignalling(void)
 {
 }
 
@@ -2042,8 +2046,8 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 		port->startPDelayIntervalTimer(waitTime);
 	}
 	else if (linkDelayInterval == PTPMessageSignalling::sigMsgInterval_NoSend) {
-		// TODO: No send functionality needs to be implemented.
-		GPTP_LOG_WARNING("Signal received to stop sending pDelay messages: Not implemented");
+		port->stopPDelayIntervalTimer();
+		GPTP_LOG_STATUS("PDelay message transmission stopped per signaling request");
 	}
 	else if (linkDelayInterval == PTPMessageSignalling::sigMsgInterval_NoChange) {
 		// Nothing to do
@@ -2064,8 +2068,8 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 		port->startSyncIntervalTimer(waitTime);
 	}
 	else if (timeSyncInterval == PTPMessageSignalling::sigMsgInterval_NoSend) {
-		// TODO: No send functionality needs to be implemented.
-		GPTP_LOG_WARNING("Signal received to stop sending Sync messages: Not implemented");
+		port->stopSyncIntervalTimer();
+		GPTP_LOG_STATUS("Sync message transmission stopped per signaling request");
 	}
 	else if (timeSyncInterval == PTPMessageSignalling::sigMsgInterval_NoChange) {
 		// Nothing to do
