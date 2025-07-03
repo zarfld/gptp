@@ -173,6 +173,24 @@
       },
       "group": "build",
       "problemMatcher": []
+    },
+    {
+      "label": "Detect MAC Address",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy", "Bypass",
+          "-Command",
+          "$mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like '*I21*' } | Select-Object -First 1 -ExpandProperty MacAddress); if (-not $mac) { Write-Host 'ERROR: No I21* network adapter found'; $mac = '00:11:22:33:44:55'; Write-Host 'Using fallback MAC: $mac'; } else { Write-Host \"Detected MAC address: $mac\"; } $mac | Out-File -FilePath 'build\\Debug\\detected_mac.txt' -Encoding ASCII -NoNewline; Write-Host \"MAC address saved to build\\Debug\\detected_mac.txt\""
+        ]
+      },
+      "dependsOn": [
+        "Build project Debug"
+      ],
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }
