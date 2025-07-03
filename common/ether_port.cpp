@@ -81,14 +81,23 @@ OSThreadExitCode openPortWrapper(void *arg)
 {
 	EtherPort *port;
 	GPTP_LOG_STATUS("*** openPortWrapper() called (thread_id=%lu, arg=%p) ***", (unsigned long)GetCurrentThreadId(), arg);
-	port = (EtherPort *) arg;
-	GPTP_LOG_STATUS("*** Calling port->openPort() (thread_id=%lu, port=%p) ***", (unsigned long)GetCurrentThreadId(), port);
-	void* result = port->openPort(port);
-	GPTP_LOG_STATUS("*** port->openPort() returned %p (thread_id=%lu, port=%p) ***", result, (unsigned long)GetCurrentThreadId(), port);
-	if (result == NULL)
-		return osthread_ok;
-	else
+	
+	try {
+		port = (EtherPort *) arg;
+		GPTP_LOG_STATUS("*** Calling port->openPort() (thread_id=%lu, port=%p) ***", (unsigned long)GetCurrentThreadId(), port);
+		void* result = port->openPort(port);
+		GPTP_LOG_STATUS("*** port->openPort() returned %p (thread_id=%lu, port=%p) ***", result, (unsigned long)GetCurrentThreadId(), port);
+		if (result == NULL)
+			return osthread_ok;
+		else
+			return osthread_error;
+	} catch (const std::exception& ex) {
+		GPTP_LOG_ERROR("*** EXCEPTION in openPortWrapper: %s (thread_id=%lu) ***", ex.what(), (unsigned long)GetCurrentThreadId());
 		return osthread_error;
+	} catch (...) {
+		GPTP_LOG_ERROR("*** UNKNOWN EXCEPTION in openPortWrapper (thread_id=%lu) ***", (unsigned long)GetCurrentThreadId());
+		return osthread_error;
+	}
 }
 
 EtherPort::~EtherPort()
@@ -379,7 +388,25 @@ void *EtherPort::openPort( EtherPort *port )
 
     GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
     uint64_t loop_counter = 0;
-    Timestamp last_activity_time = clock->getTime();
+    Timestamp last_activity_time;
+    
+    // Defensive check for clock pointer before accessing it
+    if (!clock) {
+        GPTP_LOG_ERROR("*** FATAL: clock pointer is NULL in network thread! ***");
+        return (void*)1;
+    }
+    
+    try {
+        last_activity_time = clock->getTime();
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: Successfully got initial timestamp from clock ***");
+    } catch (const std::exception& ex) {
+        GPTP_LOG_ERROR("*** FATAL: Exception getting time from clock: %s ***", ex.what());
+        return (void*)1;
+    } catch (...) {
+        GPTP_LOG_ERROR("*** FATAL: Unknown exception getting time from clock ***");
+        return (void*)1;
+    }
+    
     try {
         while ( getListeningThreadRunning() ) {
             GPTP_LOG_DEBUG("*** NETWORK THREAD: LOOP START (loop_counter=%llu, thread_id=%lu, stack_ptr=%p) ***", loop_counter, (unsigned long)GetCurrentThreadId(), (void*)&loop_counter);

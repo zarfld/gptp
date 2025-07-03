@@ -36,15 +36,39 @@
 #include "windows_hal_iphlpapi.hpp"
 #include "windows_hal_ndis.hpp"
 #include "gptp_log.hpp"
+#include "avbts_osthread.hpp"
 
 // Thread callback implementation
 DWORD WINAPI OSThreadCallback( LPVOID input ) {
+    GPTP_LOG_STATUS("*** OSThreadCallback ENTRY (thread_id=%lu, input=%p) ***", GetCurrentThreadId(), input);
+    
     OSThreadArg *arg = (OSThreadArg*) input;
     
-    if (arg) {
-        arg->ret = arg->func( arg->arg );
+    if (!arg) {
+        GPTP_LOG_ERROR("*** OSThreadCallback: arg is NULL! ***");
+        return 1;
     }
     
+    GPTP_LOG_STATUS("*** OSThreadCallback: About to call func=%p with arg=%p (thread_id=%lu) ***", 
+        (void*)arg->func, arg->arg, GetCurrentThreadId());
+    
+    try {
+        if (arg->func) {
+            arg->ret = arg->func( arg->arg );
+            GPTP_LOG_STATUS("*** OSThreadCallback: func returned successfully (thread_id=%lu) ***", GetCurrentThreadId());
+        } else {
+            GPTP_LOG_ERROR("*** OSThreadCallback: func is NULL! ***");
+            arg->ret = (OSThreadExitCode)1; // osthread_error
+        }
+    } catch (const std::exception& ex) {
+        GPTP_LOG_ERROR("*** OSThreadCallback: Exception caught: %s (thread_id=%lu) ***", ex.what(), GetCurrentThreadId());
+        arg->ret = (OSThreadExitCode)1; // osthread_error
+    } catch (...) {
+        GPTP_LOG_ERROR("*** OSThreadCallback: Unknown exception caught (thread_id=%lu) ***", GetCurrentThreadId());
+        arg->ret = (OSThreadExitCode)1; // osthread_error
+    }
+    
+    GPTP_LOG_STATUS("*** OSThreadCallback EXIT (thread_id=%lu) ***", GetCurrentThreadId());
     return 0;
 }
 

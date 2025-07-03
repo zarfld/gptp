@@ -456,7 +456,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	while( !exit_flag ) {
 		Sleep( 1200 );
-		GPTP_LOG_DEBUG("*** MAIN: Main loop iteration (exit_flag=%s) ***", exit_flag ? "true" : "false");
+		GPTP_LOG_DEBUG("*** MAIN: Main loop iteration (exit_flag=%s, sleeping 1200ms) ***", exit_flag ? "true" : "false");
 	}
 
 		GPTP_LOG_STATUS("*** MAIN: Exiting normally at end of _tmain() ***");
