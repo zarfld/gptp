@@ -881,12 +881,11 @@ bool EtherPort::_processEvent( Event e )
 			putTxLock();
 
 			{
-				long long timeout;
-				long long interval;
+                               uint64_t timeout;
+                               uint64_t interval;
 
-				timeout = PDELAY_RESP_RECEIPT_TIMEOUT_MULTIPLIER *
-					((long long)
-					 (pow((double)2,getPDelayInterval())*1000000000.0));
+                                timeout = PDELAY_RESP_RECEIPT_TIMEOUT_MULTIPLIER *
+                                        static_cast<uint64_t>(pow((double)2,getPDelayInterval())*1000000000.0);
 
 				timeout = timeout > EVENT_TIMER_GRANULARITY ?
 					timeout : EVENT_TIMER_GRANULARITY;
@@ -896,9 +895,8 @@ bool EtherPort::_processEvent( Event e )
 					"PDelay interval %d, timeout %lld",
 					getPDelayInterval(), timeout);
 
-				interval =
-					((long long)
-					 (pow((double)2,getPDelayInterval())*1000000000.0));
+                                interval =
+                                        static_cast<uint64_t>(pow((double)2,getPDelayInterval())*1000000000.0);
 				interval = interval > EVENT_TIMER_GRANULARITY ?
 					interval : EVENT_TIMER_GRANULARITY;
 				GPTP_LOG_DEBUG("Restarting PDelay timer with interval=%lld ns (%.3f ms) ***", 
@@ -1261,8 +1259,7 @@ int EtherPort::getRxTimestamp
 	return 0;
 }
 
-void EtherPort::startPDelayIntervalTimer
-( long long unsigned int waitTime )
+void EtherPort::startPDelayIntervalTimer(uint64_t waitTime)
 {
 	GPTP_LOG_DEBUG("startPDelayIntervalTimer() called with waitTime=%llu ns (%.3f ms) ***", 
 		waitTime, waitTime / 1000000.0);
