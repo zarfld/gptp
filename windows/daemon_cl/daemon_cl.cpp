@@ -156,299 +156,307 @@ int parseMacAddr( _TCHAR *macstr, uint8_t *octet_string ) {
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	PortInit_t portInit;
+	try {
+		PortInit_t portInit;
 	
-	// Enable enhanced packet debug to diagnose packet reception issues
-	enablePacketReceptionDebug(true);
+		// Enable enhanced packet debug to diagnose packet reception issues
+		enablePacketReceptionDebug(true);
 	
-	// Initialize with standard profile as default
-	portInit.profile = gPTPProfileFactory::createStandardProfile();
+		// Initialize with standard profile as default
+		portInit.profile = gPTPProfileFactory::createStandardProfile();
 	
-	phy_delay_map_t ether_phy_delay;
-	ether_phy_delay[LINKSPEED_1G].set_delay
-	(PHY_DELAY_GB_TX_PCH, PHY_DELAY_GB_RX_PCH);
-	ether_phy_delay[LINKSPEED_100MB].set_delay
-	(PHY_DELAY_MB_TX_PCH, PHY_DELAY_MB_RX_PCH);
+		phy_delay_map_t ether_phy_delay;
+		ether_phy_delay[LINKSPEED_1G].set_delay
+		(PHY_DELAY_GB_TX_PCH, PHY_DELAY_GB_RX_PCH);
+		ether_phy_delay[LINKSPEED_100MB].set_delay
+		(PHY_DELAY_MB_TX_PCH, PHY_DELAY_MB_RX_PCH);
 
 
-	portInit.clock = NULL;
-	portInit.index = 1;
-	portInit.timestamper = NULL;
-	portInit.net_label = NULL;
-	portInit.isGM = false;
-	portInit.testMode = false;
-	portInit.initialLogSyncInterval = LOG2_INTERVAL_INVALID;
-	portInit.initialLogPdelayReqInterval = LOG2_INTERVAL_INVALID;
-	portInit.operLogPdelayReqInterval = LOG2_INTERVAL_INVALID;
-	portInit.operLogSyncInterval = LOG2_INTERVAL_INVALID;
-	portInit.condition_factory = NULL;
-	portInit.thread_factory = NULL;
-	portInit.timer_factory = NULL;
-	portInit.lock_factory = NULL;
-	portInit.neighborPropDelayThreshold =
-		CommonPort::NEIGHBOR_PROP_DELAY_THRESH;
+		portInit.clock = NULL;
+		portInit.index = 1;
+		portInit.timestamper = NULL;
+		portInit.net_label = NULL;
+		portInit.isGM = false;
+		portInit.testMode = false;
+		portInit.initialLogSyncInterval = LOG2_INTERVAL_INVALID;
+		portInit.initialLogPdelayReqInterval = LOG2_INTERVAL_INVALID;
+		portInit.operLogPdelayReqInterval = LOG2_INTERVAL_INVALID;
+		portInit.operLogSyncInterval = LOG2_INTERVAL_INVALID;
+		portInit.condition_factory = NULL;
+		portInit.thread_factory = NULL;
+		portInit.timer_factory = NULL;
+		portInit.lock_factory = NULL;
+		portInit.neighborPropDelayThreshold =
+			CommonPort::NEIGHBOR_PROP_DELAY_THRESH;
 
-	bool syntonize = false;
-	bool wireless = false;
-	uint8_t priority1 = 248;
-	int i;
-	int phy_delays[4] =	{ -1, -1, -1, -1 };
-	uint8_t addr_ostr[ETHER_ADDR_OCTETS];
+		bool syntonize = false;
+		bool wireless = false;
+		uint8_t priority1 = 248;
+		int i;
+		int phy_delays[4] =	{ -1, -1, -1, -1 };
+		uint8_t addr_ostr[ETHER_ADDR_OCTETS];
 
-	// Register default network interface
-	WindowsPCAPNetworkInterfaceFactory *default_factory = new WindowsPCAPNetworkInterfaceFactory();
-	OSNetworkInterfaceFactory::registerFactory( factory_name_t( "default" ), default_factory );
+		// Register default network interface
+		WindowsPCAPNetworkInterfaceFactory *default_factory = new WindowsPCAPNetworkInterfaceFactory();
+		OSNetworkInterfaceFactory::registerFactory( factory_name_t( "default" ), default_factory );
 
-	// Create thread, lock, timer, timerq factories
-	portInit.thread_factory = new WindowsThreadFactory();
-	portInit.lock_factory = new WindowsLockFactory();
-	portInit.timer_factory = new WindowsTimerFactory();
-	portInit.condition_factory = new WindowsConditionFactory();
-	WindowsNamedPipeIPC *ipc = new WindowsNamedPipeIPC();
-	WindowsTimerQueueFactory *timerq_factory = new WindowsTimerQueueFactory();
-	CommonPort *port;
-	WindowsWirelessAdapter *wl_adapter = NULL;
+		// Create thread, lock, timer, timerq factories
+		portInit.thread_factory = new WindowsThreadFactory();
+		portInit.lock_factory = new WindowsLockFactory();
+		portInit.timer_factory = new WindowsTimerFactory();
+		portInit.condition_factory = new WindowsConditionFactory();
+		WindowsNamedPipeIPC *ipc = new WindowsNamedPipeIPC();
+		WindowsTimerQueueFactory *timerq_factory = new WindowsTimerQueueFactory();
+		CommonPort *port;
+		WindowsWirelessAdapter *wl_adapter = NULL;
 
-	if( !ipc->init() ) {
-		delete ipc;
-		ipc = NULL;
-	}
+		if( !ipc->init() ) {
+			delete ipc;
+			ipc = NULL;
+		}
 
-	// If there are no arguments, output usage
-	if (1 == argc) {
-		print_usage(argv[0]);
-		return -1;
-	}
+		// If there are no arguments, output usage
+		if (1 == argc) {
+			print_usage(argv[0]);
+			return -1;
+		}
 
 
-	/* Process optional arguments */
-	for( i = 1; i < argc; ++i ) {
-		if (ispunct(argv[i][0]))
-		{
-			if (toupper(argv[i][1]) == 'H') {
-				print_usage(argv[0]);
-				return -1;
-			}
-			if (strcmp(argv[i], "-debug-packets") == 0) {
-				debug_packet_reception = true;
-				enablePacketReceptionDebug(true);
-				printf("Enhanced packet reception debugging enabled\n");
-			}
-			else if (strcmp(argv[i], "-profile") == 0) {
-				if (i + 1 >= argc) {
-					printf("Profile name must be specified after -profile option\n");
+		/* Process optional arguments */
+		for( i = 1; i < argc; ++i ) {
+			if (ispunct(argv[i][0]))
+			{
+				if (toupper(argv[i][1]) == 'H') {
+					print_usage(argv[0]);
 					return -1;
 				}
-				std::string profile_name = argv[++i];
-				portInit.profile = gPTPProfileFactory::createProfileByName(profile_name);
-				printf("Profile '%s' enabled: %s\n", 
-					profile_name.c_str(), 
-					gPTPProfileFactory::getProfileDescription(portInit.profile).c_str());
-			}
-			else if (strcmp(argv[i], "-Milan") == 0) {
-				// Legacy Milan option for backward compatibility
-				portInit.profile = gPTPProfileFactory::createMilanProfile();
-				printf("Milan Baseline Interoperability Profile enabled (legacy option)\n");
-				printf("  - 125ms sync interval, 100ms convergence target\n");
-				printf("  - Enhanced asCapable behavior (2-5 PDelay requirement)\n");
-			}
-			else if (strcmp(argv[i], "-AvnuBase") == 0) {
-				// Legacy AVnu Base option for backward compatibility
-				portInit.profile = gPTPProfileFactory::createAvnuBaseProfile();
-				printf("AVnu Base/ProAV Functional Interoperability Profile enabled (legacy option)\n");
-				printf("  - asCapable requires 2-10 successful PDelay exchanges\n");
-				printf("  - Standard 1s timing intervals\n");
-			}
-			else if (toupper(argv[i][1]) == 'W')
-			{
-				wireless = true;
-			}
-			else if (toupper(argv[i][1]) == 'R') {
-				if (i + 1 >= argc) {
-					printf("Priority 1 value must be specified on "
-						"command line, using default value\n");
+				if (strcmp(argv[i], "-debug-packets") == 0) {
+					debug_packet_reception = true;
+					enablePacketReceptionDebug(true);
+					printf("Enhanced packet reception debugging enabled\n");
 				}
-				else {
-					unsigned long tmp = strtoul(argv[i + 1], NULL, 0); ++i;
-					if (tmp > 255) {
-						printf("Invalid priority 1 value, using "
-							"default value\n");
+				else if (strcmp(argv[i], "-profile") == 0) {
+					if (i + 1 >= argc) {
+						printf("Profile name must be specified after -profile option\n");
+						return -1;
+					}
+					std::string profile_name = argv[++i];
+					portInit.profile = gPTPProfileFactory::createProfileByName(profile_name);
+					printf("Profile '%s' enabled: %s\n", 
+						profile_name.c_str(), 
+						gPTPProfileFactory::getProfileDescription(portInit.profile).c_str());
+				}
+				else if (strcmp(argv[i], "-Milan") == 0) {
+					// Legacy Milan option for backward compatibility
+					portInit.profile = gPTPProfileFactory::createMilanProfile();
+					printf("Milan Baseline Interoperability Profile enabled (legacy option)\n");
+					printf("  - 125ms sync interval, 100ms convergence target\n");
+					printf("  - Enhanced asCapable behavior (2-5 PDelay requirement)\n");
+				}
+				else if (strcmp(argv[i], "-AvnuBase") == 0) {
+					// Legacy AVnu Base option for backward compatibility
+					portInit.profile = gPTPProfileFactory::createAvnuBaseProfile();
+					printf("AVnu Base/ProAV Functional Interoperability Profile enabled (legacy option)\n");
+					printf("  - asCapable requires 2-10 successful PDelay exchanges\n");
+					printf("  - Standard 1s timing intervals\n");
+				}
+				else if (toupper(argv[i][1]) == 'W')
+				{
+					wireless = true;
+				}
+				else if (toupper(argv[i][1]) == 'R') {
+					if (i + 1 >= argc) {
+						printf("Priority 1 value must be specified on "
+							"command line, using default value\n");
 					}
 					else {
-						priority1 = (uint8_t)tmp;
+						unsigned long tmp = strtoul(argv[i + 1], NULL, 0); ++i;
+						if (tmp > 255) {
+							printf("Invalid priority 1 value, using "
+								"default value\n");
+						}
+						else {
+							priority1 = (uint8_t)tmp;
+						}
+					}
+				}
+			} else
+			{
+				break;
+			}
+		}
+
+		// Parse local HW MAC address
+		if (i < argc)
+		{
+			parseMacAddr(argv[i++], addr_ostr);
+			portInit.net_label = new LinkLayerAddress(addr_ostr);
+		} else
+		{
+			printf("Local hardware MAC address required");
+			return -1;
+		}
+
+		if( wireless )
+		{
+			if (i < argc)
+			{
+				parseMacAddr(argv[i++], addr_ostr);
+				portInit.virtual_label = new LinkLayerAddress(addr_ostr);
+			} else
+			{
+				printf("Wireless operation requires local virtual MAC address");
+				return -1;
+			}
+		}
+
+		if (!wireless)
+		{
+			// Create HWTimestamper object
+			portInit.timestamper = new WindowsEtherTimestamper();
+		} else
+		{
+			portInit.timestamper = new WindowsWirelessTimestamper();
+			(static_cast<WindowsWirelessTimestamper *> (portInit.timestamper))->setAdapter(new IntelWirelessAdapter());
+		}
+
+		// Create Clock object with configuration support
+		// Check for configuration file and read clock quality parameters
+		bool use_config_file = false;
+		std::string config_file_path = "gptp_cfg.ini";
+		unsigned char config_clockClass = 248;
+		unsigned char config_clockAccuracy = 0x22;
+		uint16_t config_offsetScaledLogVariance = 0x436A;
+		std::string config_profile = "standard";
+	
+		// Check if configuration file exists
+		DWORD file_attr = GetFileAttributesA(config_file_path.c_str());
+		if (file_attr != INVALID_FILE_ATTRIBUTES && !(file_attr & FILE_ATTRIBUTE_DIRECTORY)) {
+			use_config_file = true;
+		
+			GptpIniParser iniParser(config_file_path);
+			if (iniParser.parserError() < 0) {
+				GPTP_LOG_ERROR("Cannot parse ini file. Aborting file reading, using defaults.");
+				use_config_file = false;
+			} else {
+				GPTP_LOG_INFO("Reading configuration from %s", config_file_path.c_str());
+				priority1 = iniParser.getPriority1();
+				config_clockClass = iniParser.getClockClass();
+				config_clockAccuracy = iniParser.getClockAccuracy();
+				config_offsetScaledLogVariance = iniParser.getOffsetScaledLogVariance();
+				config_profile = iniParser.getProfile();
+			
+				GPTP_LOG_INFO("priority1 = %d", priority1);
+				GPTP_LOG_INFO("clockClass = %d", config_clockClass);
+				GPTP_LOG_INFO("clockAccuracy = 0x%02X", config_clockAccuracy);
+				GPTP_LOG_INFO("offsetScaledLogVariance = 0x%04X", config_offsetScaledLogVariance);
+				GPTP_LOG_INFO("profile = %s", config_profile.c_str());
+			
+				// Profile priority: Command line options override configuration file
+				if (portInit.profile.profile_name != "standard") {
+					// Profile was explicitly set via command line - keep it
+					GPTP_LOG_INFO("Profile '%s' explicitly set via command line (overrides config file)", 
+						portInit.profile.profile_name.c_str());
+				} else {
+					// Use profile from configuration file
+					if (!config_profile.empty() && config_profile != "standard") {
+						portInit.profile = gPTPProfileFactory::createProfileByName(config_profile);
+						GPTP_LOG_INFO("Profile '%s' loaded from configuration file: %s", 
+							config_profile.c_str(),
+							gPTPProfileFactory::getProfileDescription(portInit.profile).c_str());
+					} else {
+						GPTP_LOG_INFO("Using standard profile from configuration file");
 					}
 				}
 			}
-		} else
-		{
-			break;
-		}
-	}
-
-	// Parse local HW MAC address
-	if (i < argc)
-	{
-		parseMacAddr(argv[i++], addr_ostr);
-		portInit.net_label = new LinkLayerAddress(addr_ostr);
-	} else
-	{
-		printf("Local hardware MAC address required");
-		return -1;
-	}
-
-	if( wireless )
-	{
-		if (i < argc)
-		{
-			parseMacAddr(argv[i++], addr_ostr);
-			portInit.virtual_label = new LinkLayerAddress(addr_ostr);
-		} else
-		{
-			printf("Wireless operation requires local virtual MAC address");
-			return -1;
-		}
-	}
-
-	if (!wireless)
-	{
-		// Create HWTimestamper object
-		portInit.timestamper = new WindowsEtherTimestamper();
-	} else
-	{
-		portInit.timestamper = new WindowsWirelessTimestamper();
-		(static_cast<WindowsWirelessTimestamper *> (portInit.timestamper))->setAdapter(new IntelWirelessAdapter());
-	}
-
-	// Create Clock object with configuration support
-	// Check for configuration file and read clock quality parameters
-	bool use_config_file = false;
-	std::string config_file_path = "gptp_cfg.ini";
-	unsigned char config_clockClass = 248;
-	unsigned char config_clockAccuracy = 0x22;
-	uint16_t config_offsetScaledLogVariance = 0x436A;
-	std::string config_profile = "standard";
-	
-	// Check if configuration file exists
-	DWORD file_attr = GetFileAttributesA(config_file_path.c_str());
-	if (file_attr != INVALID_FILE_ATTRIBUTES && !(file_attr & FILE_ATTRIBUTE_DIRECTORY)) {
-		use_config_file = true;
-		
-		GptpIniParser iniParser(config_file_path);
-		if (iniParser.parserError() < 0) {
-			GPTP_LOG_ERROR("Cannot parse ini file. Aborting file reading, using defaults.");
-			use_config_file = false;
 		} else {
-			GPTP_LOG_INFO("Reading configuration from %s", config_file_path.c_str());
-			priority1 = iniParser.getPriority1();
-			config_clockClass = iniParser.getClockClass();
-			config_clockAccuracy = iniParser.getClockAccuracy();
-			config_offsetScaledLogVariance = iniParser.getOffsetScaledLogVariance();
-			config_profile = iniParser.getProfile();
-			
-			GPTP_LOG_INFO("priority1 = %d", priority1);
-			GPTP_LOG_INFO("clockClass = %d", config_clockClass);
-			GPTP_LOG_INFO("clockAccuracy = 0x%02X", config_clockAccuracy);
-			GPTP_LOG_INFO("offsetScaledLogVariance = 0x%04X", config_offsetScaledLogVariance);
-			GPTP_LOG_INFO("profile = %s", config_profile.c_str());
-			
-			// Profile priority: Command line options override configuration file
-			if (portInit.profile.profile_name != "standard") {
-				// Profile was explicitly set via command line - keep it
-				GPTP_LOG_INFO("Profile '%s' explicitly set via command line (overrides config file)", 
-					portInit.profile.profile_name.c_str());
-			} else {
-				// Use profile from configuration file
-				if (!config_profile.empty() && config_profile != "standard") {
-					portInit.profile = gPTPProfileFactory::createProfileByName(config_profile);
-					GPTP_LOG_INFO("Profile '%s' loaded from configuration file: %s", 
-						config_profile.c_str(),
-						gPTPProfileFactory::getProfileDescription(portInit.profile).c_str());
-				} else {
-					GPTP_LOG_INFO("Using standard profile from configuration file");
-				}
-			}
+			GPTP_LOG_INFO("Configuration file %s not found, using default values", config_file_path.c_str());
 		}
-	} else {
-		GPTP_LOG_INFO("Configuration file %s not found, using default values", config_file_path.c_str());
-	}
 	
-	portInit.clock = new IEEE1588Clock(false, false, priority1, timerq_factory, ipc, portInit.lock_factory);  // Do not force slave
+		portInit.clock = new IEEE1588Clock(false, false, priority1, timerq_factory, ipc, portInit.lock_factory);  // Do not force slave
 	
-	// Configure clock quality based on unified profile system
-	ClockQuality quality;
-	if (use_config_file) {
-		// Config file values override profile defaults
-		quality.cq_class = config_clockClass;
-		quality.clockAccuracy = config_clockAccuracy;
-		quality.offsetScaledLogVariance = config_offsetScaledLogVariance;
+		// Configure clock quality based on unified profile system
+		ClockQuality quality;
+		if (use_config_file) {
+			// Config file values override profile defaults
+			quality.cq_class = config_clockClass;
+			quality.clockAccuracy = config_clockAccuracy;
+			quality.offsetScaledLogVariance = config_offsetScaledLogVariance;
 		
-		GPTP_LOG_INFO("Clock quality configured from file: class=%d, accuracy=0x%02X, variance=0x%04X",
-			quality.cq_class, quality.clockAccuracy, quality.offsetScaledLogVariance);
-	} else {
-		// Use profile-specific clock quality
-		quality.cq_class = portInit.profile.clock_class;
-		quality.clockAccuracy = portInit.profile.clock_accuracy;
-		quality.offsetScaledLogVariance = portInit.profile.offset_scaled_log_variance;
+			GPTP_LOG_INFO("Clock quality configured from file: class=%d, accuracy=0x%02X, variance=0x%04X",
+				quality.cq_class, quality.clockAccuracy, quality.offsetScaledLogVariance);
+		} else {
+			// Use profile-specific clock quality
+			quality.cq_class = portInit.profile.clock_class;
+			quality.clockAccuracy = portInit.profile.clock_accuracy;
+			quality.offsetScaledLogVariance = portInit.profile.offset_scaled_log_variance;
 		
-		GPTP_LOG_INFO("Clock quality configured from profile '%s': class=%d, accuracy=0x%02X, variance=0x%04X",
-			portInit.profile.profile_name.c_str(),
-			quality.cq_class, quality.clockAccuracy, quality.offsetScaledLogVariance);
-	}
+			GPTP_LOG_INFO("Clock quality configured from profile '%s': class=%d, accuracy=0x%02X, variance=0x%04X",
+				portInit.profile.profile_name.c_str(),
+				quality.cq_class, quality.clockAccuracy, quality.offsetScaledLogVariance);
+		}
 	
-	portInit.clock->setClockQuality(quality);
+		portInit.clock->setClockQuality(quality);
 
-	if (!wireless)
-	{
-		// Create Port Object linked to clock and low level
-		portInit.phy_delay = &ether_phy_delay;
-		EtherPort *eport = new EtherPort(&portInit);
-		gptp_ether_port = eport; // Set global pointer for watchdog
-		eport->setLinkSpeed( findLinkSpeed( static_cast <LinkLayerAddress *> ( portInit.net_label )));
-		port = eport;
-		if (!eport->init_port()) {
-			printf("Failed to initialize port\n");
-			return -1;
-		}
-		port->processEvent(POWERUP);
-	} else
-	{
-		if (i < argc)
+		if (!wireless)
 		{
-			parseMacAddr(argv[i++], addr_ostr);
-			LinkLayerAddress peer_addr(addr_ostr);
-			port = new WirelessPort(&portInit, peer_addr);
-			(static_cast <WirelessTimestamper *> (portInit.timestamper))->setPort( static_cast<WirelessPort *> ( port ));
-			if (!port->init_port()) {
+			// Create Port Object linked to clock and low level
+			portInit.phy_delay = &ether_phy_delay;
+			EtherPort *eport = new EtherPort(&portInit);
+			gptp_ether_port = eport; // Set global pointer for watchdog
+			eport->setLinkSpeed( findLinkSpeed( static_cast <LinkLayerAddress *> ( portInit.net_label )));
+			port = eport;
+			if (!eport->init_port()) {
 				printf("Failed to initialize port\n");
 				return -1;
 			}
 			port->processEvent(POWERUP);
 		} else
 		{
-			printf("Wireless operation requires remote MAC address");
+			if (i < argc)
+			{
+				parseMacAddr(argv[i++], addr_ostr);
+				LinkLayerAddress peer_addr(addr_ostr);
+				port = new WirelessPort(&portInit, peer_addr);
+				(static_cast <WirelessTimestamper *> (portInit.timestamper))->setPort( static_cast<WirelessPort *> ( port ));
+				if (!port->init_port()) {
+					printf("Failed to initialize port\n");
+					return -1;
+				}
+				port->processEvent(POWERUP);
+			} else
+			{
+				printf("Wireless operation requires remote MAC address");
+				return -1;
+			}
+		}
+
+		// Setup and start watchdog monitoring
+		if (watchdog_setup() != 0) {
+			GPTP_LOG_ERROR("Failed to setup watchdog, continuing without watchdog support");
+		}
+
+		// Wait for Ctrl-C
+		if( !SetConsoleCtrlHandler( ctrl_handler, true )) {
+			printf( "Unable to register Ctrl-C handler\n" );
 			return -1;
 		}
+
+		while( !exit_flag ) Sleep( 1200 );
+
+		// Cleanup link monitoring before exiting
+		cleanupLinkMonitoring();
+
+		delete( ipc );
+
+		return 0;
+	} catch (const std::exception& ex) {
+		GPTP_LOG_ERROR("*** TOP-LEVEL EXCEPTION in main: %s", ex.what());
+		return 1;
+	} catch (...) {
+		GPTP_LOG_ERROR("*** TOP-LEVEL UNKNOWN EXCEPTION in main() - aborting");
+		return 1;
 	}
-
-	// Setup and start watchdog monitoring
-	if (watchdog_setup() != 0) {
-		GPTP_LOG_ERROR("Failed to setup watchdog, continuing without watchdog support");
-	}
-
-	// Wait for Ctrl-C
-	if( !SetConsoleCtrlHandler( ctrl_handler, true )) {
-		printf( "Unable to register Ctrl-C handler\n" );
-		return -1;
-	}
-
-	while( !exit_flag ) Sleep( 1200 );
-
-	// Cleanup link monitoring before exiting
-	cleanupLinkMonitoring();
-
-	delete( ipc );
-
-	return 0;
 }
 
 #define WIN_LINKSPEED_MULT (1000/*1 Kbit*/)

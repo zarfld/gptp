@@ -907,7 +907,7 @@ bool EtherPort::_processEvent( Event e )
 		pdelay_rx_lock->lock();
 		GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pdelay_rx_lock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&e);
 		if (last_pdelay_resp_fwup == NULL) {
-			GPTP_LOG_ERROR("PDelay Response Followup is NULL!");
+			GPTP_LOG_ERROR("PDelay Response Followup is NULL! About to abort().");
 			abort();
 		}
 		last_pdelay_resp_fwup->processMessage(this);

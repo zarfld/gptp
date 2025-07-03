@@ -566,9 +566,9 @@ PTPMessageCommon *buildPTPMessage
 	return msg;
 
 abort:
+	GPTP_LOG_ERROR("*** ABORT: Entered abort label in buildPTPMessage or message processing. Returning NULL. ***");
 	delete sourcePortIdentity;
 	delete timer;
-
 	return NULL;
 }
 
