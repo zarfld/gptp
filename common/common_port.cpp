@@ -803,14 +803,14 @@ bool CommonPort::processEvent( Event e )
 
 		break;
 	case PDELAY_INTERVAL_TIMEOUT_EXPIRES:
-		GPTP_LOG_DEBUG("P_DELAY_INTERVAL_TIMEOUT_EXPIRES occured");
+		GPTP_LOG_DEBUG("PDELAY_INTERVAL_TIMEOUT_EXPIRES occured");
 		// If asCapable is true attempt some media specific action
-	// TODO: implement profile specific handling on that case
+		// TODO: implement profile specific handling on that case
 		if( asCapable )
 			ret = _processEvent( e );
 		else
 			ret = true; // No action needed if not asCapable
-		
+		break;
 	}
 
 	if( ret == false )
