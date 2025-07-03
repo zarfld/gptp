@@ -286,6 +286,18 @@ void IEEE1588Clock::addEventTimerLocked
     
     try {
         GPTP_LOG_DEBUG("*** addEventTimerLocked: About to call addEventTimer ***");
+        
+        // Extra defensive check - verify timerq pointer is still valid
+        if (!timerq) {
+            GPTP_LOG_ERROR("*** FATAL: timerq became NULL after acquiring lock in addEventTimerLocked! ***");
+            OSLockResult unlock_result = putTimerQLock();
+            if (unlock_result == oslock_fail) {
+                GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock after NULL timerq in addEventTimerLocked! ***");
+            }
+            return;
+        }
+        
+        GPTP_LOG_DEBUG("*** addEventTimerLocked: timerq=%p, calling addEventTimer ***", timerq);
         addEventTimer( target, e, time_ns );
         GPTP_LOG_DEBUG("*** addEventTimerLocked: addEventTimer completed successfully ***");
     } catch (const std::exception& ex) {
@@ -350,6 +362,18 @@ void IEEE1588Clock::deleteEventTimerLocked
 
     try {
         GPTP_LOG_DEBUG("*** deleteEventTimerLocked: About to call timerq->cancelEvent ***");
+        
+        // Extra defensive check - verify timerq pointer is still valid
+        if (!timerq) {
+            GPTP_LOG_ERROR("*** FATAL: timerq became NULL after acquiring lock! ***");
+            OSLockResult unlock_result = putTimerQLock();
+            if (unlock_result == oslock_fail) {
+                GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock after NULL timerq! ***");
+            }
+            return;
+        }
+        
+        GPTP_LOG_DEBUG("*** deleteEventTimerLocked: timerq=%p, event=%d, calling cancelEvent ***", timerq, (int)event);
         timerq->cancelEvent((int)event, NULL);
         GPTP_LOG_DEBUG("*** deleteEventTimerLocked: timerq->cancelEvent completed successfully ***");
     } catch (const std::exception& ex) {

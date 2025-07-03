@@ -465,57 +465,118 @@ private:
 	TimerArgList_t retiredTimers;
 	SRWLOCK retiredTimersLock;
 	void cleanupRetiredTimers() {
-		AcquireSRWLockExclusive( &retiredTimersLock );
+		GPTP_LOG_DEBUG("*** WindowsTimerQueue::cleanupRetiredTimers: ENTER (thread_id=%lu) ***", (unsigned long)GetCurrentThreadId());
 		
-		// Use a temporary list to avoid holding the lock too long
-		TimerArgList_t toDelete;
-		TimerArgList_t::iterator it = retiredTimers.begin();
-		
-		while( it != retiredTimers.end() ) {
-			WindowsTimerQueueHandlerArg *retired_arg = *it;
+		try {
+			GPTP_LOG_DEBUG("*** cleanupRetiredTimers: About to acquire retiredTimersLock ***");
+			AcquireSRWLockExclusive( &retiredTimersLock );
+			GPTP_LOG_DEBUG("*** cleanupRetiredTimers: Acquired retiredTimersLock, retired list size=%zu ***", retiredTimers.size());
 			
-			// Try to delete the timer again with a timeout to check if it's safe
-			// If it succeeds, the timer is definitely not running anymore
-			if( DeleteTimerQueueTimer( retired_arg->queue_handle, retired_arg->timer_handle, NULL ) ) {
+			// Use a temporary list to avoid holding the lock too long
+			TimerArgList_t toDelete;
+			TimerArgList_t::iterator it = retiredTimers.begin();
+			GPTP_LOG_DEBUG("*** cleanupRetiredTimers: Starting iteration through retired timers ***");
+			
+			while( it != retiredTimers.end() ) {
+				GPTP_LOG_DEBUG("*** cleanupRetiredTimers: Processing retired timer ***");
+				WindowsTimerQueueHandlerArg *retired_arg = *it;
+				
+				if (!retired_arg) {
+					GPTP_LOG_ERROR("*** FATAL: retired_arg is NULL in cleanupRetiredTimers! ***");
+					++it;
+					continue;
+				}
+				
+				GPTP_LOG_DEBUG("*** cleanupRetiredTimers: About to call DeleteTimerQueueTimer for cleanup (queue_handle=%p, timer_handle=%p) ***", 
+					retired_arg->queue_handle, retired_arg->timer_handle);
+				
+				// Don't try to delete the timer again - it was already deleted in cancelEvent
+				// Just mark it as safe to clean up since it was already successfully cancelled
+				GPTP_LOG_DEBUG("*** cleanupRetiredTimers: Timer already deleted in cancelEvent, safe to clean up ***");
 				// Timer successfully deleted, safe to clean up
 				toDelete.push_back( retired_arg );
 				it = retiredTimers.erase( it );
-			} else {
-				// Timer still active or callback running, leave it for next cleanup
-				++it;
 			}
+			
+			GPTP_LOG_DEBUG("*** cleanupRetiredTimers: About to release retiredTimersLock, toDelete size=%zu ***", toDelete.size());
+			ReleaseSRWLockExclusive( &retiredTimersLock );
+			GPTP_LOG_DEBUG("*** cleanupRetiredTimers: Released retiredTimersLock ***");
+			
+			// Clean up the structures outside the lock
+			GPTP_LOG_DEBUG("*** cleanupRetiredTimers: About to clean up %zu timer structures ***", toDelete.size());
+			for( TimerArgList_t::iterator deleteIt = toDelete.begin(); deleteIt != toDelete.end(); ++deleteIt ) {
+				WindowsTimerQueueHandlerArg *arg = *deleteIt;
+				if (!arg) {
+					GPTP_LOG_ERROR("*** FATAL: arg is NULL in cleanup loop! ***");
+					continue;
+				}
+				
+				GPTP_LOG_DEBUG("*** cleanupRetiredTimers: Cleaning up timer arg %p (rm=%s) ***", arg, arg->rm ? "true" : "false");
+				if( arg->rm && arg->inner_arg ) {
+					GPTP_LOG_DEBUG("*** cleanupRetiredTimers: About to delete inner_arg %p ***", arg->inner_arg);
+					delete arg->inner_arg;
+				}
+				GPTP_LOG_DEBUG("*** cleanupRetiredTimers: About to delete arg %p ***", arg);
+				delete arg;
+			}
+			GPTP_LOG_DEBUG("*** cleanupRetiredTimers: Cleanup completed successfully ***");
+		} catch (const std::exception& ex) {
+			GPTP_LOG_ERROR("*** FATAL: Exception in cleanupRetiredTimers: %s ***", ex.what());
+		} catch (...) {
+			GPTP_LOG_ERROR("*** FATAL: Unknown exception in cleanupRetiredTimers ***");
 		}
 		
-		ReleaseSRWLockExclusive( &retiredTimersLock );
-		
-		// Clean up the structures outside the lock
-		for( TimerArgList_t::iterator deleteIt = toDelete.begin(); deleteIt != toDelete.end(); ++deleteIt ) {
-			WindowsTimerQueueHandlerArg *arg = *deleteIt;
-			if( arg->rm ) delete arg->inner_arg;
-			delete arg;
-		}
+		GPTP_LOG_DEBUG("*** WindowsTimerQueue::cleanupRetiredTimers: EXIT ***");
 	}
 	
 	void cleanupCompletedTimers() {
-		// Clean up completed timers from all timer queues
-		for( TimerQueueMap_t::iterator queue_it = timerQueueMap.begin(); queue_it != timerQueueMap.end(); ++queue_it ) {
-			AcquireSRWLockExclusive( &queue_it->second.lock );
+		GPTP_LOG_DEBUG("*** WindowsTimerQueue::cleanupCompletedTimers: ENTER (thread_id=%lu) ***", (unsigned long)GetCurrentThreadId());
+		
+		try {
+			// Clean up completed timers from all timer queues
+			GPTP_LOG_DEBUG("*** cleanupCompletedTimers: Iterating through timerQueueMap (size=%zu) ***", timerQueueMap.size());
 			
-			TimerArgList_t::iterator it = queue_it->second.arg_list.begin();
-			while( it != queue_it->second.arg_list.end() ) {
-				WindowsTimerQueueHandlerArg *arg = *it;
+			for( TimerQueueMap_t::iterator queue_it = timerQueueMap.begin(); queue_it != timerQueueMap.end(); ++queue_it ) {
+				GPTP_LOG_DEBUG("*** cleanupCompletedTimers: Processing queue for type %d ***", queue_it->first);
 				
-				if( arg->completed ) {
-					// Timer has completed, remove it from the list and delete it
-					it = queue_it->second.arg_list.erase( it );
-					delete arg;
-				} else {
-					++it;
+				GPTP_LOG_DEBUG("*** cleanupCompletedTimers: About to acquire SRW lock for type %d ***", queue_it->first);
+				AcquireSRWLockExclusive( &queue_it->second.lock );
+				GPTP_LOG_DEBUG("*** cleanupCompletedTimers: Acquired SRW lock for type %d, arg_list size=%zu ***", 
+					queue_it->first, queue_it->second.arg_list.size());
+				
+				TimerArgList_t::iterator it = queue_it->second.arg_list.begin();
+				while( it != queue_it->second.arg_list.end() ) {
+					WindowsTimerQueueHandlerArg *arg = *it;
+					
+					if (!arg) {
+						GPTP_LOG_ERROR("*** FATAL: arg is NULL in cleanupCompletedTimers! ***");
+						it = queue_it->second.arg_list.erase( it );
+						continue;
+					}
+					
+					GPTP_LOG_DEBUG("*** cleanupCompletedTimers: Checking timer arg %p (completed=%s) ***", arg, arg->completed ? "true" : "false");
+					
+					if( arg->completed ) {
+						GPTP_LOG_DEBUG("*** cleanupCompletedTimers: Timer completed, removing from list and deleting ***");
+						// Timer has completed, remove it from the list and delete it
+						it = queue_it->second.arg_list.erase( it );
+						delete arg;
+					} else {
+						++it;
+					}
 				}
+				
+				GPTP_LOG_DEBUG("*** cleanupCompletedTimers: About to release SRW lock for type %d ***", queue_it->first);
+				ReleaseSRWLockExclusive( &queue_it->second.lock );
 			}
-			
-			ReleaseSRWLockExclusive( &queue_it->second.lock );
+			GPTP_LOG_DEBUG("*** cleanupCompletedTimers: All queues processed successfully ***");
+		} catch (const std::exception& ex) {
+			GPTP_LOG_ERROR("*** FATAL: Exception in cleanupCompletedTimers: %s ***", ex.what());
+		} catch (...) {
+			GPTP_LOG_ERROR("*** FATAL: Unknown exception in cleanupCompletedTimers ***");
 		}
+		
+		GPTP_LOG_DEBUG("*** WindowsTimerQueue::cleanupCompletedTimers: EXIT ***");
 	}
 protected:
 	/**
@@ -564,32 +625,68 @@ public:
 	 * @return Always returns true.
 	 */
 	bool cancelEvent( int type, unsigned *event ) {
-		TimerQueueMap_t::iterator iter = timerQueueMap.find( type );
-		if( iter == timerQueueMap.end() ) return false;
-		AcquireSRWLockExclusive( &timerQueueMap[type].lock );
-		while( ! timerQueueMap[type].arg_list.empty() ) {
-			WindowsTimerQueueHandlerArg *del_arg = timerQueueMap[type].arg_list.front();
-			timerQueueMap[type].arg_list.pop_front();
-			ReleaseSRWLockExclusive( &timerQueueMap[type].lock );
-			// Use NULL instead of INVALID_HANDLE_VALUE to avoid deadlock
-			// This makes the timer cancellation asynchronous
-			DeleteTimerQueueTimer( del_arg->queue_handle, del_arg->timer_handle, NULL );
+		GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: ENTER (type=%d, event=%p, thread_id=%lu) ***", type, event, (unsigned long)GetCurrentThreadId());
+		
+		try {
+			TimerQueueMap_t::iterator iter = timerQueueMap.find( type );
+			if( iter == timerQueueMap.end() ) {
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: Event type %d not found in map, returning false ***", type);
+				return false;
+			}
 			
-			// Don't delete immediately - move to retired list for deferred cleanup
-			// This prevents use-after-free if timer callback is still executing
-			AcquireSRWLockExclusive( &retiredTimersLock );
-			retiredTimers.push_back( del_arg );
-			ReleaseSRWLockExclusive( &retiredTimersLock );
-			
+			GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: Found event type %d, about to acquire SRW lock ***", type);
 			AcquireSRWLockExclusive( &timerQueueMap[type].lock );
-		}
-		ReleaseSRWLockExclusive( &timerQueueMap[type].lock );
+			GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: Acquired SRW lock for type %d ***", type);
+			
+			while( ! timerQueueMap[type].arg_list.empty() ) {
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: Processing timer in arg_list (size=%zu) ***", timerQueueMap[type].arg_list.size());
+				WindowsTimerQueueHandlerArg *del_arg = timerQueueMap[type].arg_list.front();
+				if (!del_arg) {
+					GPTP_LOG_ERROR("*** FATAL: del_arg is NULL in cancelEvent! ***");
+					break;
+				}
+				
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to pop front from arg_list ***");
+				timerQueueMap[type].arg_list.pop_front();
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to release SRW lock for DeleteTimerQueueTimer ***");
+				ReleaseSRWLockExclusive( &timerQueueMap[type].lock );
+				
+				// Use NULL instead of INVALID_HANDLE_VALUE to avoid deadlock
+				// This makes the timer cancellation asynchronous
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to call DeleteTimerQueueTimer (queue_handle=%p, timer_handle=%p) ***", del_arg->queue_handle, del_arg->timer_handle);
+				DeleteTimerQueueTimer( del_arg->queue_handle, del_arg->timer_handle, NULL );
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: DeleteTimerQueueTimer completed ***");
+				
+				// Don't delete immediately - move to retired list for deferred cleanup
+				// This prevents use-after-free if timer callback is still executing
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to acquire retiredTimersLock ***");
+				AcquireSRWLockExclusive( &retiredTimersLock );
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to add to retiredTimers list ***");
+				retiredTimers.push_back( del_arg );
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to release retiredTimersLock ***");
+				ReleaseSRWLockExclusive( &retiredTimersLock );
+				
+				GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to reacquire SRW lock for next iteration ***");
+				AcquireSRWLockExclusive( &timerQueueMap[type].lock );
+			}
+			GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: All timers processed, about to release final SRW lock ***");
+			ReleaseSRWLockExclusive( &timerQueueMap[type].lock );
 
-		// Clean up any retired timers that are safe to delete
-		cleanupRetiredTimers();
-		// Also clean up completed timers to prevent memory leaks
-		cleanupCompletedTimers();
-		return true;
+			// Clean up any retired timers that are safe to delete
+			GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to call cleanupRetiredTimers ***");
+			cleanupRetiredTimers();
+			// Also clean up completed timers to prevent memory leaks
+			GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: About to call cleanupCompletedTimers ***");
+			cleanupCompletedTimers();
+			GPTP_LOG_DEBUG("*** WindowsTimerQueue::cancelEvent: EXIT (returning true) ***");
+			return true;
+		} catch (const std::exception& ex) {
+			GPTP_LOG_ERROR("*** FATAL: Exception in WindowsTimerQueue::cancelEvent: %s ***", ex.what());
+			return false;
+		} catch (...) {
+			GPTP_LOG_ERROR("*** FATAL: Unknown exception in WindowsTimerQueue::cancelEvent ***");
+			return false;
+		}
 	}
 };
 

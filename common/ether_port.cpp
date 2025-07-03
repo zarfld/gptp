@@ -1308,9 +1308,53 @@ void EtherPort::startPDelayIntervalTimer
 
 void EtherPort::stopPDelayIntervalTimer()
 {
-	pDelayIntervalTimerLock->lock();
-	clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
-	pDelayIntervalTimerLock->unlock();
+	GPTP_LOG_DEBUG("stopPDelayIntervalTimer() called (thread_id=%lu)", (unsigned long)GetCurrentThreadId());
+    
+    // Check if lock pointer is valid before using it
+    if (!pDelayIntervalTimerLock) {
+        GPTP_LOG_ERROR("*** FATAL: pDelayIntervalTimerLock is NULL in stopPDelayIntervalTimer! ***");
+        return;
+    }
+    
+    GPTP_LOG_DEBUG("*** About to acquire pDelayIntervalTimerLock in stopPDelayIntervalTimer ***");
+    try {
+        pDelayIntervalTimerLock->lock();
+        GPTP_LOG_DEBUG("*** Acquired pDelayIntervalTimerLock in stopPDelayIntervalTimer ***");
+        
+        // Defensive check for clock pointer before timer operations
+        if (!clock) {
+            GPTP_LOG_ERROR("*** FATAL: clock pointer is NULL in stopPDelayIntervalTimer! ***");
+            pDelayIntervalTimerLock->unlock();
+            return;
+        }
+        
+        GPTP_LOG_DEBUG("*** About to call deleteEventTimerLocked in stopPDelayIntervalTimer ***");
+        clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
+        GPTP_LOG_DEBUG("*** deleteEventTimerLocked completed in stopPDelayIntervalTimer ***");
+        
+        GPTP_LOG_DEBUG("*** About to release pDelayIntervalTimerLock in stopPDelayIntervalTimer ***");
+        pDelayIntervalTimerLock->unlock();
+        GPTP_LOG_DEBUG("*** Released pDelayIntervalTimerLock in stopPDelayIntervalTimer ***");
+    } catch (const std::exception& ex) {
+        GPTP_LOG_ERROR("*** FATAL: Exception in stopPDelayIntervalTimer: %s ***", ex.what());
+        // Try to unlock if we can
+        try {
+            pDelayIntervalTimerLock->unlock();
+        } catch (...) {
+            GPTP_LOG_ERROR("*** CRITICAL: Failed to unlock in exception handler ***");
+        }
+        return;
+    } catch (...) {
+        GPTP_LOG_ERROR("*** FATAL: Unknown exception in stopPDelayIntervalTimer ***");
+        // Try to unlock if we can
+        try {
+            pDelayIntervalTimerLock->unlock();
+        } catch (...) {
+            GPTP_LOG_ERROR("*** CRITICAL: Failed to unlock in exception handler ***");
+        }
+        return;
+    }
+    
 	GPTP_LOG_STATUS("PDelay message transmission stopped per signaling request");
 }
 
