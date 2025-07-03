@@ -305,7 +305,7 @@ protected:
 	 * @param  waitTime time interval
 	 * @return none
 	 */
-	void startPDelayIntervalTimer(long long unsigned int waitTime);
+       void startPDelayIntervalTimer(uint64_t waitTime);
 
 	/**
 	 * @brief  Increments PDelay sequence ID and returns.

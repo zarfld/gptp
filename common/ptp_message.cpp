@@ -2070,7 +2070,7 @@ bool PTPMessageSignalling::sendPort
 
 void PTPMessageSignalling::processMessage( CommonPort *port )
 {
-	long long unsigned int waitTime;
+       uint64_t waitTime;
 
 	GPTP_LOG_STATUS("Signalling Link Delay Interval: %d", tlv.getLinkDelayInterval());
 	GPTP_LOG_STATUS("Signalling Sync Interval: %d", tlv.getTimeSyncInterval());
@@ -2083,7 +2083,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 	if (linkDelayInterval == PTPMessageSignalling::sigMsgInterval_Initial) {
 		port->resetInitPDelayInterval();
 
-		waitTime = ((long long) (pow(2.0, port->getPDelayInterval()) *  1000000000.0));
+               waitTime = static_cast<uint64_t>(pow(2.0, port->getPDelayInterval()) *  1000000000.0);
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startPDelayIntervalTimer(waitTime);
 	}
@@ -2097,7 +2097,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 	else {
 		port->setPDelayInterval(linkDelayInterval);
 
-		waitTime = ((long long) (pow(2.0, port->getPDelayInterval()) *  1000000000.0));
+               waitTime = static_cast<uint64_t>(pow(2.0, port->getPDelayInterval()) *  1000000000.0);
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startPDelayIntervalTimer(waitTime);
 	}
@@ -2105,7 +2105,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 	if (timeSyncInterval == PTPMessageSignalling::sigMsgInterval_Initial) {
 		port->resetInitSyncInterval();
 
-		waitTime = ((long long) (pow((double)2, port->getSyncInterval()) *  1000000000.0));
+               waitTime = static_cast<uint64_t>(pow((double)2, port->getSyncInterval()) *  1000000000.0);
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startSyncIntervalTimer(waitTime);
 	}
@@ -2119,7 +2119,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 	else {
 		port->setSyncInterval(timeSyncInterval);
 
-		waitTime = ((long long) (pow((double)2, port->getSyncInterval()) *  1000000000.0));
+               waitTime = static_cast<uint64_t>(pow((double)2, port->getSyncInterval()) *  1000000000.0);
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startSyncIntervalTimer(waitTime);
 	}
@@ -2131,7 +2131,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 			int8_t initial_interval = port->getProfileAnnounceInterval();
 			port->setAnnounceInterval(initial_interval);
 			
-			waitTime = ((long long) (pow((double)2, port->getAnnounceInterval()) *  1000000000.0));
+                       waitTime = static_cast<uint64_t>(pow((double)2, port->getAnnounceInterval()) *  1000000000.0);
 			waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 			port->startAnnounceIntervalTimer(waitTime);
 			
@@ -2149,7 +2149,7 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 		else {
 			port->setAnnounceInterval(announceInterval);
 
-			waitTime = ((long long) (pow((double)2, port->getAnnounceInterval()) *  1000000000.0));
+                       waitTime = static_cast<uint64_t>(pow((double)2, port->getAnnounceInterval()) *  1000000000.0);
 			waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 			port->startAnnounceIntervalTimer(waitTime);
 		}
