@@ -401,18 +401,23 @@ int _tmain(int argc, _TCHAR* argv[])
 		portInit.clock->setClockQuality(quality);
 
 		if (!wireless)
-		{
-			// Create Port Object linked to clock and low level
-			portInit.phy_delay = &ether_phy_delay;
-			EtherPort *eport = new EtherPort(&portInit);
-			gptp_ether_port = eport; // Set global pointer for watchdog
-			eport->setLinkSpeed( findLinkSpeed( static_cast <LinkLayerAddress *> ( portInit.net_label )));
-			port = eport;
-			if (!eport->init_port()) {
-				printf("Failed to initialize port\n");
-				return -1;
-			}
-			port->processEvent(POWERUP);
+		{		// Create Port Object linked to clock and low level
+		GPTP_LOG_STATUS("*** MAIN: About to create EtherPort ***");
+		portInit.phy_delay = &ether_phy_delay;
+		EtherPort *eport = new EtherPort(&portInit);
+		GPTP_LOG_STATUS("*** MAIN: EtherPort created successfully ***");
+		gptp_ether_port = eport; // Set global pointer for watchdog
+		GPTP_LOG_STATUS("*** MAIN: About to set link speed ***");
+		eport->setLinkSpeed( findLinkSpeed( static_cast <LinkLayerAddress *> ( portInit.net_label )));
+		GPTP_LOG_STATUS("*** MAIN: Link speed set successfully ***");
+		port = eport;
+		GPTP_LOG_STATUS("*** MAIN: About to initialize port ***");
+		if (!eport->init_port()) {
+			printf("Failed to initialize port\n");
+			return -1;
+		}
+		GPTP_LOG_STATUS("*** MAIN: Port initialized successfully, about to process POWERUP event ***");
+		port->processEvent(POWERUP);
 		} else
 		{
 			if (i < argc)
@@ -433,18 +438,26 @@ int _tmain(int argc, _TCHAR* argv[])
 			}
 		}
 
-		// Setup and start watchdog monitoring
-		if (watchdog_setup() != 0) {
-			GPTP_LOG_ERROR("Failed to setup watchdog, continuing without watchdog support");
-		}
+	// Setup and start watchdog monitoring
+	GPTP_LOG_STATUS("*** MAIN: About to setup watchdog ***");
+	if (watchdog_setup() != 0) {
+		GPTP_LOG_ERROR("Failed to setup watchdog, continuing without watchdog support");
+	} else {
+		GPTP_LOG_STATUS("*** MAIN: Watchdog setup completed successfully ***");
+	}
 
-		// Wait for Ctrl-C
-		if( !SetConsoleCtrlHandler( ctrl_handler, true )) {
-			printf( "Unable to register Ctrl-C handler\n" );
-			return -1;
-		}
+	// Wait for Ctrl-C
+	GPTP_LOG_STATUS("*** MAIN: About to register Ctrl-C handler ***");
+	if( !SetConsoleCtrlHandler( ctrl_handler, true )) {
+		printf( "Unable to register Ctrl-C handler\n" );
+		return -1;
+	}
+	GPTP_LOG_STATUS("*** MAIN: Ctrl-C handler registered, entering main loop ***");
 
-		while( !exit_flag ) Sleep( 1200 );
+	while( !exit_flag ) {
+		Sleep( 1200 );
+		GPTP_LOG_DEBUG("*** MAIN: Main loop iteration (exit_flag=%s) ***", exit_flag ? "true" : "false");
+	}
 
 		GPTP_LOG_STATUS("*** MAIN: Exiting normally at end of _tmain() ***");
 		// Cleanup link monitoring before exiting
@@ -455,9 +468,11 @@ int _tmain(int argc, _TCHAR* argv[])
 		return 0;
 	} catch (const std::exception& ex) {
 		GPTP_LOG_ERROR("*** TOP-LEVEL EXCEPTION in main: %s", ex.what());
+		GPTP_LOG_ERROR("*** Exception occurred during main execution - stack trace may be available ***");
 		return 1;
 	} catch (...) {
 		GPTP_LOG_ERROR("*** TOP-LEVEL UNKNOWN EXCEPTION in main() - aborting");
+		GPTP_LOG_ERROR("*** Unknown exception occurred during main execution ***");
 		return 1;
 	}
 }
