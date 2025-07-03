@@ -394,6 +394,9 @@ void *EtherPort::openPort( EtherPort *port )
 
             // Log before every recv call
             GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call recv() - loop #%llu", loop_counter);
+            // Add a flush to ensure log is written before possible crash
+            fflush(stdout);
+            fflush(stderr);
             rrecv = recv( &remote, buf, length, link_speed );
             GPTP_LOG_DEBUG("*** NETWORK THREAD: recv() returned %d - loop #%llu", rrecv, loop_counter);
 

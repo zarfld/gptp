@@ -156,6 +156,7 @@ int parseMacAddr( _TCHAR *macstr, uint8_t *octet_string ) {
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+	GPTP_LOG_STATUS("*** MAIN: Entered _tmain() ***");
 	try {
 		PortInit_t portInit;
 	
@@ -217,6 +218,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		// If there are no arguments, output usage
 		if (1 == argc) {
+			GPTP_LOG_STATUS("*** MAIN: Exiting due to missing arguments (argc==1) ***");
 			print_usage(argv[0]);
 			return -1;
 		}
@@ -444,6 +446,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		while( !exit_flag ) Sleep( 1200 );
 
+		GPTP_LOG_STATUS("*** MAIN: Exiting normally at end of _tmain() ***");
 		// Cleanup link monitoring before exiting
 		cleanupLinkMonitoring();
 
