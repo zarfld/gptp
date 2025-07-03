@@ -389,7 +389,7 @@ bool CommonPort::restoreSerializedState
 }
 
 void CommonPort::startSyncReceiptTimer
-( long long unsigned int waitTime )
+( uint64_t waitTime )
 {
 	clock->getTimerQLock();
 	syncReceiptTimerLock->lock();
@@ -410,7 +410,7 @@ void CommonPort::stopSyncReceiptTimer( void )
 }
 
 void CommonPort::startSyncIntervalTimer
-( long long unsigned int waitTime )
+( uint64_t waitTime )
 {
 	if( syncIntervalTimerLock->trylock() == oslock_fail ) return;
 	clock->deleteEventTimerLocked(this, SYNC_INTERVAL_TIMEOUT_EXPIRES);
@@ -420,7 +420,7 @@ void CommonPort::startSyncIntervalTimer
 }
 
 void CommonPort::startAnnounceIntervalTimer
-( long long unsigned int waitTime )
+( uint64_t waitTime )
 {
 	announceIntervalTimerLock->lock();
 	clock->deleteEventTimerLocked
