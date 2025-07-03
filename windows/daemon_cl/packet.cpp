@@ -51,18 +51,36 @@ extern EtherPort *gptp_ether_port;
 
 void update_network_thread_heartbeat() {
     GPTP_LOG_DEBUG("update_network_thread_heartbeat: ENTER (thread_id=%lu, gptp_ether_port=%p)\n", GetCurrentThreadId(), gptp_ether_port);
-    if (gptp_ether_port) {
-        auto tid = GetCurrentThreadId();
-        gptp_ether_port->network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
-        ULONGLONG now_gk = GetTickCount64();
-        LARGE_INTEGER qpc;
-        QueryPerformanceCounter(&qpc);
-        // Store QPC ticks for liveness/activity, not GetTickCount64
-        gptp_ether_port->network_thread_last_activity.store((uint64_t)qpc.QuadPart, std::memory_order_relaxed);
-        GPTP_LOG_DEBUG("update_network_thread_heartbeat: thread_id=%lu, GetTickCount64()=%llu ms, QPC=%lld, gptp_ether_port=%p, heartbeat=%llu, last_activity(QPC)=%llu\n",
-               tid, now_gk, qpc.QuadPart, gptp_ether_port, gptp_ether_port->network_thread_heartbeat.load(), gptp_ether_port->network_thread_last_activity.load());
-    } else {
+    
+    // Add more defensive checks
+    if (!gptp_ether_port) {
         GPTP_LOG_DEBUG("update_network_thread_heartbeat: gptp_ether_port=NULL (thread_id=%lu)\n", GetCurrentThreadId());
+        return;
+    }
+    
+    // Check if the pointer is valid with defensive checks
+    try {
+        // Test if we can access the object safely
+        if (gptp_ether_port != nullptr) {
+            auto tid = GetCurrentThreadId();
+            gptp_ether_port->network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
+            ULONGLONG now_gk = GetTickCount64();
+            LARGE_INTEGER qpc;
+            if (QueryPerformanceCounter(&qpc) != 0) {
+                // Store QPC ticks for liveness/activity, not GetTickCount64
+                gptp_ether_port->network_thread_last_activity.store((uint64_t)qpc.QuadPart, std::memory_order_relaxed);
+                GPTP_LOG_DEBUG("update_network_thread_heartbeat: thread_id=%lu, GetTickCount64()=%llu ms, QPC=%lld, gptp_ether_port=%p, heartbeat=%llu, last_activity(QPC)=%llu\n",
+                       tid, now_gk, qpc.QuadPart, gptp_ether_port, gptp_ether_port->network_thread_heartbeat.load(), gptp_ether_port->network_thread_last_activity.load());
+            } else {
+                GPTP_LOG_ERROR("*** ERROR: QueryPerformanceCounter failed in update_network_thread_heartbeat ***");
+            }
+        } else {
+            GPTP_LOG_ERROR("*** ERROR: gptp_ether_port is null in update_network_thread_heartbeat ***");
+        }
+    } catch (...) {
+        GPTP_LOG_ERROR("*** FATAL: Exception in update_network_thread_heartbeat - gptp_ether_port pointer is invalid! (thread_id=%lu, ptr=%p) ***", GetCurrentThreadId(), gptp_ether_port);
+        // Don't access the pointer anymore
+        gptp_ether_port = nullptr;
     }
 }
 

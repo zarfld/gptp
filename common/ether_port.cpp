@@ -345,15 +345,37 @@ void EtherPort::processMessage
 
 void *EtherPort::openPort( EtherPort *port )
 {
-    GPTP_LOG_STATUS("*** EtherPort::openPort ENTRY (thread_id=%lu, port=%p) ***", (unsigned long)GetCurrentThreadId(), port);
+    // Stack canary to detect stack overflow
+    const uint32_t stack_canary = 0xDEADBEEF;
+    volatile uint32_t stack_check = stack_canary;
+    
+    GPTP_LOG_STATUS("*** EtherPort::openPort ENTRY (thread_id=%lu, port=%p, stack_canary=%08x, stack_ptr=%p) ***", 
+        (unsigned long)GetCurrentThreadId(), port, stack_canary, (void*)&stack_check);
+    
     port_ready_condition->signal();
     setListeningThreadRunning(true);
 
-    // Heartbeat: set initial value
-    network_thread_heartbeat.store(0, std::memory_order_relaxed);
-    LARGE_INTEGER qpc_init;
-    QueryPerformanceCounter(&qpc_init);
-    network_thread_last_activity.store((uint64_t)qpc_init.QuadPart, std::memory_order_relaxed); // Use QPC ticks for consistency with watchdog
+    // Heartbeat: set initial value with defensive checks
+    if (!port) {
+        GPTP_LOG_ERROR("*** FATAL: EtherPort::openPort called with NULL port pointer! ***");
+        return (void*)1;
+    }
+    
+    // Initialize heartbeat with defensive checks (removed SEH to avoid C2713/C2712 errors)
+    try {
+        network_thread_heartbeat.store(0, std::memory_order_relaxed);
+        LARGE_INTEGER qpc_init;
+        if (QueryPerformanceCounter(&qpc_init) == 0) {
+            GPTP_LOG_ERROR("*** ERROR: QueryPerformanceCounter failed during initialization ***");
+            // Fall back to GetTickCount64 if QPC fails
+            network_thread_last_activity.store(GetTickCount64(), std::memory_order_relaxed);
+        } else {
+            network_thread_last_activity.store((uint64_t)qpc_init.QuadPart, std::memory_order_relaxed);
+        }
+    } catch (...) {
+        GPTP_LOG_ERROR("*** FATAL: Exception initializing heartbeat in openPort (thread_id=%lu, port=%p) ***", (unsigned long)GetCurrentThreadId(), port);
+        return (void*)1;
+    }
 
     GPTP_LOG_STATUS("*** NETWORK THREAD: Starting packet reception loop ***");
     uint64_t loop_counter = 0;
@@ -369,11 +391,24 @@ void *EtherPort::openPort( EtherPort *port )
             
             loop_counter++;
 
-            // Heartbeat: update on every loop
-            network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
-            LARGE_INTEGER qpc_loop;
-            QueryPerformanceCounter(&qpc_loop);
-            network_thread_last_activity.store((uint64_t)qpc_loop.QuadPart, std::memory_order_relaxed);
+            // Heartbeat: update on every loop with defensive checks
+            try {
+                if (&network_thread_heartbeat != nullptr && &network_thread_last_activity != nullptr) {
+                    network_thread_heartbeat.fetch_add(1, std::memory_order_relaxed);
+                    LARGE_INTEGER qpc_loop;
+                    if (QueryPerformanceCounter(&qpc_loop) != 0) {
+                        network_thread_last_activity.store((uint64_t)qpc_loop.QuadPart, std::memory_order_relaxed);
+                    } else {
+                        GPTP_LOG_ERROR("*** ERROR: QueryPerformanceCounter failed in main loop ***");
+                    }
+                } else {
+                    GPTP_LOG_ERROR("*** FATAL: Heartbeat pointers are null in main loop ***");
+                    break;
+                }
+            } catch (...) {
+                GPTP_LOG_ERROR("*** FATAL: Exception updating heartbeat in main loop (loop_counter=%llu, thread_id=%lu) ***", loop_counter, (unsigned long)GetCurrentThreadId());
+                break;
+            }
 
             // Log thread activity every 100 loops to prove thread is alive
             if (loop_counter % 100 == 0) {
@@ -439,6 +474,13 @@ void *EtherPort::openPort( EtherPort *port )
     } catch (...) {
         GPTP_LOG_ERROR("*** NETWORK THREAD: Unhandled unknown exception caught (loop_counter=%llu) ***", loop_counter);
     }
+    
+    // Final stack canary check
+    if (stack_check != stack_canary) {
+        GPTP_LOG_ERROR("*** FATAL: Stack overflow detected at exit! Canary corrupted: expected=%08x, got=%08x ***", 
+            stack_canary, stack_check);
+    }
+    
     GPTP_LOG_ERROR("*** NETWORK THREAD: Listening thread terminated - loop_counter=%llu (reason: loop exit) ***", loop_counter);
     setListeningThreadRunning(false);
     return NULL;
@@ -1187,6 +1229,13 @@ void EtherPort::startPDelayIntervalTimer
 	GPTP_LOG_DEBUG("startPDelayIntervalTimer() called with waitTime=%llu ns (%.3f ms) ***", 
 		waitTime, waitTime / 1000000.0);
     GPTP_LOG_DEBUG("*** NETWORK THREAD: About to acquire pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
+    
+    // Check if lock pointer is valid before using it
+    if (!pDelayIntervalTimerLock) {
+        GPTP_LOG_ERROR("*** FATAL: pDelayIntervalTimerLock is NULL! Cannot proceed. ***");
+        return;
+    }
+    
     pDelayIntervalTimerLock->lock();
     GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
 	clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
