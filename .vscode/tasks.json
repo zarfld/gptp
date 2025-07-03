@@ -19,19 +19,21 @@
       "type": "shell",
       "windows": {
         "command": "cmake",
-        "args": [ "--version" ]
+        "args": [
+          "--version"
+        ]
       },
       "group": "build",
       "problemMatcher": []
     },
-
     {
       "label": "Configure project",
       "type": "shell",
       "windows": {
         "command": "cmake",
         "args": [
-          "-B", "build",
+          "-B",
+          "build",
           "-DCMAKE_BUILD_TYPE=Release"
         ]
       },
@@ -48,8 +50,10 @@
       "windows": {
         "command": "cmake",
         "args": [
-          "--build", "build",
-          "--config", "Release"
+          "--build",
+          "build",
+          "--config",
+          "Release"
         ]
       },
       "dependsOn": [
@@ -58,13 +62,14 @@
       "group": "build",
       "problemMatcher": []
     },
-        {
+    {
       "label": "Configure Debug",
       "type": "shell",
       "windows": {
         "command": "cmake",
         "args": [
-          "-B", "build",
+          "-B",
+          "build",
           "-DCMAKE_BUILD_TYPE=Debug"
         ]
       },
@@ -81,8 +86,10 @@
       "windows": {
         "command": "cmake",
         "args": [
-          "--build", "build",
-          "--config", "Debug"
+          "--build",
+          "build",
+          "--config",
+          "Debug"
         ]
       },
       "dependsOn": [
@@ -95,35 +102,75 @@
       "label": "Debug gptp",
       "type": "shell",
       "windows": {
-          "command": "powershell",
-          "args": [
-            "-NoProfile",
-            "-Command",
-            "$mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*''  } | Select-Object -First 1 -ExpandProperty MacAddress);",
-            "& 'build\\Debug\\gptp.exe' $mac -debug-packets"
-          ]
-        },
-        "dependsOn": [
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-Command",
+          "$mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*'' } | Select-Object -First 1 -ExpandProperty MacAddress);",
+          "& 'build\\Debug\\gptp.exe' $mac -debug-packets"
+        ]
+      },
+      "dependsOn": [
         "Build project Debug"
       ],
       "group": "build",
       "problemMatcher": []
     },
     {
-      "label": "Debug gptp with Milan",
+      "label": "Debug gptp with Milan (Admin)",
       "type": "shell",
       "windows": {
-          "command": "powershell",
-          "args": [
-            "-NoProfile",
-            "-Command",
-            "$mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*''  } | Select-Object -First 1 -ExpandProperty MacAddress);",
-            "& 'build\\Debug\\gptp.exe' -Milan $mac -debug-packets"
-          ]
-        },
-        "dependsOn": [
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          " $ts = Get-Date -Format yyyyMMdd_HHmmss; " +
+          " $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*'' } | Select-Object -First 1 -ExpandProperty MacAddress); " +
+          " $log = \"build\\Debug\\gptp_$ts.log\"; " +
+          " $err = \"build\\Debug\\gptp_$ts.err\"; " +
+          " try { & 'build\\Debug\\gptp.exe' -Milan $mac -debug-packets 2>&1 | Tee-Object -FilePath \"build\\Debug\\gptp_$ts.log\"; Write-Host \"gptp execution completed. Log saved to build\\Debug\\gptp_$ts.log\"; } " +
+          " catch { $_ | Out-File -FilePath \"build\\Debug\\gptp_$ts.err\" -Append; Write-Host \"Error occurred. Details in build\\Debug\\gptp_$ts.err\"; }"
+        ]
+      },
+      "dependsOn": [
         "Build project Debug"
       ],
+      "group": "build",
+      "problemMatcher": []
+    },
+
+
+    {
+      "label": "View Latest gptp Log",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "$latestLog = Get-ChildItem -Path 'build\\Debug\\gptp*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($latestLog) { Write-Host \"=== Latest gptp log file: $($latestLog.Name) (Size: $([math]::Round($latestLog.Length/1KB, 2)) KB) ===\"; Write-Host ''; Get-Content $latestLog.FullName | Select-Object -Last 100; Write-Host ''; Write-Host '=== End of log (last 100 lines) ==='; } else { Write-Host 'No gptp log files found in build\\Debug\\'; Get-ChildItem -Path 'build\\Debug\\' | Where-Object { $_.Name -like '*gptp*' } | Format-Table Name, Length, LastWriteTime; }"
+        ]
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean gptp Logs",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "Write-Host 'Cleaning up all gptp log files...'; $logFiles = Get-ChildItem -Path 'build\\Debug\\gptp*.log', 'build\\Debug\\gptp*.err' -ErrorAction SilentlyContinue; if ($logFiles) { $logFiles | ForEach-Object { Write-Host \"Removing: $($_.Name)\"; Remove-Item $_.FullName -Force; }; Write-Host \"Cleaned up $($logFiles.Count) log files.\"; } else { Write-Host 'No log files found to clean up.'; }"
+        ]
+      },
       "group": "build",
       "problemMatcher": []
     }
