@@ -166,7 +166,8 @@ bool WirelessPort::openPort()
 			break;
 		}
 	}
-
+	GPTP_LOG_DEBUG( "WirelessPort::openPort() returning false" );
+	// This is an infinite loop, so we should never reach here.
 	return false;
 }
 

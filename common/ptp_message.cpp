@@ -2086,6 +2086,8 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 		waitTime = ((long long) (pow(2.0, port->getPDelayInterval()) *  1000000000.0));
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startPDelayIntervalTimer(waitTime);
+		GPTP_LOG_DEBUG("Link delay interval reset to initial value: %d (%.3f seconds)", 
+			port->getPDelayInterval(), pow(2.0, (double)port->getPDelayInterval()));
 	}
 	else if (linkDelayInterval == PTPMessageSignalling::sigMsgInterval_NoSend) {
 		port->stopPDelayIntervalTimer();
@@ -2100,6 +2102,8 @@ void PTPMessageSignalling::processMessage( CommonPort *port )
 		waitTime = ((long long) (pow(2.0, port->getPDelayInterval()) *  1000000000.0));
 		waitTime = waitTime > EVENT_TIMER_GRANULARITY ? waitTime : EVENT_TIMER_GRANULARITY;
 		port->startPDelayIntervalTimer(waitTime);
+		GPTP_LOG_DEBUG("Link delay interval set to: %d (%.3f seconds)", 
+			port->getPDelayInterval(), pow(2.0, (double)port->getPDelayInterval()));
 	}
 
 	if (timeSyncInterval == PTPMessageSignalling::sigMsgInterval_Initial) {

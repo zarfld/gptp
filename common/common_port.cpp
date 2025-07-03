@@ -654,7 +654,9 @@ bool CommonPort::processEvent( Event e )
 	{
 	default:
 		// Unhandled event
+		
 		ret = _processEvent( e );
+		GPTP_LOG_ERROR("default switch - Unhandled event %d in CommonPort::processEvent()", e);
 		break;
 
 	case POWERUP:
@@ -730,11 +732,6 @@ bool CommonPort::processEvent( Event e )
 			getPortIdentity( dest_id );
 			annc->setPortIdentity( &dest_id );
 			
-			// Enhanced debug logging for announce message details
-			GPTP_LOG_VERBOSE("Announce message details: clockId=%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X, interval=%d", 
-				clock_id.getIdentity()[0], clock_id.getIdentity()[1], clock_id.getIdentity()[2], clock_id.getIdentity()[3],
-				clock_id.getIdentity()[4], clock_id.getIdentity()[5], clock_id.getIdentity()[6], clock_id.getIdentity()[7],
-				getAnnounceInterval());
 			
 			bool send_result = annc->sendPort( this, NULL );
 			if (send_result) {
@@ -805,8 +802,23 @@ bool CommonPort::processEvent( Event e )
 				     1000000000.0 ));
 
 		break;
+	case PDELAY_INTERVAL_TIMEOUT_EXPIRES:
+		GPTP_LOG_DEBUG("P_DELAY_INTERVAL_TIMEOUT_EXPIRES occured");
+		// If asCapable is true attempt some media specific action
+	// TODO: implement profile specific handling on that case
+		if( asCapable )
+			ret = _processEvent( e );
+		else
+			ret = true; // No action needed if not asCapable
+		
 	}
 
+	if( ret == false )
+	{
+		GPTP_LOG_ERROR
+			("CommonPort::processEvent: Unhandled event %d",
+			 e);
+	}
 	return ret;
 }
 

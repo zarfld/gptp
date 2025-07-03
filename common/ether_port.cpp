@@ -200,6 +200,8 @@ void EtherPort::startPDelay()
 				getProfile().profile_name.c_str(), pdelay_interval_ns, pdelay_interval_ns / 1000000000.0);
 			pdelay_started = true;
 			startPDelayIntervalTimer(pdelay_interval_ns);
+			GPTP_LOG_DEBUG("*** PDelay timer started with interval: %d (%.3f seconds) ***", 
+				getPDelayInterval(), pow(2.0, (double)getPDelayInterval()));
 		}
 	} else {
 		GPTP_LOG_WARNING("*** DEBUG: PDelay is halted, not starting timer ***");
@@ -904,8 +906,11 @@ bool EtherPort::_processEvent( Event e )
 				GPTP_LOG_DEBUG("Restarting PDelay timer with interval=%lld ns (%.3f ms) ***", 
 					interval, interval / 1000000.0);
 				startPDelayIntervalTimer(interval);
+				GPTP_LOG_DEBUG("Restarted PDelay interval timer with interval=%lld ns (%.3f ms)", 
+					interval, interval / 1000000.0);
 			}
 		}
+		ret = true;
 		break;
 	case SYNC_INTERVAL_TIMEOUT_EXPIRES:
 		{
@@ -1131,6 +1136,8 @@ bool EtherPort::_processEvent( Event e )
 		break;
 	}
 
+	GPTP_LOG_DEBUG("EtherPort::processEvent() returning %s", 
+		ret ? "true" : "false");
 	return ret;
 }
 
