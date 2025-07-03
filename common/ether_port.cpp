@@ -80,9 +80,12 @@ OSThreadExitCode watchNetLinkWrapper(void *arg)
 OSThreadExitCode openPortWrapper(void *arg)
 {
 	EtherPort *port;
-
+	GPTP_LOG_STATUS("*** openPortWrapper() called (thread_id=%lu, arg=%p) ***", (unsigned long)GetCurrentThreadId(), arg);
 	port = (EtherPort *) arg;
-	if (port->openPort(port) == NULL)
+	GPTP_LOG_STATUS("*** Calling port->openPort() (thread_id=%lu, port=%p) ***", (unsigned long)GetCurrentThreadId(), port);
+	void* result = port->openPort(port);
+	GPTP_LOG_STATUS("*** port->openPort() returned %p (thread_id=%lu, port=%p) ***", result, (unsigned long)GetCurrentThreadId(), port);
+	if (result == NULL)
 		return osthread_ok;
 	else
 		return osthread_error;
@@ -342,8 +345,8 @@ void EtherPort::processMessage
 
 void *EtherPort::openPort( EtherPort *port )
 {
+    GPTP_LOG_STATUS("*** EtherPort::openPort ENTRY (thread_id=%lu, port=%p) ***", (unsigned long)GetCurrentThreadId(), port);
     port_ready_condition->signal();
-
     setListeningThreadRunning(true);
 
     // Heartbeat: set initial value
@@ -531,77 +534,82 @@ void EtherPort::sendGeneralPort
 
 bool EtherPort::_processEvent( Event e )
 {
-	bool ret = false;
+    bool ret = false;
+    bool listenThreadOk = false; // Moved declaration here to avoid C2360 error
 
-	switch (e) {
-	case POWERUP:
-	case INITIALIZE:
-		// Start PDelay based on profile configuration
-		if( shouldStartPDelayOnLinkUp() )
-		{
-			if ( getPortState() != PTP_SLAVE &&
-			     getPortState() != PTP_MASTER )
-			{
-				GPTP_LOG_STATUS("Starting PDelay");
-				startPDelay();
-			}
-		}
-		else {
-			startPDelay();
-		}
+    switch (e) {
+    case POWERUP:
+    case INITIALIZE:
+        // Start PDelay based on profile configuration
+        if( shouldStartPDelayOnLinkUp() )
+        {
+            if ( getPortState() != PTP_SLAVE &&
+                 getPortState() != PTP_MASTER )
+            {
+                GPTP_LOG_STATUS("Starting PDelay");
+                startPDelay();
+            }
+        }
+        else {
+            startPDelay();
+        }
 
-		port_ready_condition->wait_prelock();
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait_prelock() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&ret);
+        port_ready_condition->wait_prelock();
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait_prelock() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&ret);
 
-		GPTP_LOG_STATUS("*** ATTEMPTING TO START LINK WATCH THREAD ***");
-		if( !linkWatch(watchNetLinkWrapper, (void *)this) )
-		{
-			GPTP_LOG_ERROR("*** FAILED TO CREATE LINK WATCH THREAD ***");
-			ret = false;
-			break;
-		}
-		GPTP_LOG_STATUS("*** LINK WATCH THREAD STARTED SUCCESSFULLY ***");
+        GPTP_LOG_STATUS("*** ATTEMPTING TO START LINK WATCH THREAD ***");
+        if( !linkWatch(watchNetLinkWrapper, (void *)this) )
+        {
+            GPTP_LOG_ERROR("*** FAILED TO CREATE LINK WATCH THREAD ***");
+            ret = false;
+            break;
+        }
+        GPTP_LOG_STATUS("*** LINK WATCH THREAD STARTED SUCCESSFULLY ***");
 
-		GPTP_LOG_STATUS("*** ATTEMPTING TO START LISTENING THREAD ***");
-		if( !linkOpen(openPortWrapper, (void *)this) )
-		{
-			GPTP_LOG_ERROR("Error creating port thread");
-			ret = false;
-			break;
-		}
+        GPTP_LOG_STATUS("*** ATTEMPTING TO START LISTENING THREAD ***");
+        GPTP_LOG_DEBUG("About to call linkOpen(openPortWrapper, this) (thread_id=%lu, stack_ptr=%p)", (unsigned long)GetCurrentThreadId(), (void*)this);
+        listenThreadOk = linkOpen(openPortWrapper, (void *)this);
+        GPTP_LOG_DEBUG("linkOpen(openPortWrapper, this) returned %d (thread_id=%lu, stack_ptr=%p)", (int)listenThreadOk, (unsigned long)GetCurrentThreadId(), (void*)this);
+        if( !listenThreadOk )
+        {
+            GPTP_LOG_ERROR("Error creating port thread (listening thread)!");
+            ret = false;
+            break;
+        }
+        GPTP_LOG_STATUS("*** LISTENING THREAD STARTED SUCCESSFULLY ***");
 
-		port_ready_condition->wait();
-		GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&ret);
+        port_ready_condition->wait();
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: port_ready_condition->wait() returned (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&ret);
 
-		if( getProfile().automotive_test_status )
-		{
-			setStationState(STATION_STATE_ETHERNET_READY);
-			if (getTestMode())
-			{
-				APMessageTestStatus *testStatusMsg = new APMessageTestStatus(this);
-				if (testStatusMsg) {
-					testStatusMsg->sendPort(this);
-					delete testStatusMsg;
-				}
-			}
-			if (!isGM) {
-				// Send an initial signalling message
-				PTPMessageSignalling *sigMsg = new PTPMessageSignalling(this);
-				if (sigMsg) {
-					sigMsg->setintervals(PTPMessageSignalling::sigMsgInterval_NoSend, getSyncInterval(), PTPMessageSignalling::sigMsgInterval_NoSend);
-					sigMsg->sendPort(this, NULL);
-					delete sigMsg;
-				}
+        if( getProfile().automotive_test_status )
+        {
+            setStationState(STATION_STATE_ETHERNET_READY);
+            if (getTestMode())
+            {
+                APMessageTestStatus *testStatusMsg = new APMessageTestStatus(this);
+                if (testStatusMsg) {
+                    testStatusMsg->sendPort(this);
+                    delete testStatusMsg;
+                }
+            }
+            if (!isGM) {
+                // Send an initial signalling message
+                PTPMessageSignalling *sigMsg = new PTPMessageSignalling(this);
+                if (sigMsg) {
+                    sigMsg->setintervals(PTPMessageSignalling::sigMsgInterval_NoSend, getSyncInterval(), PTPMessageSignalling::sigMsgInterval_NoSend);
+                    sigMsg->sendPort(this, NULL);
+                    delete sigMsg;
+                }
 
-				startSyncReceiptTimer((unsigned long long)
-					 (SYNC_RECEIPT_TIMEOUT_MULTIPLIER *
-					  ((double) pow((double)2, getSyncInterval()) *
-					   1000000000.0)));
-			}
-		}
+                startSyncReceiptTimer((unsigned long long)
+                     (SYNC_RECEIPT_TIMEOUT_MULTIPLIER *
+                      ((double) pow((double)2, getSyncInterval()) *
+                       1000000000.0)));
+            }
+        }
 
-		ret = true;
-		break;
+        ret = true;
+        break;
 	case STATE_CHANGE_EVENT:
 		// Profile-specific handling of state change events
 		if (getProfile().bmca_enabled == false)
