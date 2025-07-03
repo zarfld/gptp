@@ -47,6 +47,22 @@
 
 #include <math.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#endif
+
+static uint64_t get_current_thread_id() {
+#ifdef _WIN32
+    return (uint64_t)GetCurrentThreadId();
+#else
+    return (uint64_t)syscall(SYS_gettid);
+#endif
+}
+
 std::string ClockIdentity::getIdentityString()
 {
 	uint8_t cid[PTP_CLOCK_IDENTITY_LENGTH];
@@ -246,9 +262,57 @@ void IEEE1588Clock::addEventTimer
 void IEEE1588Clock::addEventTimerLocked
 ( CommonPort *target, Event e, unsigned long long time_ns )
 {
-    if( getTimerQLock() == oslock_fail ) return;
-	addEventTimer( target, e, time_ns );
-    if( putTimerQLock() == oslock_fail ) return;
+    GPTP_LOG_DEBUG("*** addEventTimerLocked: target=%p, event=%d, time_ns=%llu, thread_id=%llu ***", 
+        target, (int)e, time_ns, get_current_thread_id());
+    
+    // Check for null pointers first
+    if (!target) {
+        GPTP_LOG_ERROR("*** FATAL: addEventTimerLocked called with NULL target pointer! ***");
+        return;
+    }
+    
+    if (!timerq) {
+        GPTP_LOG_ERROR("*** FATAL: addEventTimerLocked called with NULL timerq! ***");
+        return;
+    }
+    
+    GPTP_LOG_DEBUG("*** addEventTimerLocked: About to acquire timer queue lock ***");
+    OSLockResult lock_result = getTimerQLock();
+    if( lock_result == oslock_fail ) {
+        GPTP_LOG_ERROR("*** ERROR: Failed to acquire timer queue lock in addEventTimerLocked (result=%d) ***", (int)lock_result);
+        return;
+    }
+    GPTP_LOG_DEBUG("*** addEventTimerLocked: Timer queue lock acquired successfully (result=%d) ***", (int)lock_result);
+    
+    try {
+        GPTP_LOG_DEBUG("*** addEventTimerLocked: About to call addEventTimer ***");
+        addEventTimer( target, e, time_ns );
+        GPTP_LOG_DEBUG("*** addEventTimerLocked: addEventTimer completed successfully ***");
+    } catch (const std::exception& ex) {
+        GPTP_LOG_ERROR("*** FATAL: Exception in addEventTimer: %s ***", ex.what());
+        // Always release the lock on exception
+        OSLockResult unlock_result = putTimerQLock();
+        if (unlock_result == oslock_fail) {
+            GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock after exception! ***");
+        }
+        return;
+    } catch (...) {
+        GPTP_LOG_ERROR("*** FATAL: Unknown exception in addEventTimer ***");
+        // Always release the lock on exception
+        OSLockResult unlock_result = putTimerQLock();
+        if (unlock_result == oslock_fail) {
+            GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock after unknown exception! ***");
+        }
+        return;
+    }
+    
+    GPTP_LOG_DEBUG("*** addEventTimerLocked: About to release timer queue lock ***");
+    OSLockResult unlock_result = putTimerQLock();
+    if( unlock_result == oslock_fail ) {
+        GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock in addEventTimerLocked (result=%d) ***", (int)unlock_result);
+        return;
+    }
+    GPTP_LOG_DEBUG("*** addEventTimerLocked: Timer queue lock released successfully (result=%d) ***", (int)unlock_result);
 }
 
 
@@ -262,12 +326,60 @@ void IEEE1588Clock::deleteEventTimer
 void IEEE1588Clock::deleteEventTimerLocked
 ( CommonPort *target, Event event )
 {
-    if( getTimerQLock() == oslock_fail ) return;
+    GPTP_LOG_DEBUG("*** deleteEventTimerLocked: target=%p, event=%d, thread_id=%llu ***", 
+        target, (int)event, get_current_thread_id());
+    
+    // Check for null pointers first
+    if (!target) {
+        GPTP_LOG_ERROR("*** ERROR: deleteEventTimerLocked called with NULL target pointer! ***");
+        return;
+    }
+    
+    if (!timerq) {
+        GPTP_LOG_ERROR("*** FATAL: deleteEventTimerLocked called with NULL timerq! ***");
+        return;
+    }
+    
+    GPTP_LOG_DEBUG("*** deleteEventTimerLocked: About to acquire timer queue lock ***");
+    OSLockResult lock_result = getTimerQLock();
+    if( lock_result == oslock_fail ) {
+        GPTP_LOG_ERROR("*** ERROR: Failed to acquire timer queue lock in deleteEventTimerLocked (result=%d) ***", (int)lock_result);
+        return;
+    }
+    GPTP_LOG_DEBUG("*** deleteEventTimerLocked: Timer queue lock acquired successfully (result=%d) ***", (int)lock_result);
 
-	timerq->cancelEvent((int)event, NULL);
+    try {
+        GPTP_LOG_DEBUG("*** deleteEventTimerLocked: About to call timerq->cancelEvent ***");
+        timerq->cancelEvent((int)event, NULL);
+        GPTP_LOG_DEBUG("*** deleteEventTimerLocked: timerq->cancelEvent completed successfully ***");
+    } catch (const std::exception& ex) {
+        GPTP_LOG_ERROR("*** FATAL: Exception in timerq->cancelEvent: %s ***", ex.what());
+        // Always release the lock on exception
+        OSLockResult unlock_result = putTimerQLock();
+        if (unlock_result == oslock_fail) {
+            GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock after exception! ***");
+        }
+        return;
+    } catch (...) {
+        GPTP_LOG_ERROR("*** FATAL: Unknown exception in timerq->cancelEvent ***");
+        // Always release the lock on exception
+        OSLockResult unlock_result = putTimerQLock();
+        if (unlock_result == oslock_fail) {
+            GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock after unknown exception! ***");
+        }
+        return;
+    }
 
-    if( putTimerQLock() == oslock_fail ) return;
+    GPTP_LOG_DEBUG("*** deleteEventTimerLocked: About to release timer queue lock ***");
+    OSLockResult unlock_result = putTimerQLock();
+    if( unlock_result == oslock_fail ) {
+        GPTP_LOG_ERROR("*** CRITICAL: Failed to release timer queue lock in deleteEventTimerLocked (result=%d) ***", (int)unlock_result);
+        return;
+    }
+    GPTP_LOG_DEBUG("*** deleteEventTimerLocked: Timer queue lock released successfully (result=%d) ***", (int)unlock_result);
 }
+
+
 
 FrequencyRatio IEEE1588Clock::calcLocalSystemClockRateDifference( Timestamp local_time, Timestamp system_time ) {
 	unsigned long long inter_system_time;

@@ -361,8 +361,17 @@ void *EtherPort::openPort( EtherPort *port )
     GPTP_LOG_STATUS("*** EtherPort::openPort ENTRY (thread_id=%lu, port=%p, stack_canary=%08x, stack_ptr=%p) ***", 
         (unsigned long)GetCurrentThreadId(), port, stack_canary, (void*)&stack_check);
     
+    GPTP_LOG_STATUS("*** NETWORK THREAD: About to signal port_ready_condition ***");
+    if (!port_ready_condition) {
+        GPTP_LOG_ERROR("*** FATAL: port_ready_condition is NULL! ***");
+        return (void*)1;
+    }
     port_ready_condition->signal();
+    GPTP_LOG_STATUS("*** NETWORK THREAD: port_ready_condition->signal() completed ***");
+    
+    GPTP_LOG_STATUS("*** NETWORK THREAD: About to set listening thread running ***");
     setListeningThreadRunning(true);
+    GPTP_LOG_STATUS("*** NETWORK THREAD: setListeningThreadRunning(true) completed ***");
 
     // Heartbeat: set initial value with defensive checks
     if (!port) {
@@ -370,6 +379,7 @@ void *EtherPort::openPort( EtherPort *port )
         return (void*)1;
     }
     
+    GPTP_LOG_STATUS("*** NETWORK THREAD: About to initialize heartbeat ***");
     // Initialize heartbeat with defensive checks (removed SEH to avoid C2713/C2712 errors)
     try {
         network_thread_heartbeat.store(0, std::memory_order_relaxed);
@@ -381,6 +391,7 @@ void *EtherPort::openPort( EtherPort *port )
         } else {
             network_thread_last_activity.store((uint64_t)qpc_init.QuadPart, std::memory_order_relaxed);
         }
+        GPTP_LOG_STATUS("*** NETWORK THREAD: Heartbeat initialization completed ***");
     } catch (...) {
         GPTP_LOG_ERROR("*** FATAL: Exception initializing heartbeat in openPort (thread_id=%lu, port=%p) ***", (unsigned long)GetCurrentThreadId(), port);
         return (void*)1;
@@ -1265,8 +1276,30 @@ void EtherPort::startPDelayIntervalTimer
     
     pDelayIntervalTimerLock->lock();
     GPTP_LOG_DEBUG("*** NETWORK THREAD: Acquired pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
-	clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
-	clock->addEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES, waitTime);
+    
+    // Defensive check for clock pointer before timer operations
+    if (!clock) {
+        GPTP_LOG_ERROR("*** FATAL: clock pointer is NULL in startPDelayIntervalTimer! ***");
+        pDelayIntervalTimerLock->unlock();
+        return;
+    }
+    
+    try {
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call clock->deleteEventTimerLocked ***");
+        clock->deleteEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES);
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: About to call clock->addEventTimerLocked ***");
+        clock->addEventTimerLocked(this, PDELAY_INTERVAL_TIMEOUT_EXPIRES, waitTime);
+        GPTP_LOG_DEBUG("*** NETWORK THREAD: Clock timer operations completed successfully ***");
+    } catch (const std::exception& ex) {
+        GPTP_LOG_ERROR("*** FATAL: Exception in clock timer operations: %s ***", ex.what());
+        pDelayIntervalTimerLock->unlock();
+        return;
+    } catch (...) {
+        GPTP_LOG_ERROR("*** FATAL: Unknown exception in clock timer operations ***");
+        pDelayIntervalTimerLock->unlock();
+        return;
+    }
+    
     GPTP_LOG_DEBUG("*** NETWORK THREAD: About to release pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
     pDelayIntervalTimerLock->unlock();
     GPTP_LOG_DEBUG("*** NETWORK THREAD: Released pDelayIntervalTimerLock (thread_id=%lu, stack_ptr=%p) ***", (unsigned long)GetCurrentThreadId(), (void*)&waitTime);
