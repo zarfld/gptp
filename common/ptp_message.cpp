@@ -175,7 +175,7 @@ PTPMessageCommon *buildPTPMessage
 	uint16_t port_num;
 	sourcePortIdentity->getClockIdentityString(clock_id_str);
 	sourcePortIdentity->getPortNumber(&port_num);
-	GPTP_LOG_STATUS("Received message type %d, sequenceId %u, sourcePortIdentity %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%u",
+	GPTP_LOG_DEBUG("Received message type %d, sequenceId %u, sourcePortIdentity %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%u",
 		messageType, sequenceId, 
 		clock_id_str[0], clock_id_str[1], clock_id_str[2], clock_id_str[3],
 		clock_id_str[4], clock_id_str[5], clock_id_str[6], clock_id_str[7], port_num);
@@ -1256,7 +1256,7 @@ PTPMessagePathDelayReq::PTPMessagePathDelayReq
 void PTPMessagePathDelayReq::processMessage( CommonPort *port )
 {
 	GPTP_LOG_INFO("*** PTPMessagePathDelayReq::processMessage - START processing PDelay Request");
-	GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Processing request seq=%u", sequenceId);
+	GPTP_LOG_DEBUG("PDELAY RESPONSE: Processing request seq=%u", sequenceId);
 	
 	OSTimer *timer = port->getTimerFactory()->createTimer();
 	PortIdentity resp_fwup_id;
@@ -1269,20 +1269,20 @@ void PTPMessagePathDelayReq::processMessage( CommonPort *port )
 	if (eport == NULL)
 	{
 		GPTP_LOG_ERROR( "Received Pdelay Request on wrong port type" );
-		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: FAILED - wrong port type");
+		GPTP_LOG_DEBUG("PDELAY RESPONSE: FAILED - wrong port type");
 		goto done;
 	}
 
-	GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: Port state check - current state: %d", port->getPortState());
+	GPTP_LOG_DEBUG("PDELAY RESPONSE: Port state check - current state: %d", port->getPortState());
 	if (port->getPortState() == PTP_DISABLED) {
 		// Do nothing all messages should be ignored when in this state
-		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: SKIPPED - port disabled");
+		GPTP_LOG_DEBUG("PDELAY RESPONSE: SKIPPED - port disabled");
 		goto done;
 	}
 
 	if (port->getPortState() == PTP_FAULTY) {
 		// According to spec recovery is implementation specific
-		GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: RECOVERING - port faulty");
+		GPTP_LOG_DEBUG("PDELAY RESPONSE: RECOVERING - port faulty");
 		eport->recoverPort();
 		goto done;
 	}
@@ -1290,7 +1290,7 @@ void PTPMessagePathDelayReq::processMessage( CommonPort *port )
 	port->incCounter_ieee8021AsPortStatRxPdelayRequest();
 
 	GPTP_LOG_INFO("*** PTPMessagePathDelayReq::processMessage - passed state checks, creating response");
-	GPTP_LOG_STATUS("*** PDELAY RESPONSE DEBUG: State checks passed - creating PDelay Response");
+	GPTP_LOG_DEBUG("PDELAY RESPONSE: State checks passed - creating PDelay Response");
 
 	/* Generate and send message */
 	resp = new PTPMessagePathDelayResp(eport);
