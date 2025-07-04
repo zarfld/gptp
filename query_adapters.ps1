@@ -47,3 +47,35 @@ if ($pnpDevices) {
         Write-Host "  Status: $($device.Status)"
     }
 }
+
+# === Intel WMI/PROSet Advanced Query ===
+Write-Host ""; Write-Host "Checking for Intel WMI/PROSet classes..." -ForegroundColor Cyan
+$intelNamespaces = @("root\IntelNCS2", "root\IntelNCS", "root\Intel", "root\IntelManagement")
+foreach ($ns in $intelNamespaces) {
+    try {
+        $classes = Get-WmiObject -Namespace $ns -List -ErrorAction Stop
+        if ($classes) {
+            Write-Host "Found classes in $ns:" -ForegroundColor Yellow
+            foreach ($class in $classes) {
+                Write-Host "  $($class.Name)" -ForegroundColor White
+            }
+            # For each class, show properties and methods (first instance only)
+            foreach ($class in $classes | Select-Object -First 3) {
+                Write-Host "\nClass: $($class.Name)" -ForegroundColor Cyan
+                $instances = Get-WmiObject -Namespace $ns -Class $class.Name -ErrorAction SilentlyContinue
+                if ($instances) {
+                    $instance = $instances | Select-Object -First 1
+                    Write-Host "  Properties:" -ForegroundColor Magenta
+                    $instance | Get-Member -MemberType Property | ForEach-Object { Write-Host "    $($_.Name)" }
+                    Write-Host "  Methods:" -ForegroundColor Magenta
+                    $instance | Get-Member -MemberType Method | ForEach-Object { Write-Host "    $($_.Name)" }
+                } else {
+                    Write-Host "  No instances found." -ForegroundColor DarkGray
+                }
+            }
+            break
+        }
+    } catch {
+        Write-Host "Namespace $ns not accessible: $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
+}
