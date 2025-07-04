@@ -16,6 +16,7 @@
 #define MILAN_PROFILE_HPP
 
 #include "profile_interface.hpp"
+#include "avbts_clock.hpp"
 #include <cstdint>
 
 /**
@@ -30,6 +31,13 @@ struct MilanConfig {
     int8_t milan_sync_interval_log;         // -3 (125ms)
     int8_t milan_announce_interval_log;     // 0 (1s)
     int8_t milan_pdelay_interval_log;       // 0 (1s)
+    
+    // Milan B.1 Media Clock Holdover Configuration
+    uint32_t media_clock_holdover_time_ms; // Minimum 5 seconds (5000ms)
+    uint32_t tu_bit_duration_ms;           // 0.25 seconds (250ms) for tu bit
+    uint32_t gm_change_convergence_time_ms; // 5 seconds max for GM agreement
+    uint32_t stream_stability_time_ms;     // 60 seconds min stream stability
+    uint32_t bridge_propagation_time_ms;   // <50ms bridge propagation time
 };
 
 /**
@@ -43,6 +51,15 @@ struct MilanStats {
     uint64_t total_sync_messages;           // Total sync messages received
     uint64_t total_announce_messages;       // Total announce messages received
     bool convergence_achieved;               // Whether 100ms target was met
+    
+    // Milan B.1 Media Clock Holdover Statistics
+    uint64_t last_gm_change_time;          // When last GM change occurred (ns)
+    uint64_t current_stream_stability_time; // How long current stream has been stable (ns)
+    bool media_clock_holdover_active;       // Whether holdover is currently active
+    bool tu_bit_active;                     // Whether tu (timestamp uncertain) bit is set
+    uint64_t tu_bit_start_time;            // When tu bit was set (ns)
+    ClockIdentity current_grandmaster;      // Current grandmaster identity
+    ClockIdentity previous_grandmaster;     // Previous grandmaster identity
 };
 
 /**
@@ -96,8 +113,16 @@ public:
     bool evaluateAsCapableOnLinkDown(bool link_down) const override;
 
     // Protocol-specific behaviors
-    bool allowsNegativeCorrectionField() const override { return false; }
-    bool requiresStrictTimeouts() const override { return true; }
+    bool allowsNegativeCorrectionField() const override { 
+        // Milan Baseline Interoperability Specification: Standard gPTP behavior
+        return false; 
+    }
+    
+    bool requiresStrictTimeouts() const override { 
+        // Milan requires strict timing compliance for interoperability
+        return true; 
+    }
+    
     bool supportsBMCA() const override { return true; }
 
     // Milan-specific statistics and monitoring
@@ -119,6 +144,19 @@ public:
     uint64_t getConvergenceTime() const;
     bool isWithinJitterLimits() const;
     bool isWithinPathDelayLimits() const;
+    
+    // Milan B.1 Media Clock Holdover methods
+    bool handleGrandmasterChange(const ClockIdentity& new_gm, const ClockIdentity& old_gm);
+    bool handleGrandmasterChange(const PortIdentity& new_gm, const PortIdentity& old_gm);
+    void handleAsCapableChange(bool new_as_capable);
+    bool isMediaClockHoldoverRequired(const ClockIdentity& new_gm) const;
+    bool shouldSetTimestampUncertain() const;
+    void updateTimestampUncertainBit(bool force_update = false);
+    bool isStreamStable() const;
+    uint64_t getStreamStabilityTime() const;
+    void notifyStreamStart();
+    void notifyGrandmasterChange(const ClockIdentity& new_gm);
+    bool isWithinGrandmasterConvergenceTime() const;
 };
 
 #endif // MILAN_PROFILE_HPP

@@ -36,12 +36,12 @@ gPTPProfile createMilanProfile() {
     profile.neighbor_prop_delay_thresh = 800000; // 800μs
     profile.sync_receipt_thresh = 3;
     
-    // Milan clock quality (corrected per specification)
-    profile.clock_class = 248;              // Application clock (not grandmaster=6)
-    profile.clock_accuracy = 0x20;          // 32ns accuracy
-    profile.offset_scaled_log_variance = 0x4000;
-    profile.priority1 = 248;                // Application clock priority
-    profile.priority2 = 248;
+    // Milan clock quality (corrected per Milan Baseline Interoperability Specification 2.0a)
+    profile.clock_class = 248;              // Application specific time (Class 248) - MILAN REQUIRED
+    profile.clock_accuracy = 0xFE;          // Time accurate to within unspecified bounds - MILAN REQUIRED
+    profile.offset_scaled_log_variance = 0x4E5D; // Standard variance - MILAN REQUIRED
+    profile.priority1 = 248;                // Application clock priority - MILAN REQUIRED
+    profile.priority2 = 248;                // Application clock priority - MILAN REQUIRED
     
     /* MILAN Baseline Interoperability Profile Clock Quality January30,2019:
         5.6.2.4. asCapable [gPTP, Clause 10.2.4.1]

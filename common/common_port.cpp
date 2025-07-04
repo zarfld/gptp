@@ -36,6 +36,7 @@
 #include <avbts_clock.hpp>
 #include <common_tstamper.hpp>
 #include <gptp_cfg.hpp>
+#include <milan_profile.hpp>  // Milan profile for B.1 compliance
 #include <cmath>
 
 CommonPort::CommonPort( PortInit_t *portInit ) :
@@ -84,6 +85,16 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	log_mean_sync_interval = active_profile.sync_interval_log;
 	log_mean_announce_interval = active_profile.announce_interval_log;
 	
+	// Initialize Milan B.1 Profile Integration
+	milan_profile = nullptr;
+	if (active_profile.profile_name == "milan") {
+		milan_profile = new MilanProfile();
+		GPTP_LOG_INFO("*** MILAN B.1: Profile initialized for B.1 Media Clock Holdover compliance ***");
+	}
+	
+	// Initialize grandmaster tracking for B.1
+	last_grandmaster_identity = PortIdentity();
+	
 	GPTP_LOG_INFO("Port initialized with %s profile: %s", 
 		active_profile.profile_name.c_str(),
 		active_profile.profile_description.c_str());
@@ -116,6 +127,12 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 
 CommonPort::~CommonPort()
 {
+	// Clean up Milan profile if allocated
+	if (milan_profile) {
+		delete milan_profile;
+		milan_profile = nullptr;
+	}
+	
 	delete qualified_announce;
 }
 
@@ -494,9 +511,30 @@ bool CommonPort::processStateChange( Event e )
 		    PTP_CLOCK_IDENTITY_LENGTH ) != 0 )
 	{
 		ClockIdentity newGM;
+		ClockIdentity oldGM;
 		changed_external_master = true;
 		newGM.set((uint8_t *) EBestClockIdentity );
+		oldGM.set((uint8_t *) LastEBestClockIdentity );
 		clock->setLastEBestIdentity( newGM );
+		
+		// Milan B.1: Handle grandmaster change for media clock holdover
+		if (milan_profile != nullptr) {
+			// Use the real MilanProfile instance for B.1 compliance
+			PortIdentity old_gm_identity;
+			PortIdentity new_gm_identity;
+			
+			// Create PortIdentity objects for the profile logic
+			old_gm_identity.setClockIdentity(oldGM);
+			new_gm_identity.setClockIdentity(newGM);
+			
+			// Call Milan B.1 grandmaster change handling via helper method
+			handleMilanGrandmasterChange(old_gm_identity, new_gm_identity);
+			
+			// Update tracking for next change
+			last_grandmaster_identity = new_gm_identity;
+			
+			GPTP_LOG_STATUS("*** MILAN B.1: Grandmaster change processed through MilanProfile instance ***");
+		}
 	}
 	else
 	{
@@ -806,15 +844,10 @@ bool CommonPort::processEvent( Event e )
 		GPTP_LOG_DEBUG("PDELAY_INTERVAL_TIMEOUT_EXPIRES occured");
 		// If asCapable is true attempt some media specific action
 		// TODO: implement profile specific handling on that case
-		// gPTPprofile maintain_as_capable_on_timeout
-
-		bool maintain_as_capable_on_timeout = active_profile.maintain_as_capable_on_timeout;
-		if(!maintain_as_capable_on_timeout && asCapable) {
-			GPTP_LOG_WARNING("PDelay interval expired, but asCapable is false - not sending PDelay messages");
-			asCapable = false; // Disable asCapable if profile requires it
-		}
-
-		ret = true; // No action needed if not asCapable
+		if( asCapable )
+			ret = _processEvent( e );
+		else
+			ret = true; // No action needed if not asCapable
 		break;
 	}
 
@@ -927,4 +960,17 @@ void CommonPort::sendGeneralPort(int etherType, uint8_t* buf, uint16_t len, Mult
 
 void CommonPort::stopSyncIntervalTimer() {
 	// Default implementation: do nothing. Derived classes should override if needed.
+}
+
+// Milan B.1 profile integration helpers
+void CommonPort::handleMilanAsCapableChange(bool new_as_capable) {
+	if (milan_profile != nullptr) {
+		milan_profile->handleAsCapableChange(new_as_capable);
+	}
+}
+
+void CommonPort::handleMilanGrandmasterChange(const PortIdentity& old_gm, const PortIdentity& new_gm) {
+	if (milan_profile != nullptr) {
+		milan_profile->handleGrandmasterChange(new_gm, old_gm);
+	}
 }

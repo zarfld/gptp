@@ -51,6 +51,7 @@
 #define LOG2_INTERVAL_INVALID -127 /* Invalid Log base 2 interval value */
 
 class IEEE1588Clock;
+class MilanProfile;  // Forward declaration for Milan B.1 profile
 
 /**
  * @brief PortIdentity interface
@@ -396,6 +397,10 @@ private:
 	unsigned _consecutive_missing_responses;	// Track consecutive missing responses
 	Timestamp _last_pdelay_req_timestamp;	// Track when last PDelay request was sent
 	bool _pdelay_response_received;		// Track if response was received (late or on-time)
+
+	// Milan B.1 Profile Integration
+	MilanProfile* milan_profile;		// Milan profile instance for B.1 compliance features
+	PortIdentity last_grandmaster_identity;	// Track grandmaster changes for B.1 holdover
 
 protected:
 	static const int64_t INVALID_LINKDELAY = 3600000000000;
@@ -945,6 +950,9 @@ public:
 				("*** AsCapable STATE CHANGE: %s *** (Announce messages will %s be sent)", 
 				 ascap == true ? "ENABLED" : "DISABLED",
 				 ascap == true ? "NOW" : "NO LONGER");
+			
+			// Milan B.1: Handle asCapable changes for stream stability tracking
+			handleMilanAsCapableChange(ascap);
 		}
 		if( !ascap )
 		{
@@ -1280,6 +1288,10 @@ public:
 	// Profile statistics and monitoring
 	void updateProfileJitterStats(uint64_t jitter_ns);
 	bool checkProfileConvergence();
+
+	// Milan B.1 profile integration helpers
+	void handleMilanAsCapableChange(bool new_as_capable);
+	void handleMilanGrandmasterChange(const PortIdentity& old_gm, const PortIdentity& new_gm);
 
 	// Counter and interval accessors
 	unsigned int getSyncCount() const { return sync_count; }
