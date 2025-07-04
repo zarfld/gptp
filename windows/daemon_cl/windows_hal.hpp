@@ -61,6 +61,26 @@
 #include <map>
 #include <list>
 
+// Constants for OID failure tracking
+#define MAX_OID_FAILURES 10
+
+// Struct to track consecutive failures for Intel OIDs
+struct OidFailureTracker {
+    unsigned int failure_count;
+    bool disabled;
+    
+    OidFailureTracker() : failure_count(0), disabled(false) {}
+};
+
+// Intel OID failure tracking for RXSTAMP, TXSTAMP, and SYSTIM
+struct IntelOidFailureTracking {
+    OidFailureTracker rxstamp;
+    OidFailureTracker txstamp; 
+    OidFailureTracker systim;
+    
+    IntelOidFailureTracking() = default;
+};
+
 // NDIS timestamp OIDs and structures (define if not available in older SDKs)
 #ifndef OID_TIMESTAMP_CAPABILITY
 #define OID_TIMESTAMP_CAPABILITY 0x00010265
@@ -196,7 +216,9 @@ protected:
 	/**
 	 * @brief Default constructor
 	 */
-	WindowsPCAPNetworkInterface() { handle = NULL; };
+	WindowsPCAPNetworkInterface() { 
+		handle = NULL; 
+	};
 };
 
 /**
@@ -972,6 +994,7 @@ private:
 	LARGE_INTEGER tsc_hz;
 	LARGE_INTEGER netclock_hz;
 	bool cross_timestamping_initialized; //!< Flag to track cross-timestamping initialization
+	mutable IntelOidFailureTracking oid_failures; //!< Track OID failure counts
 	DWORD readOID( NDIS_OID oid, void *output_buffer, DWORD size, DWORD *size_returned ) const {
 		NDIS_OID oid_l = oid;
 		DWORD rc = DeviceIoControl(
@@ -1026,6 +1049,7 @@ public:
 		miniport = INVALID_HANDLE_VALUE;
 		tsc_hz.QuadPart = 0;
 		netclock_hz.QuadPart = 0;
+		memset(&oid_failures, 0, sizeof(oid_failures));
 	}
 	
 	/**
@@ -1082,11 +1106,31 @@ public:
 			GPTP_LOG_DEBUG("miniport handle is valid");
 		}
 
+		// Check if we should skip the SYSTIM OID due to repeated failures
+		if (oid_failures.systim.disabled) {
+			GPTP_LOG_VERBOSE("Skipping SYSTIM OID - disabled after %u consecutive failures", oid_failures.systim.failure_count);
+			return false;
+		}
+
 		if(( result = readOID( OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned )) != ERROR_SUCCESS ) {
+			if (result == 50) { // ERROR_NOT_SUPPORTED
+				oid_failures.systim.failure_count++;
+				if (oid_failures.systim.failure_count >= MAX_OID_FAILURES) {
+					oid_failures.systim.disabled = true;
+					GPTP_LOG_WARNING("Disabling SYSTIM OID after %u consecutive failures with error 50 (not supported)", oid_failures.systim.failure_count);
+				} else {
+					GPTP_LOG_DEBUG("SYSTIM OID failure %u/%u (error 50)", oid_failures.systim.failure_count, MAX_OID_FAILURES);
+				}
+			} else {
+				// Reset counter for non-50 errors
+				oid_failures.systim.failure_count = 0;
+			}
 			GPTP_LOG_WARNING("Failed to read Intel system time OID: error %d (0x%08X)", result, result);
 			return false;
 		}
 		else{
+			oid_failures.systim.failure_count = 0;
+			oid_failures.systim.disabled = false;
 			GPTP_LOG_DEBUG("Intel system time OID read successfully, returned %d bytes", returned);
 		}
 		
@@ -1110,6 +1154,8 @@ public:
 		*system_time = nanoseconds64ToTimestamp( now_tsc );
 		system_time->_version = version;
 
+		oid_failures.systim.failure_count = 0;
+		oid_failures.systim.disabled = false;
 		return true;
 	}
 
@@ -1139,10 +1185,28 @@ public:
 			return GPTP_EC_FAILURE;
 		}
 
+		// Check if we should skip the TXSTAMP OID due to repeated failures
+		if (oid_failures.txstamp.disabled) {
+			GPTP_LOG_VERBOSE("Skipping TXSTAMP OID - disabled after %u consecutive failures", oid_failures.txstamp.failure_count);
+			goto try_tx_fallback;
+		}
+
 		while(( result = readOID( OID_INTEL_GET_TXSTAMP, buf_tmp, sizeof(buf_tmp), &returned )) == ERROR_SUCCESS ) {
 			memcpy( buf, buf_tmp, sizeof( buf ));
 		}
 		if( result != ERROR_GEN_FAILURE ) {
+			if (result == 50) { // ERROR_NOT_SUPPORTED
+				oid_failures.txstamp.failure_count++;
+				if (oid_failures.txstamp.failure_count >= MAX_OID_FAILURES) {
+					oid_failures.txstamp.disabled = true;
+					GPTP_LOG_WARNING("Disabling TXSTAMP OID after %u consecutive failures with error 50 (not supported)", oid_failures.txstamp.failure_count);
+				} else {
+					GPTP_LOG_DEBUG("TXSTAMP OID failure %u/%u (error 50)", oid_failures.txstamp.failure_count, MAX_OID_FAILURES);
+				}
+			} else {
+				// Reset counter for non-50 errors
+				oid_failures.txstamp.failure_count = 0;
+			}
 			GPTP_LOG_WARNING("Error (TX) timestamping PDelay request, error=%d (0x%08X). Intel OID may not be supported or accessible", result, result);
 			if (result == ERROR_NOT_SUPPORTED) {
 				GPTP_LOG_INFO("Driver does not support Intel TX timestamping OID - trying fallback methods");
@@ -1182,6 +1246,8 @@ public:
 		timestamp = nanoseconds64ToTimestamp( tx_s );
 		timestamp._version = version;
 
+		oid_failures.txstamp.failure_count = 0;
+		oid_failures.txstamp.disabled = false;
 		return GPTP_EC_SUCCESS;
 		
 	try_tx_fallback:
@@ -1255,6 +1321,7 @@ public:
 		static uint32_t timestamp_attempts = 0;
 		static uint32_t timestamp_successes = 0;
 		static uint32_t timestamp_failures = 0;
+		static uint32_t consecutive_failures = 0;
 		static uint32_t fallback_attempts = 0;
 		timestamp_attempts++;
 
@@ -1267,14 +1334,9 @@ public:
 		}
 
 		// Primary method: Intel custom OID for hardware RX timestamps
-		// Check if Intel PTP hardware clock is running before attempting timestamp reads
-		static bool intel_ptp_available = true; // Assume available initially
-		static uint32_t consecutive_failures = 0;
-		
-		// If we've had many consecutive failures, skip Intel OID attempts for efficiency
-		if (consecutive_failures > 50) {
-			intel_ptp_available = false;
-			GPTP_LOG_VERBOSE("Skipping Intel OID after %u consecutive failures", consecutive_failures);
+		// Check if we should skip the RXSTAMP OID due to repeated failures
+		if (oid_failures.rxstamp.disabled) {
+			GPTP_LOG_VERBOSE("Skipping RXSTAMP OID - disabled after %u consecutive failures", oid_failures.rxstamp.failure_count);
 			goto try_fallback_timestamp;
 		}
 		
@@ -1284,7 +1346,18 @@ public:
 		
 		if( result != ERROR_GEN_FAILURE ) {
 			timestamp_failures++;
-			consecutive_failures++;
+			if (result == 50) { // ERROR_NOT_SUPPORTED
+				oid_failures.rxstamp.failure_count++;
+				if (oid_failures.rxstamp.failure_count >= MAX_OID_FAILURES) {
+					oid_failures.rxstamp.disabled = true;
+					GPTP_LOG_WARNING("Disabling RXSTAMP OID after %u consecutive failures with error 50 (not supported)", oid_failures.rxstamp.failure_count);
+				} else {
+					GPTP_LOG_DEBUG("RXSTAMP OID failure %u/%u (error 50)", oid_failures.rxstamp.failure_count, MAX_OID_FAILURES);
+				}
+			} else {
+				// Reset counter for non-50 errors
+				oid_failures.rxstamp.failure_count = 0;
+			}
 			GPTP_LOG_WARNING("*** Received an event packet but cannot retrieve timestamp, discarding. messageType=%d,error=%d (0x%08X) (Attempt %u, Failures: %u)", 
 				messageId.getMessageType(), result, result, timestamp_attempts, timestamp_failures);
 			if (result == ERROR_NOT_SUPPORTED) {
@@ -1343,7 +1416,8 @@ public:
 		
 		// SUCCESS: Intel OID provided valid RX timestamp
 		timestamp_successes++;
-		consecutive_failures = 0; // Reset failure counter on success
+		oid_failures.rxstamp.failure_count = 0;
+		oid_failures.rxstamp.disabled = false;
 		rx_r = timestamp_raw;
 		rx_s = scaleNativeClockToNanoseconds( rx_r );
 		timestamp = nanoseconds64ToTimestamp( rx_s );
@@ -1528,7 +1602,8 @@ public:
 		DWORD buf[6];
 		DWORD returned = 0;
 		DWORD result;
-		
+		DWORD result2;
+		DWORD result3;
 		// First check if basic OID functionality is working
 		GPTP_LOG_STATUS("Testing basic Intel OID functionality for %s", adapter_description);
 		
@@ -1537,7 +1612,7 @@ public:
 		result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
 		
 		if (result == ERROR_SUCCESS && returned == sizeof(buf)) {
-			// Validate that we got reasonable data (not all 0xFF)
+			GPTP_LOG_STATUS("OID_INTEL_GET_SYSTIM - Validate that we got reasonable data (not all 0xFF)");
 			bool valid_data = false;
 			for (int i = 0; i < 6; i++) {
 				if (buf[i] != 0xFFFFFFFF) {
@@ -1626,10 +1701,24 @@ public:
 					adapter_description);
 			}
 		} else {
-			GPTP_LOG_VERBOSE("Intel OID test failed for %s: error=%d, returned=%d/%d", 
+			GPTP_LOG_WARNING("Intel OID test failed for %s: error=%d, returned=%d/%d", 
 				adapter_description, result, returned, sizeof(buf));
 		}
 		
+		result2 = readOID(OID_INTEL_GET_RXSTAMP, buf, sizeof(buf), &returned);
+		if (result2 == ERROR_SUCCESS && returned == sizeof(buf)){
+			GPTP_LOG_STATUS("OID_INTEL_GET_RXSTAMP - Validate that we got reasonable data (not all 0xFF)");
+		}
+		else{
+			GPTP_LOG_WARNING("OID_INTEL_GET_RXSTAMP - failed");
+		}
+		result3 = readOID(OID_INTEL_GET_TXSTAMP, buf, sizeof(buf), &returned);
+		if (result3 == ERROR_SUCCESS && returned == sizeof(buf)){
+			GPTP_LOG_STATUS("OID_INTEL_GET_TXSTAMP - Validate that we got reasonable data (not all 0xFF)");
+		}
+		else{
+			GPTP_LOG_WARNING("OID_INTEL_GET_TXSTAMP - failed");
+		}
 		// Intel OIDs not available or not functional
 		return false;
 	}
