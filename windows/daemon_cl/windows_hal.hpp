@@ -1528,7 +1528,8 @@ public:
 		DWORD buf[6];
 		DWORD returned = 0;
 		DWORD result;
-		
+		DWORD result2;
+		DWORD result3;
 		// First check if basic OID functionality is working
 		GPTP_LOG_STATUS("Testing basic Intel OID functionality for %s", adapter_description);
 		
@@ -1537,7 +1538,7 @@ public:
 		result = readOID(OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned);
 		
 		if (result == ERROR_SUCCESS && returned == sizeof(buf)) {
-			// Validate that we got reasonable data (not all 0xFF)
+			GPTP_LOG_STATUS("OID_INTEL_GET_SYSTIM - Validate that we got reasonable data (not all 0xFF)");
 			bool valid_data = false;
 			for (int i = 0; i < 6; i++) {
 				if (buf[i] != 0xFFFFFFFF) {
@@ -1626,10 +1627,24 @@ public:
 					adapter_description);
 			}
 		} else {
-			GPTP_LOG_VERBOSE("Intel OID test failed for %s: error=%d, returned=%d/%d", 
+			GPTP_LOG_WARNING("Intel OID test failed for %s: error=%d, returned=%d/%d", 
 				adapter_description, result, returned, sizeof(buf));
 		}
 		
+		result2 = readOID(OID_INTEL_GET_RXSTAMP, buf, sizeof(buf), &returned);
+		if (result2 == ERROR_SUCCESS && returned == sizeof(buf)){
+			GPTP_LOG_STATUS("OID_INTEL_GET_RXSTAMP - Validate that we got reasonable data (not all 0xFF)");
+		}
+		else{
+			GPTP_LOG_WARNING("OID_INTEL_GET_RXSTAMP - failed");
+		}
+		result3 = readOID(OID_INTEL_GET_TXSTAMP, buf, sizeof(buf), &returned);
+		if (result3 == ERROR_SUCCESS && returned == sizeof(buf)){
+			GPTP_LOG_STATUS("OID_INTEL_GET_TXSTAMP - Validate that we got reasonable data (not all 0xFF)");
+		}
+		else{
+			GPTP_LOG_WARNING("OID_INTEL_GET_TXSTAMP - failed");
+		}
 		// Intel OIDs not available or not functional
 		return false;
 	}

@@ -191,6 +191,26 @@ void WindowsWatchdogHandler::run_update()
     uint64_t last_heartbeat = 0;
     uint64_t last_activity = 0;
     bool last_healthy = true;
+    bool first_heartbeat_received = false;
+    
+    // Give the network thread time to start up before we start monitoring
+    GPTP_LOG_INFO("Watchdog: Waiting 5 seconds for network thread startup...");
+    Sleep(5000);  // Wait 5 seconds before starting monitoring
+
+    // Wait for the first heartbeat to be initialized before starting strict monitoring
+    GPTP_LOG_INFO("Watchdog: Waiting for first network thread heartbeat...");
+    while (!stop_watchdog && !first_heartbeat_received) {
+        if (gptp_ether_port) {
+            uint64_t current_heartbeat = gptp_ether_port->network_thread_heartbeat.load(std::memory_order_relaxed);
+            if (current_heartbeat > 0) {
+                first_heartbeat_received = true;
+                last_heartbeat = current_heartbeat;
+                GPTP_LOG_INFO("Watchdog: First heartbeat received (%llu), starting monitoring", current_heartbeat);
+                break;
+            }
+        }
+        Sleep(1000);  // Check every second for first heartbeat
+    }
 
     while (!stop_watchdog)
     {
@@ -208,7 +228,15 @@ void WindowsWatchdogHandler::run_update()
             uint64_t activity_age_ticks = qpc_now.QuadPart - current_activity;
             double activity_age_ms = (double)activity_age_ticks * 1000.0 / (double)qpc_freq.QuadPart;
             DWORD watchdog_tid = GetCurrentThreadId();
-            if (current_heartbeat == last_heartbeat || activity_age_ms > NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS) {
+            
+            // Be more tolerant during the first few updates (startup grace period)
+            bool is_startup_period = (update_count <= 3);
+            double timeout_threshold = is_startup_period ? (NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS * 3) : NETWORK_THREAD_HEARTBEAT_TIMEOUT_MS;
+            
+            // Only check for heartbeat stalls if we've received the first heartbeat
+            if (first_heartbeat_received && 
+                ((current_heartbeat == last_heartbeat && update_count > 1) || 
+                 (activity_age_ms > timeout_threshold && current_activity > 0))) {
                 // Debug print for diagnosis
                 GPTP_LOG_DEBUG("watchdog: gptp_ether_port=%p, last_heartbeat=%llu, current_heartbeat=%llu, last_activity(QPC)=%llu, now(QPC)=%lld, activity_age_ms=%.2f, watchdog_thread_id=%lu\n",
                     gptp_ether_port,
@@ -224,6 +252,11 @@ void WindowsWatchdogHandler::run_update()
                     "gPTP daemon ERROR: Network thread heartbeat lost (last=%llu, now=%llu, activity_age=%.2f s) [update #%lu]",
                     last_heartbeat, current_heartbeat, activity_age_ms / 1000.0, update_count);
             } else {
+                if (update_count <= 5) {
+                    // Log more details during startup
+                    GPTP_LOG_DEBUG("watchdog: startup check #%lu - heartbeat=%llu, activity_age=%.2f ms, threshold=%.2f ms", 
+                        update_count, current_heartbeat, activity_age_ms, timeout_threshold);
+                }
                 snprintf(health_message, sizeof(health_message),
                     "gPTP daemon healthy - network thread heartbeat OK (heartbeat=%llu, activity(QPC)=%llu, now(QPC)=%lld) [update #%lu]",
                     current_heartbeat, current_activity, qpc_now.QuadPart, update_count);
