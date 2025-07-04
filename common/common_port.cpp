@@ -806,10 +806,15 @@ bool CommonPort::processEvent( Event e )
 		GPTP_LOG_DEBUG("PDELAY_INTERVAL_TIMEOUT_EXPIRES occured");
 		// If asCapable is true attempt some media specific action
 		// TODO: implement profile specific handling on that case
-		if( asCapable )
-			ret = _processEvent( e );
-		else
-			ret = true; // No action needed if not asCapable
+		// gPTPprofile maintain_as_capable_on_timeout
+
+		bool maintain_as_capable_on_timeout = active_profile.maintain_as_capable_on_timeout;
+		if(!maintain_as_capable_on_timeout && asCapable) {
+			GPTP_LOG_WARNING("PDelay interval expired, but asCapable is false - not sending PDelay messages");
+			asCapable = false; // Disable asCapable if profile requires it
+		}
+
+		ret = true; // No action needed if not asCapable
 		break;
 	}
 

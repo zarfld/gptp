@@ -34,18 +34,41 @@ ProfileTimingConfig MilanProfile::getTimingConfig() const {
 }
 
 ProfileClockQuality MilanProfile::getClockQuality() const {
+
     ProfileClockQuality quality;
     quality.clock_class = 6;                // Primary reference quality
     quality.clock_accuracy = 0x20;          // 32ns accuracy  
     quality.offset_scaled_log_variance = 0x4000; // Standard variance
+    
+    /* MILAN Baseline Interoperability Profile Clock Quality January30,2019:
+
+    5.6.2.1. Priority1 [gPTP, Clause 8.6.2.1]
+        If a PAAD is Grandmaster Capable the default priority1 value shall be 248 (Other Time-Aware System).
+        Note: Section 6.1.1 of this document defines that all Talker PAADs have to be Grandmaster Capable.
+    
+    */
     quality.priority1 = 248;                // Default application priority
     quality.priority2 = 248;                // Default priority2
     return quality;
 }
 
 ProfileAsCapableBehavior MilanProfile::getAsCapableBehavior() const {
+
+    /* MILAN Baseline Interoperability Profile Clock Quality January30,2019:
+        5.6.2.4. asCapable [gPTP, Clause 10.2.4.1]
+            A PAAD shall report asCapable as TRUE after no less than 2 and no more than 5 successfully received Pdelay Responses and Pdelay Response Follow Ups to the Pdelay Request messages sent by the device.
+            Note: This requirement ensures that all certified PAADs become asCapable within a bounded time.
+    
+        5.6.2.6. Pdelay Turnaround Time
+        Per [gPTP, Annex B.2.3], Pdelay turnaround time must be less than or equal to 10ms. This requirement 
+        shall be relaxed by 50% for Avnu purposes resulting in a maximum Pdelay turnaround time of 15ms. 
+        Responses later than this time may or may not be processed by a gPTP device, but should not result in 
+        asCapable being set to FALSE if 3 or more consecutive responses are received later than 10ms but before 
+        pdelayReqInterval (typically 1 second).
+    
+    */
     ProfileAsCapableBehavior behavior;
-    behavior.initial_as_capable = true;                 // Milan starts with asCapable=true for fast convergence
+    behavior.initial_as_capable = false;                // Milan starts with asCapable=false it must be earned "after no less than 2 and no more than 5 successfully received Pdelay Responses"
     behavior.min_pdelay_successes = 2;                  // Minimum 2 successful PDelay exchanges
     behavior.max_pdelay_successes = 5;                  // Maximum 5 successful PDelay exchanges
     behavior.maintain_on_late_response = true;          // Maintain asCapable on late responses

@@ -43,6 +43,19 @@ gPTPProfile createMilanProfile() {
     profile.priority1 = 248;                // Application clock priority
     profile.priority2 = 248;
     
+    /* MILAN Baseline Interoperability Profile Clock Quality January30,2019:
+        5.6.2.4. asCapable [gPTP, Clause 10.2.4.1]
+            A PAAD shall report asCapable as TRUE after no less than 2 and no more than 5 successfully received Pdelay Responses and Pdelay Response Follow Ups to the Pdelay Request messages sent by the device.
+            Note: This requirement ensures that all certified PAADs become asCapable within a bounded time.
+    
+        5.6.2.6. Pdelay Turnaround Time
+        Per [gPTP, Annex B.2.3], Pdelay turnaround time must be less than or equal to 10ms. This requirement 
+        shall be relaxed by 50% for Avnu purposes resulting in a maximum Pdelay turnaround time of 15ms. 
+        Responses later than this time may or may not be processed by a gPTP device, but should not result in 
+        asCapable being set to FALSE if 3 or more consecutive responses are received later than 10ms but before 
+        pdelayReqInterval (typically 1 second).
+    
+    */
     // Milan asCapable behavior (corrected per specification)
     profile.initial_as_capable = false;     // Milan starts asCapable=false, must earn it
     profile.as_capable_on_link_up = false;  // Must earn asCapable via PDelay (not immediate)
@@ -196,7 +209,7 @@ gPTPProfile createAutomotiveProfile() {
     profile.priority2 = 248;
     
     // Automotive asCapable behavior
-    profile.initial_as_capable = false;     // Start false
+    profile.initial_as_capable = true;     // Start false
     profile.as_capable_on_link_up = true;   // Automotive: asCapable=true immediately on link up
     profile.as_capable_on_link_down = true; // Lose asCapable on link down
     profile.min_pdelay_successes = 0;       // No PDelay requirement
