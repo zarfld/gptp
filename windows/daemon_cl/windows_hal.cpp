@@ -833,7 +833,7 @@ bool WindowsEtherTimestamper::tryNDISTimestamp(Timestamp& timestamp, const PTPMe
 	// Work around const-correctness issue with PTPMessageId methods
 	PTPMessageId& non_const_messageId = const_cast<PTPMessageId&>(messageId);
 	
-	GPTP_LOG_STATUS("*** NDIS FALLBACK METHOD CALLED *** for seq=%u, messageType=%d", 
+	GPTP_LOG_INFO("*** NDIS FALLBACK METHOD CALLED *** for seq=%u, messageType=%d", 
 		non_const_messageId.getSequenceId(), non_const_messageId.getMessageType());
 	GPTP_LOG_VERBOSE("Attempting NDIS-based timestamp fallback for message ID: seq=%u, messageType=%d", 
 		non_const_messageId.getSequenceId(), non_const_messageId.getMessageType());
