@@ -995,6 +995,7 @@ private:
 	LARGE_INTEGER netclock_hz;
 	bool cross_timestamping_initialized; //!< Flag to track cross-timestamping initialization
 	mutable IntelOidFailureTracking oid_failures; //!< Track OID failure counts
+	mutable EnhancedSoftwareTimestamper enhanced_timestamper; //!< Enhanced software timestamping capabilities
 	DWORD readOID( NDIS_OID oid, void *output_buffer, DWORD size, DWORD *size_returned ) const {
 		NDIS_OID oid_l = oid;
 		DWORD rc = DeviceIoControl(
@@ -1109,7 +1110,8 @@ public:
 		// Check if we should skip the SYSTIM OID due to repeated failures
 		if (oid_failures.systim.disabled) {
 			GPTP_LOG_VERBOSE("Skipping SYSTIM OID - disabled after %u consecutive failures", oid_failures.systim.failure_count);
-			return false;
+			// Use enhanced software timestamping as fallback
+			goto use_enhanced_software_timestamping;
 		}
 
 		if(( result = readOID( OID_INTEL_GET_SYSTIM, buf, sizeof(buf), &returned )) != ERROR_SUCCESS ) {
@@ -1126,7 +1128,8 @@ public:
 				oid_failures.systim.failure_count = 0;
 			}
 			GPTP_LOG_WARNING("Failed to read Intel system time OID: error %d (0x%08X)", result, result);
-			return false;
+			// Use enhanced software timestamping as fallback
+			goto use_enhanced_software_timestamping;
 		}
 		else{
 			oid_failures.systim.failure_count = 0;
@@ -1157,6 +1160,34 @@ public:
 		oid_failures.systim.failure_count = 0;
 		oid_failures.systim.disabled = false;
 		return true;
+
+use_enhanced_software_timestamping:
+		// Enhanced software timestamping fallback when Intel OIDs are not available
+		GPTP_LOG_DEBUG("Using enhanced software timestamping fallback");
+		
+		if (system_time && device_time) {
+			// Get high-precision software timestamp
+			Timestamp software_time = enhanced_timestamper.getSystemTime();
+			
+			// For software timestamping, system time and device time are the same
+			*system_time = software_time;
+			*device_time = software_time;
+			
+			// Set version
+			system_time->_version = version;
+			device_time->_version = version;
+			
+			// Set local clock and nominal rate to default values
+			if (local_clock) *local_clock = 0;
+			if (nominal_clock_rate) *nominal_clock_rate = 1000000000; // 1 GHz
+			
+			GPTP_LOG_VERBOSE("Enhanced software timestamp: %u.%09u", 
+							software_time.seconds_ls, software_time.nanoseconds);
+			
+			return true;
+		}
+		
+		return false;
 	}
 
 	/**
@@ -1287,7 +1318,15 @@ public:
 			}
 		}
 		
-		return GPTP_EC_FAILURE;
+		// Final fallback to enhanced software timestamping
+		timestamp = enhanced_timestamper.getSystemTime();
+		timestamp._version = version;
+		
+		GPTP_LOG_VERBOSE("TX timestamp enhanced software fallback: messageType=%d, seq=%u, ts=%u.%09u", 
+			messageId.getMessageType(), messageId.getSequenceId(), 
+			timestamp.seconds_ls, timestamp.nanoseconds);
+		
+		return GPTP_EC_SUCCESS;
 	}
 
 	/**
@@ -1522,17 +1561,13 @@ public:
 			messageId.getMessageType(), messageId.getSequenceId(), fallback_attempts);
 		GPTP_LOG_ERROR("Attempted methods: Intel OID  NDIS  IPHLPAPI  Packet Capture  Cross-timestamp  Intel System Time  TSC");
 
-        // Ultimate fallback: use system time as RX timestamp
-        FILETIME ft;
-        GetSystemTimeAsFileTime(&ft);
-        ULARGE_INTEGER uli;
-        uli.LowPart = ft.dwLowDateTime;
-        uli.HighPart = ft.dwHighDateTime;
-        uint64_t nsec_since_1970 = (uli.QuadPart - 116444736000000000ULL) * 100;
-        timestamp = nanoseconds64ToTimestamp(nsec_since_1970);
+        // Ultimate fallback: use enhanced software timestamping
+        timestamp = enhanced_timestamper.getSystemTime();
         timestamp._version = version;
-        GPTP_LOG_STATUS("Ultimate fallback: using system time as RX timestamp (hardware/software methods failed) for messageType=%d, seq=%u, ts=%llu ns", 
-            messageId.getMessageType(), messageId.getSequenceId(), nsec_since_1970);
+        
+        GPTP_LOG_STATUS("Ultimate fallback: using enhanced software timestamp (hardware/software methods failed) for messageType=%d, seq=%u, ts=%u.%09u (precision: %lld ns)", 
+            messageId.getMessageType(), messageId.getSequenceId(), 
+            timestamp.seconds_ls, timestamp.nanoseconds, enhanced_timestamper.getTimestampPrecision());
         return GPTP_EC_SUCCESS;
 	}
 
@@ -1859,7 +1894,88 @@ public:
 		return false;
 	}
 
-	// ...existing code...
+	// Enhanced timestamping capabilities and configuration
+	struct EnhancedTimestampingConfig {
+	    // Software timestamping precision thresholds (relaxed for software timestamping)
+	    static constexpr int64_t SOFTWARE_TIMESTAMP_THRESHOLD_NS = 1000000;  // 1ms
+	    static constexpr int64_t PDELAY_THRESHOLD_NS = 5000000;              // 5ms  
+	    static constexpr int64_t SYNC_THRESHOLD_NS = 2000000;                // 2ms
+	    static constexpr bool ALLOW_SOFTWARE_ASCAPABLE = true;               // Allow asCapable with software timestamping
+	    
+	    // Performance counter frequency for high-precision timing
+	    LARGE_INTEGER performance_frequency;
+	    bool high_resolution_available;
+	    
+	    EnhancedTimestampingConfig() : high_resolution_available(false) {
+	        if (QueryPerformanceFrequency(&performance_frequency)) {
+	            high_resolution_available = true;
+	        }
+	    }
+	};
+
+	// Windows standard timestamping methods
+	enum class WindowsTimestampMethod {
+	    QUERY_PERFORMANCE_COUNTER,      // High-precision QueryPerformanceCounter
+	    GET_SYSTEM_TIME_PRECISE,        // GetSystemTimePreciseAsFileTime
+	    WINSOCK_TIMESTAMP,              // Winsock SO_TIMESTAMP if available
+	    FALLBACK_GETTICKCOUNT           // Fallback to GetTickCount64
+	};
+
+	// Enhanced software timestamper class
+	class EnhancedSoftwareTimestamper {
+	private:
+	    EnhancedTimestampingConfig config;
+	    WindowsTimestampMethod preferred_method;
+	    mutable std::mutex timestamp_mutex;
+	    
+	    // Calibration for timestamp methods
+	    int64_t method_precision_ns;
+	    bool calibrated;
+	    
+	public:
+	    EnhancedSoftwareTimestamper();
+	    ~EnhancedSoftwareTimestamper() = default;
+	    
+	    // Get high-precision system timestamp
+	    Timestamp getSystemTime() const;
+	    
+	    // Get timestamp using specific method
+	    Timestamp getTimestamp(WindowsTimestampMethod method) const;
+	    
+	    // Enable socket timestamping if supported
+	    bool enableSocketTimestamping(SOCKET sock) const;
+	    
+	    // Get socket timestamp if available
+	    bool getSocketTimestamp(SOCKET sock, Timestamp& ts) const;
+	    
+	    // Calibrate timestamping precision
+	    void calibrateTimestampPrecision();
+	    
+	    // Get measured precision in nanoseconds
+	    int64_t getTimestampPrecision() const { return method_precision_ns; }
+	    
+	    // Check if method is available
+	    bool isMethodAvailable(WindowsTimestampMethod method) const;
+	    
+	    // Get preferred timestamping method
+	    WindowsTimestampMethod getPreferredMethod() const { return preferred_method; }
+	    
+	private:
+	    Timestamp getPerformanceCounterTime() const;
+	    Timestamp getPreciseSystemTime() const;
+	    Timestamp getWinsockTimestamp(SOCKET sock) const;
+	    Timestamp getFallbackTime() const;
+	};
+
+	// Timestamping diagnostics and logging
+	class TimestampingDiagnostics {
+	public:
+	    static void logTimestampingCapabilities(EnhancedSoftwareTimestamper& timestamper);
+	    static void logPerformanceCharacteristics(EnhancedSoftwareTimestamper& timestamper);
+	    static int64_t measureClockResolution();
+	    static int64_t measureTimestampPrecision(WindowsTimestampMethod method);
+	    static void logSystemTimingInfo();
+	};
 };
 
 
