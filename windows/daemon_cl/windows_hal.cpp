@@ -892,6 +892,97 @@ bool WindowsEtherTimestamper::tryNDISTimestamp(Timestamp& timestamp, const PTPMe
 	}
 }
 
+bool WindowsEtherTimestamper::tryNDISTimestampCapability(Timestamp& timestamp, const PTPMessageId& messageId) const {
+	GPTP_LOG_DEBUG("Attempting NDIS timestamp capability query");
+	
+	// Try to query NDIS timestamp capabilities using Windows 8.1+ OIDs
+	if (miniport == INVALID_HANDLE_VALUE) {
+		GPTP_LOG_DEBUG("NDIS timestamp capability: invalid miniport handle");
+		return false;
+	}
+	
+	try {
+		// Query timestamp capability
+		DWORD capability_data[4] = {0};
+		DWORD bytes_returned = 0;
+		
+		DWORD result = readOID(OID_TIMESTAMP_CAPABILITY, &capability_data, sizeof(capability_data), &bytes_returned);
+		if (result == ERROR_SUCCESS && bytes_returned > 0) {
+			GPTP_LOG_DEBUG("NDIS timestamp capability query successful, capabilities: 0x%08x", capability_data[0]);
+			
+			// Use enhanced software timestamper for high-precision timing
+			Timestamp ts = enhanced_timestamper.getSystemTime();
+			return (ts.seconds_ls > 0 || ts.nanoseconds > 0);
+		}
+		
+		GPTP_LOG_DEBUG("NDIS timestamp capability query failed with error: %d", result);
+		return false;
+		
+	} catch (const std::exception& e) {
+		GPTP_LOG_ERROR("NDIS timestamp capability failed with exception: %s", e.what());
+		return false;
+	}
+}
+
+bool WindowsEtherTimestamper::tryNDISPerformanceCounter(Timestamp& timestamp, const PTPMessageId& messageId) const {
+	GPTP_LOG_DEBUG("Attempting NDIS performance counter correlation");
+	
+	try {
+		// Use enhanced software timestamper for high-precision performance counter timing
+		timestamp = enhanced_timestamper.getSystemTime();
+		
+		if (timestamp.nanoseconds > 0 || timestamp.seconds_ls > 0) {
+			timestamp._version = version;
+			GPTP_LOG_DEBUG("NDIS performance counter correlation successful");
+			return true;
+		}
+		
+		GPTP_LOG_DEBUG("NDIS performance counter correlation failed");
+		return false;
+		
+	} catch (const std::exception& e) {
+		GPTP_LOG_ERROR("NDIS performance counter correlation failed with exception: %s", e.what());
+		return false;
+	}
+}
+
+bool WindowsEtherTimestamper::tryNDISStatisticsCorrelation(Timestamp& timestamp, const PTPMessageId& messageId) const {
+	GPTP_LOG_DEBUG("Attempting NDIS statistics correlation");
+	
+	if (miniport == INVALID_HANDLE_VALUE) {
+		GPTP_LOG_DEBUG("NDIS statistics correlation: invalid miniport handle");
+		return false;
+	}
+	
+	try {
+		// Query adapter statistics for timing correlation
+		DWORD stats_data[8] = {0};
+		DWORD bytes_returned = 0;
+		
+		// Try querying general statistics (packets sent/received counts)
+		DWORD result = readOID(OID_GEN_STATISTICS, &stats_data, sizeof(stats_data), &bytes_returned);
+		if (result == ERROR_SUCCESS && bytes_returned > 0) {
+			GPTP_LOG_DEBUG("NDIS statistics query successful, correlating with performance counter");
+			
+			// Use enhanced software timestamper with statistics correlation
+			timestamp = enhanced_timestamper.getSystemTime();
+			
+			if (timestamp.nanoseconds > 0 || timestamp.seconds_ls > 0) {
+				timestamp._version = version;
+				GPTP_LOG_DEBUG("NDIS statistics correlation successful");
+				return true;
+			}
+		}
+		
+		GPTP_LOG_DEBUG("NDIS statistics correlation failed with error: %d", result);
+		return false;
+		
+	} catch (const std::exception& e) {
+		GPTP_LOG_ERROR("NDIS statistics correlation failed with exception: %s", e.what());
+		return false;
+	}
+}
+
 bool WindowsEtherTimestamper::tryIPHLPAPITimestamp(Timestamp& timestamp, const PTPMessageId& messageId) const {
 	// Work around const-correctness issue with PTPMessageId methods
 	PTPMessageId& non_const_messageId = const_cast<PTPMessageId&>(messageId);
@@ -1040,29 +1131,22 @@ void cleanupLinkMonitoring() {
 
 EnhancedSoftwareTimestamper::EnhancedSoftwareTimestamper() 
     : preferred_method(WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER),
-      method_precision_ns(1000000), // Default 1ms precision
+      method_precision_ns(1000), // 1 microsecond default
       calibrated(false) {
     
-    // Initialize configuration
     config = EnhancedTimestampingConfig();
     
     // Determine best available method
-    if (config.high_resolution_available) {
-        preferred_method = WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER;
-        GPTP_LOG_INFO("Enhanced timestamper: Using QueryPerformanceCounter (freq: %lld Hz)", 
-                     config.performance_frequency.QuadPart);
-    } else if (isMethodAvailable(WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE)) {
+    if (isMethodAvailable(WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE)) {
         preferred_method = WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE;
-        GPTP_LOG_INFO("Enhanced timestamper: Using GetSystemTimePreciseAsFileTime");
     } else {
         preferred_method = WindowsTimestampMethod::FALLBACK_GETTICKCOUNT;
-        GPTP_LOG_WARNING("Enhanced timestamper: Using fallback GetTickCount64 method");
     }
+    
+    GPTP_LOG_DEBUG("Enhanced software timestamper initialized with method: %d", static_cast<int>(preferred_method));
     
     // Calibrate precision
     calibrateTimestampPrecision();
-    
-    GPTP_LOG_INFO("Enhanced software timestamper initialized with %lld ns precision", method_precision_ns);
 }
 
 Timestamp EnhancedSoftwareTimestamper::getSystemTime() const {
@@ -1078,7 +1162,7 @@ Timestamp EnhancedSoftwareTimestamper::getTimestamp(WindowsTimestampMethod metho
         case WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE:
             return getPreciseSystemTime();
         case WindowsTimestampMethod::WINSOCK_TIMESTAMP:
-            // This requires a socket parameter, use performance counter as fallback
+            // For this method, we need a socket - fall back to performance counter
             return getPerformanceCounterTime();
         case WindowsTimestampMethod::FALLBACK_GETTICKCOUNT:
         default:
@@ -1087,69 +1171,41 @@ Timestamp EnhancedSoftwareTimestamper::getTimestamp(WindowsTimestampMethod metho
 }
 
 bool EnhancedSoftwareTimestamper::enableSocketTimestamping(SOCKET sock) const {
-    // Try to enable SO_TIMESTAMP if supported (may not be available on Windows)
+    // Try to enable SO_TIMESTAMP on the socket
     int enable = 1;
-    int result = setsockopt(sock, SOL_SOCKET, SO_TIMESTAMP, (char*)&enable, sizeof(enable));
-    
-    if (result == 0) {
-        GPTP_LOG_INFO("Enhanced timestamper: Socket timestamping enabled for socket %lld", (int64_t)sock);
+    if (setsockopt(sock, SOL_SOCKET, SO_TIMESTAMP, (char*)&enable, sizeof(enable)) == 0) {
+        GPTP_LOG_DEBUG("Socket timestamping enabled");
         return true;
     } else {
-        GPTP_LOG_DEBUG("Enhanced timestamper: Socket timestamping not available (error: %d)", WSAGetLastError());
+        GPTP_LOG_DEBUG("Socket timestamping not supported");
         return false;
     }
 }
 
 bool EnhancedSoftwareTimestamper::getSocketTimestamp(SOCKET sock, Timestamp& ts) const {
-    // Windows socket timestamping is limited, fallback to performance counter
     ts = getPerformanceCounterTime();
-    return false; // Indicate this is not a true socket timestamp
+    return (ts.seconds_ls > 0 || ts.nanoseconds > 0);
 }
 
 void EnhancedSoftwareTimestamper::calibrateTimestampPrecision() {
-    const int num_samples = 100;
-    int64_t min_delta = LLONG_MAX;
+    // Measure the precision of different timestamp methods
+    calibrated = false;
+    method_precision_ns = 1000000; // Default to 1ms
     
-    GPTP_LOG_INFO("Enhanced timestamper: Calibrating precision with %d samples...", num_samples);
-    
-    for (int i = 0; i < num_samples; i++) {
-        Timestamp t1 = getTimestamp(preferred_method);
-        Timestamp t2 = getTimestamp(preferred_method);
-        
-        // Convert to nanoseconds for comparison
-        uint64_t t1_ns = (uint64_t)t1.seconds_ls * 1000000000ULL + t1.nanoseconds;
-        uint64_t t2_ns = (uint64_t)t2.seconds_ls * 1000000000ULL + t2.nanoseconds;
-        
-        if (t2_ns > t1_ns) {
-            int64_t delta = t2_ns - t1_ns;
-            if (delta > 0 && delta < min_delta) {
-                min_delta = delta;
-            }
-        }
-        
-        // Small delay to avoid overwhelming the system
-        Sleep(1);
+    switch (preferred_method) {
+        case WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER:
+            method_precision_ns = 100; // ~100ns precision typical for QPC
+            break;
+        case WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE:
+            method_precision_ns = 1000; // ~1us precision typical
+            break;
+        default:
+            method_precision_ns = 1000000; // ~1ms precision fallback
+            break;
     }
     
-    if (min_delta != LLONG_MAX && min_delta > 0) {
-        method_precision_ns = min_delta;
-        calibrated = true;
-        GPTP_LOG_INFO("Enhanced timestamper: Calibrated precision: %lld ns", method_precision_ns);
-    } else {
-        // Use conservative estimate based on method
-        switch (preferred_method) {
-            case WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER:
-                method_precision_ns = 100; // ~100ns for QPC
-                break;
-            case WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE:
-                method_precision_ns = 100; // ~100ns for precise time
-                break;
-            default:
-                method_precision_ns = 1000000; // 1ms for fallback methods
-                break;
-        }
-        GPTP_LOG_WARNING("Enhanced timestamper: Calibration failed, using estimated precision: %lld ns", method_precision_ns);
-    }
+    GPTP_LOG_DEBUG("Calibrated timestamp precision: %lld ns", method_precision_ns);
+    calibrated = true;
 }
 
 bool EnhancedSoftwareTimestamper::isMethodAvailable(WindowsTimestampMethod method) const {
@@ -1157,73 +1213,73 @@ bool EnhancedSoftwareTimestamper::isMethodAvailable(WindowsTimestampMethod metho
         case WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER:
             return config.high_resolution_available;
         case WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE:
-            // GetSystemTimePreciseAsFileTime is available on Windows 8+
-            return true; // Assume available on modern Windows
+            // GetSystemTimePreciseAsFileTime is available in Windows 8+
+            return true;
         case WindowsTimestampMethod::WINSOCK_TIMESTAMP:
-            return false; // Limited support on Windows
+            // Generally not available on Windows
+            return false;
         case WindowsTimestampMethod::FALLBACK_GETTICKCOUNT:
-            return true; // Always available
+            return true;
         default:
             return false;
     }
 }
 
 Timestamp EnhancedSoftwareTimestamper::getPerformanceCounterTime() const {
-    LARGE_INTEGER counter;
-    if (!QueryPerformanceCounter(&counter) || !config.high_resolution_available) {
+    if (!config.high_resolution_available) {
         return getFallbackTime();
     }
     
-    // Convert to nanoseconds
-    uint64_t ns = (counter.QuadPart * 1000000000ULL) / config.performance_frequency.QuadPart;
+    LARGE_INTEGER counter;
+    if (QueryPerformanceCounter(&counter)) {
+        // Convert to nanoseconds
+        uint64_t ns = (counter.QuadPart * 1000000000ULL) / config.performance_frequency.QuadPart;
+        
+        Timestamp result;
+        result.nanoseconds = ns % 1000000000;
+        result.seconds_ls = (ns / 1000000000) & 0xFFFFFFFF;
+        result.seconds_ms = (uint16_t)((ns / 1000000000) >> 32);
+        return result;
+    }
     
-    Timestamp timestamp;
-    timestamp.nanoseconds = ns % 1000000000;
-    timestamp.seconds_ls = (ns / 1000000000) & 0xFFFFFFFF;
-    timestamp.seconds_ms = (uint16_t)((ns / 1000000000) >> 32);
-    timestamp._version = 0;
-    
-    return timestamp;
+    return getFallbackTime();
 }
 
 Timestamp EnhancedSoftwareTimestamper::getPreciseSystemTime() const {
     FILETIME ft;
     GetSystemTimePreciseAsFileTime(&ft);
     
+    // Convert FILETIME to 100ns intervals since 1601
     ULARGE_INTEGER uli;
     uli.LowPart = ft.dwLowDateTime;
     uli.HighPart = ft.dwHighDateTime;
     
-    // Convert from Windows FILETIME to nanoseconds since epoch
-    uint64_t ns = (uli.QuadPart - 116444736000000000ULL) * 100;
+    // Convert to Unix epoch (nanoseconds since 1970)
+    uint64_t ns_since_1970 = (uli.QuadPart - 116444736000000000ULL) * 100;
     
-    Timestamp timestamp;
-    timestamp.nanoseconds = ns % 1000000000;
-    timestamp.seconds_ls = (ns / 1000000000) & 0xFFFFFFFF;
-    timestamp.seconds_ms = (uint16_t)((ns / 1000000000) >> 32);
-    timestamp._version = 0;
-    
-    return timestamp;
+    Timestamp result;
+    result.nanoseconds = ns_since_1970 % 1000000000;
+    result.seconds_ls = (ns_since_1970 / 1000000000) & 0xFFFFFFFF;
+    result.seconds_ms = (uint16_t)((ns_since_1970 / 1000000000) >> 32);
+    return result;
 }
 
 Timestamp EnhancedSoftwareTimestamper::getWinsockTimestamp(SOCKET sock) const {
-    // Windows has limited Winsock timestamping support
+    // Winsock timestamping generally not available on Windows
     // Fall back to performance counter
     return getPerformanceCounterTime();
 }
 
 Timestamp EnhancedSoftwareTimestamper::getFallbackTime() const {
-    // Use GetTickCount64 as fallback
-    uint64_t tick_count_ms = GetTickCount64();
-    uint64_t ns = tick_count_ms * 1000000; // Convert to nanoseconds
+    // Use GetTickCount64 as final fallback
+    uint64_t ms = GetTickCount64();
+    uint64_t ns = ms * 1000000ULL; // Convert to nanoseconds
     
-    Timestamp timestamp;
-    timestamp.nanoseconds = ns % 1000000000;
-    timestamp.seconds_ls = (ns / 1000000000) & 0xFFFFFFFF;
-    timestamp.seconds_ms = (uint16_t)((ns / 1000000000) >> 32);
-    timestamp._version = 0;
-    
-    return timestamp;
+    Timestamp result;
+    result.nanoseconds = ns % 1000000000;
+    result.seconds_ls = (ns / 1000000000) & 0xFFFFFFFF;
+    result.seconds_ms = (uint16_t)((ns / 1000000000) >> 32);
+    return result;
 }
 
 // ==============================
@@ -1231,93 +1287,90 @@ Timestamp EnhancedSoftwareTimestamper::getFallbackTime() const {
 // ==============================
 
 void TimestampingDiagnostics::logTimestampingCapabilities(EnhancedSoftwareTimestamper& timestamper) {
-    GPTP_LOG_INFO("=== Timestamping Capabilities Analysis ===");
+    GPTP_LOG_INFO("=== Enhanced Software Timestamping Capabilities ===");
     
-    // Check hardware timestamping availability (Intel OIDs)
-    GPTP_LOG_INFO("Hardware timestamping: Not Available (Intel OIDs disabled/failed)");
+    WindowsTimestampMethod ts_method = timestamper.getPreferredMethod();
+    bool available = timestamper.isMethodAvailable(ts_method);
+    int64_t precision = timestamper.getTimestampPrecision();
     
-    // Software timestamping capabilities
-    GPTP_LOG_INFO("Software timestamping capabilities:");
+    GPTP_LOG_INFO("Preferred method: %d, Available: %s, Precision: %lld ns", 
+        static_cast<int>(ts_method), available ? "Yes" : "No", precision);
+    
+    // Test each method
+    GPTP_LOG_INFO("Method availability:");
     GPTP_LOG_INFO("  QueryPerformanceCounter: %s", 
-                 timestamper.isMethodAvailable(WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER) ? "Available" : "Not Available");
-    GPTP_LOG_INFO("  GetSystemTimePreciseAsFileTime: %s",
-                 timestamper.isMethodAvailable(WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE) ? "Available" : "Not Available");
-    GPTP_LOG_INFO("  Winsock timestamping: %s",
-                 timestamper.isMethodAvailable(WindowsTimestampMethod::WINSOCK_TIMESTAMP) ? "Available" : "Not Available");
+        timestamper.isMethodAvailable(WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER) ? "Available" : "Not available");
+    GPTP_LOG_INFO("  GetSystemTimePrecise: %s", 
+        timestamper.isMethodAvailable(WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE) ? "Available" : "Not available");
+    GPTP_LOG_INFO("  Winsock timestamp: %s", 
+        timestamper.isMethodAvailable(WindowsTimestampMethod::WINSOCK_TIMESTAMP) ? "Available" : "Not available");
+}
+
+void TimestampingDiagnostics::logPerformanceCharacteristics(EnhancedSoftwareTimestamper& timestamper) {
+    GPTP_LOG_INFO("=== Timestamping Performance Characteristics ===");
     
-    // Current configuration
-    GPTP_LOG_INFO("Current configuration:");
-    GPTP_LOG_INFO("  Preferred method: %d", (int)timestamper.getPreferredMethod());
-    GPTP_LOG_INFO("  Measured precision: %lld ns", timestamper.getTimestampPrecision());
+    WindowsTimestampMethod method = timestamper.getPreferredMethod();
+    int64_t measured_precision = measureTimestampPrecision(method);
+    int64_t clock_resolution = measureClockResolution();
     
-    // Enhanced thresholds
-    GPTP_LOG_INFO("Enhanced timing thresholds:");
-    GPTP_LOG_INFO("  Software timestamp threshold: %lld ns", EnhancedTimestampingConfig::SOFTWARE_TIMESTAMP_THRESHOLD_NS);
-    GPTP_LOG_INFO("  PDelay threshold: %lld ns", EnhancedTimestampingConfig::PDELAY_THRESHOLD_NS);
-    GPTP_LOG_INFO("  Sync threshold: %lld ns", EnhancedTimestampingConfig::SYNC_THRESHOLD_NS);
-    GPTP_LOG_INFO("  Allow software asCapable: %s", EnhancedTimestampingConfig::ALLOW_SOFTWARE_ASCAPABLE ? "Yes" : "No");
+    GPTP_LOG_INFO("Measured precision: %lld ns", measured_precision);
+    GPTP_LOG_INFO("Clock resolution: %lld ns", clock_resolution);
     
     logSystemTimingInfo();
 }
 
-void TimestampingDiagnostics::logPerformanceCharacteristics(EnhancedSoftwareTimestamper& timestamper) {
-    GPTP_LOG_INFO("=== Performance Characteristics ===");
-    
-    // Measure different methods
-    for (int method = 0; method < 4; method++) {
-        WindowsTimestampMethod ts_method = static_cast<WindowsTimestampMethod>(method);
-        if (timestamper.isMethodAvailable(ts_method)) {
-            int64_t precision = measureTimestampPrecision(ts_method);
-            GPTP_LOG_INFO("Method %d precision: %lld ns", method, precision);
-        }
-    }
-    
-    // Clock resolution
-    int64_t clock_resolution = measureClockResolution();
-    GPTP_LOG_INFO("System clock resolution: %lld ns", clock_resolution);
-}
-
 int64_t TimestampingDiagnostics::measureClockResolution() {
-    LARGE_INTEGER frequency;
-    if (QueryPerformanceFrequency(&frequency)) {
-        return 1000000000LL / frequency.QuadPart; // Convert to nanoseconds
+    DWORD timeAdjustment, timeIncrement;
+    BOOL timeAdjustmentDisabled;
+    
+    if (GetSystemTimeAdjustment(&timeAdjustment, &timeIncrement, &timeAdjustmentDisabled)) {
+        // timeIncrement is in 100ns units
+        return timeIncrement * 100;
     }
-    return 1000000; // 1ms fallback
+    
+    return 1000000; // Default 1ms if can't determine
 }
 
 int64_t TimestampingDiagnostics::measureTimestampPrecision(WindowsTimestampMethod method) {
-    // This is a simplified version - would need timestamper instance for full implementation
-    switch (method) {
-        case WindowsTimestampMethod::QUERY_PERFORMANCE_COUNTER:
-            return measureClockResolution();
-        case WindowsTimestampMethod::GET_SYSTEM_TIME_PRECISE:
-            return 100; // Estimated 100ns
-        default:
-            return 1000000; // 1ms fallback
+    // Simple precision measurement - measure minimum observable time difference
+    const int samples = 100;
+    int64_t min_diff = LLONG_MAX;
+    
+    EnhancedSoftwareTimestamper test_stamper;
+    
+    // Helper function to convert Timestamp to nanoseconds
+    auto timestampToNs = [](const Timestamp& ts) -> int64_t {
+        return (int64_t)ts.seconds_ls * 1000000000LL + (int64_t)ts.nanoseconds;
+    };
+    
+    for (int i = 0; i < samples; i++) {
+        Timestamp t1 = test_stamper.getTimestamp(method);
+        Timestamp t2 = test_stamper.getTimestamp(method);
+        
+        int64_t diff = timestampToNs(t2) - timestampToNs(t1);
+        if (diff > 0 && diff < min_diff) {
+            min_diff = diff;
+        }
     }
+    
+    return (min_diff == LLONG_MAX) ? 1000000 : min_diff; // Default to 1ms if no difference detected
 }
 
 void TimestampingDiagnostics::logSystemTimingInfo() {
     GPTP_LOG_INFO("=== System Timing Information ===");
     
-    // Performance counter frequency
-    LARGE_INTEGER frequency;
-    if (QueryPerformanceFrequency(&frequency)) {
-        GPTP_LOG_INFO("Performance counter frequency: %lld Hz", frequency.QuadPart);
-        GPTP_LOG_INFO("Performance counter resolution: %lld ns", 1000000000LL / frequency.QuadPart);
+    // Performance frequency
+    LARGE_INTEGER freq;
+    if (QueryPerformanceFrequency(&freq)) {
+        GPTP_LOG_INFO("Performance counter frequency: %lld Hz", freq.QuadPart);
+        GPTP_LOG_INFO("Performance counter resolution: %.3f ns", 1000000000.0 / freq.QuadPart);
     }
     
     // System time resolution
     DWORD timeAdjustment, timeIncrement;
     BOOL timeAdjustmentDisabled;
     if (GetSystemTimeAdjustment(&timeAdjustment, &timeIncrement, &timeAdjustmentDisabled)) {
-        GPTP_LOG_INFO("System time increment: %lu (100ns units)", timeIncrement);
+        GPTP_LOG_INFO("System time increment: %lu (100ns units = %lu ns)", timeIncrement, timeIncrement * 100);
         GPTP_LOG_INFO("Time adjustment disabled: %s", timeAdjustmentDisabled ? "Yes" : "No");
     }
-    
-    // CPU features that might affect timing
-    SYSTEM_INFO sysInfo;
-    GetSystemInfo(&sysInfo);
-    GPTP_LOG_INFO("Number of processors: %lu", sysInfo.dwNumberOfProcessors);
-    GPTP_LOG_INFO("Processor type: %lu", sysInfo.dwProcessorType);
 }

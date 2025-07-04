@@ -53,6 +53,8 @@
 #include "packet.hpp"
 
 #include "iphlpapi.h"
+#include <mutex>
+#include <chrono>
 #include "windows_ipc.hpp"
 #include "tsc.hpp"
 
@@ -60,6 +62,15 @@
 
 #include <map>
 #include <list>
+
+// Windows socket constants (define if not available)
+#ifndef SO_TIMESTAMP
+#define SO_TIMESTAMP 0x300A
+#endif
+
+// Forward declarations
+class Timestamp;
+class EnhancedSoftwareTimestamper;
 
 // Constants for OID failure tracking
 #define MAX_OID_FAILURES 10
@@ -964,6 +975,92 @@ public:
 #ifndef OID_TIMESTAMP_CURRENT_CONFIG
 #define OID_TIMESTAMP_CURRENT_CONFIG 0x00010266
 #endif
+#ifndef OID_GEN_STATISTICS
+#define OID_GEN_STATISTICS 0x00020202
+#endif
+
+// Enhanced timestamping capabilities and configuration
+struct EnhancedTimestampingConfig {
+    // Software timestamping precision thresholds (relaxed for software timestamping)
+    static constexpr int64_t SOFTWARE_TIMESTAMP_THRESHOLD_NS = 1000000;  // 1ms
+    static constexpr int64_t PDELAY_THRESHOLD_NS = 5000000;              // 5ms  
+    static constexpr int64_t SYNC_THRESHOLD_NS = 2000000;                // 2ms
+    static constexpr bool ALLOW_SOFTWARE_ASCAPABLE = true;               // Allow asCapable with software timestamping
+    
+    // Performance counter frequency for high-precision timing
+    LARGE_INTEGER performance_frequency;
+    bool high_resolution_available;
+    
+    EnhancedTimestampingConfig() : high_resolution_available(false) {
+        if (QueryPerformanceFrequency(&performance_frequency)) {
+            high_resolution_available = true;
+        }
+    }
+};
+
+// Windows standard timestamping methods
+enum class WindowsTimestampMethod {
+    QUERY_PERFORMANCE_COUNTER,      // High-precision QueryPerformanceCounter
+    GET_SYSTEM_TIME_PRECISE,        // GetSystemTimePreciseAsFileTime
+    WINSOCK_TIMESTAMP,              // Winsock SO_TIMESTAMP if available
+    FALLBACK_GETTICKCOUNT           // Fallback to GetTickCount64
+};
+
+// Enhanced software timestamper class
+class EnhancedSoftwareTimestamper {
+private:
+    EnhancedTimestampingConfig config;
+    WindowsTimestampMethod preferred_method;
+    mutable std::mutex timestamp_mutex;
+    
+    // Calibration for timestamp methods
+    int64_t method_precision_ns;
+    bool calibrated;
+    
+public:
+    EnhancedSoftwareTimestamper();
+    ~EnhancedSoftwareTimestamper() = default;
+    
+    // Get high-precision system timestamp
+    Timestamp getSystemTime() const;
+    
+    // Get timestamp using specific method
+    Timestamp getTimestamp(WindowsTimestampMethod method) const;
+    
+    // Enable socket timestamping if supported
+    bool enableSocketTimestamping(SOCKET sock) const;
+    
+    // Get socket timestamp if available
+    bool getSocketTimestamp(SOCKET sock, Timestamp& ts) const;
+    
+    // Calibrate timestamping precision
+    void calibrateTimestampPrecision();
+    
+    // Get measured precision in nanoseconds
+    int64_t getTimestampPrecision() const { return method_precision_ns; }
+    
+    // Check if method is available
+    bool isMethodAvailable(WindowsTimestampMethod method) const;
+    
+    // Get preferred timestamping method
+    WindowsTimestampMethod getPreferredMethod() const { return preferred_method; }
+    
+private:
+    Timestamp getPerformanceCounterTime() const;
+    Timestamp getPreciseSystemTime() const;
+    Timestamp getWinsockTimestamp(SOCKET sock) const;
+    Timestamp getFallbackTime() const;
+};
+
+// Timestamping diagnostics and logging
+class TimestampingDiagnostics {
+public:
+    static void logTimestampingCapabilities(EnhancedSoftwareTimestamper& timestamper);
+    static void logPerformanceCharacteristics(EnhancedSoftwareTimestamper& timestamper);
+    static int64_t measureClockResolution();
+    static int64_t measureTimestampPrecision(WindowsTimestampMethod method);
+    static void logSystemTimingInfo();
+};
 
 typedef struct
 {
@@ -1893,89 +1990,6 @@ public:
 		GPTP_LOG_INFO("This may require manual driver configuration or the adapter may not support hardware PTP");
 		return false;
 	}
-
-	// Enhanced timestamping capabilities and configuration
-	struct EnhancedTimestampingConfig {
-	    // Software timestamping precision thresholds (relaxed for software timestamping)
-	    static constexpr int64_t SOFTWARE_TIMESTAMP_THRESHOLD_NS = 1000000;  // 1ms
-	    static constexpr int64_t PDELAY_THRESHOLD_NS = 5000000;              // 5ms  
-	    static constexpr int64_t SYNC_THRESHOLD_NS = 2000000;                // 2ms
-	    static constexpr bool ALLOW_SOFTWARE_ASCAPABLE = true;               // Allow asCapable with software timestamping
-	    
-	    // Performance counter frequency for high-precision timing
-	    LARGE_INTEGER performance_frequency;
-	    bool high_resolution_available;
-	    
-	    EnhancedTimestampingConfig() : high_resolution_available(false) {
-	        if (QueryPerformanceFrequency(&performance_frequency)) {
-	            high_resolution_available = true;
-	        }
-	    }
-	};
-
-	// Windows standard timestamping methods
-	enum class WindowsTimestampMethod {
-	    QUERY_PERFORMANCE_COUNTER,      // High-precision QueryPerformanceCounter
-	    GET_SYSTEM_TIME_PRECISE,        // GetSystemTimePreciseAsFileTime
-	    WINSOCK_TIMESTAMP,              // Winsock SO_TIMESTAMP if available
-	    FALLBACK_GETTICKCOUNT           // Fallback to GetTickCount64
-	};
-
-	// Enhanced software timestamper class
-	class EnhancedSoftwareTimestamper {
-	private:
-	    EnhancedTimestampingConfig config;
-	    WindowsTimestampMethod preferred_method;
-	    mutable std::mutex timestamp_mutex;
-	    
-	    // Calibration for timestamp methods
-	    int64_t method_precision_ns;
-	    bool calibrated;
-	    
-	public:
-	    EnhancedSoftwareTimestamper();
-	    ~EnhancedSoftwareTimestamper() = default;
-	    
-	    // Get high-precision system timestamp
-	    Timestamp getSystemTime() const;
-	    
-	    // Get timestamp using specific method
-	    Timestamp getTimestamp(WindowsTimestampMethod method) const;
-	    
-	    // Enable socket timestamping if supported
-	    bool enableSocketTimestamping(SOCKET sock) const;
-	    
-	    // Get socket timestamp if available
-	    bool getSocketTimestamp(SOCKET sock, Timestamp& ts) const;
-	    
-	    // Calibrate timestamping precision
-	    void calibrateTimestampPrecision();
-	    
-	    // Get measured precision in nanoseconds
-	    int64_t getTimestampPrecision() const { return method_precision_ns; }
-	    
-	    // Check if method is available
-	    bool isMethodAvailable(WindowsTimestampMethod method) const;
-	    
-	    // Get preferred timestamping method
-	    WindowsTimestampMethod getPreferredMethod() const { return preferred_method; }
-	    
-	private:
-	    Timestamp getPerformanceCounterTime() const;
-	    Timestamp getPreciseSystemTime() const;
-	    Timestamp getWinsockTimestamp(SOCKET sock) const;
-	    Timestamp getFallbackTime() const;
-	};
-
-	// Timestamping diagnostics and logging
-	class TimestampingDiagnostics {
-	public:
-	    static void logTimestampingCapabilities(EnhancedSoftwareTimestamper& timestamper);
-	    static void logPerformanceCharacteristics(EnhancedSoftwareTimestamper& timestamper);
-	    static int64_t measureClockResolution();
-	    static int64_t measureTimestampPrecision(WindowsTimestampMethod method);
-	    static void logSystemTimingInfo();
-	};
 };
 
 
