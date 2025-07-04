@@ -101,7 +101,7 @@ endif()
 #endif
 
 // Runtime logging
-printf("INFO: Packet capture backend: %s (modern: %s)\n", 
+GPTP_LOG_INFO("Packet capture backend: %s (modern: %s)\n", 
        PCAP_BACKEND_NAME, 
        PCAP_BACKEND_MODERN ? "yes" : "no");
 ```

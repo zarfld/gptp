@@ -194,10 +194,10 @@ packet_error_t openInterfaceByAddr( struct packet_handle *handle, packet_addr_t 
         strncpy_s( name+PCAP_INTERFACENAMEPREFIX_LENGTH, PCAP_INTERFACENAMESUFFIX_LENGTH+1, pAdapterAddress->AdapterName, PCAP_INTERFACENAMESUFFIX_LENGTH );
         
         // ✅ Log packet capture backend information for debugging
-        printf("INFO: Packet capture backend: %s (modern: %s)\n", 
+        GPTP_LOG_INFO("Packet capture backend: %s (modern: %s)\n", 
                PCAP_BACKEND_NAME, 
                PCAP_BACKEND_MODERN ? "yes" : "no");
-        printf( "Opening: %s\n", name );
+        GPTP_LOG_INFO("Opening: %s\n", name );
         
         // Enhanced timeout configuration for better packet arrival detection
         int optimized_timeout = timeout;
@@ -207,7 +207,7 @@ packet_error_t openInterfaceByAddr( struct packet_handle *handle, packet_addr_t 
         } else if (timeout > STANDARD_TIMEOUT_MS) {
             // For direct NIC-to-NIC scenarios, use optimized timeout
             optimized_timeout = OPTIMIZED_TIMEOUT_MS;
-            printf("INFO: Using optimized timeout %dms for direct connection\n", optimized_timeout);
+            GPTP_LOG_INFO("Using optimized timeout %dms for direct connection\n", optimized_timeout);
         }
         
         handle->iface = pcap_open(  name, MAX_FRAME_SIZE, 
@@ -310,7 +310,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
         if( wait_result != WAIT_OBJECT_0 ) {
             GPTP_LOG_DEBUG("recvFrame: Early return - failed to get capture_lock mutex (thread_id=%lu)\n", GetCurrentThreadId());
             ret = PACKET_GETMUTEX_ERROR;
-            printf("ERROR: recvFrame: Failed to get capture_lock mutex\n");
+            GPTP_LOG_ERROR("recvFrame: Failed to get capture_lock mutex\n");
             goto fnexit;
         }
     } catch (const std::exception& ex) {
@@ -327,15 +327,15 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
         // --- Robust recovery: If iface is NULL, try to re-open before proceeding ---
         if (handle->iface == NULL) {
             GPTP_LOG_DEBUG("recvFrame: Early return - iface is NULL (thread_id=%lu)\n", GetCurrentThreadId());
-            printf("ERROR: recvFrame: Interface handle is NULL, attempting to re-open...\n");
+            GPTP_LOG_ERROR("recvFrame: Interface handle is NULL, attempting to re-open...\n");
             packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
             if (reopen_ret != PACKET_NO_ERROR) {
-                printf("ERROR: recvFrame: Failed to re-open interface (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+                GPTP_LOG_ERROR("recvFrame: Failed to re-open interface (error=%d), sleeping 100ms before retry...\n", reopen_ret);
                 ReleaseMutex(handle->capture_lock);
                 Sleep(100);
                 goto fnexit;
             } else {
-                printf("INFO: recvFrame: Interface re-opened successfully after being NULL.\n");
+                GPTP_LOG_INFO("recvFrame: Interface re-opened successfully after being NULL.\n");
                 consecutive_timeouts = 0;
                 consecutive_errors = 0;
             }
@@ -366,16 +366,16 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
             consecutive_errors = 0;
             GPTP_LOG_DEBUG("recvFrame: Timeout occurred (total timeouts: %d, consecutive: %d)\n", timeout_count, consecutive_timeouts);
             if (consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
-                printf("ERROR: recvFrame: Too many consecutive timeouts (%d), closing and reopening interface!\n", consecutive_timeouts);
+                GPTP_LOG_ERROR("recvFrame: Too many consecutive timeouts (%d), closing and reopening interface!\n", consecutive_timeouts);
                 closeInterface(handle);
                 packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
                 if (reopen_ret != PACKET_NO_ERROR) {
-                    printf("ERROR: recvFrame: Failed to re-open interface after timeout (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+                    GPTP_LOG_ERROR("recvFrame: Failed to re-open interface after timeout (error=%d), sleeping 100ms before retry...\n", reopen_ret);
                     ReleaseMutex(handle->capture_lock);
                     Sleep(100);
                     goto fnexit;
                 } else {
-                    printf("INFO: recvFrame: Interface re-opened successfully after timeout.\n");
+                    GPTP_LOG_INFO("recvFrame: Interface re-opened successfully after timeout.\n");
                     consecutive_timeouts = 0;
                     consecutive_errors = 0;
                 }
@@ -385,18 +385,18 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
             ret = PACKET_RECVFAILED_ERROR;
             consecutive_errors++;
             consecutive_timeouts = 0;
-            printf("ERROR: recvFrame: pcap_next_ex failed with result %d (consecutive errors: %d)\n", pcap_result, consecutive_errors);
+            GPTP_LOG_ERROR("recvFrame: pcap_next_ex failed with result %d (consecutive errors: %d)\n", pcap_result, consecutive_errors);
             if (consecutive_errors >= MAX_CONSECUTIVE_ERRORS) {
-                printf("ERROR: recvFrame: Too many consecutive errors (%d), closing and reopening interface!\n", consecutive_errors);
+                GPTP_LOG_ERROR("recvFrame: Too many consecutive errors (%d), closing and reopening interface!\n", consecutive_errors);
                 closeInterface(handle);
                 packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
                 if (reopen_ret != PACKET_NO_ERROR) {
-                    printf("ERROR: recvFrame: Failed to re-open interface after error (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+                    GPTP_LOG_ERROR("recvFrame: Failed to re-open interface after error (error=%d), sleeping 100ms before retry...\n", reopen_ret);
                     ReleaseMutex(handle->capture_lock);
                     Sleep(100);
                     goto fnexit;
                 } else {
-                    printf("INFO: recvFrame: Interface re-opened successfully after error.\n");
+                    GPTP_LOG_INFO("recvFrame: Interface re-opened successfully after error.\n");
                     consecutive_timeouts = 0;
                     consecutive_errors = 0;
                 }
@@ -444,7 +444,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     if( !ReleaseMutex( handle->capture_lock )) {
         GPTP_LOG_DEBUG("recvFrame: Early return - failed to release capture_lock mutex (thread_id=%lu)\n", GetCurrentThreadId());
         ret = PACKET_RLSMUTEX_ERROR;
-        printf("ERROR: recvFrame: Failed to release capture_lock mutex\n");
+        GPTP_LOG_ERROR("recvFrame: Failed to release capture_lock mutex\n");
         goto fnexit;
     }
 

@@ -455,12 +455,38 @@ void *EtherPort::openPort( EtherPort *port )
                 Timestamp current_time = clock->getTime();
                 Timestamp time_diff = current_time - last_activity_time;
                 uint64_t time_diff_ms = (uint64_t)time_diff.seconds_ls * 1000 + time_diff.nanoseconds / 1000000;
-                GPTP_LOG_STATUS("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago, heartbeat=%llu", 
+                GPTP_LOG_INFO("*** NETWORK THREAD: Loop #%llu, thread alive, last_activity=%llu ms ago, heartbeat=%llu", 
                     loop_counter, time_diff_ms, network_thread_heartbeat.load(std::memory_order_relaxed));
+
+				/* Status message should show 
+					- loaded profile name
+					- current loop count
+					- Local clock state 
+					- Grandmaster Clock Identity
+					- Offset from master
+					- Path Delay (min/max/avg	)
+					- asCapable status
+					- PDelay state (started/halting)
+
+				*/
+				/*GPTP_LOG_STATUS("*** NETWORK THREAD: Profile: %s, Loop: %llu, Clock State: %s, GM Identity: %s, Offset from Master: %lld ns, PDelay State: %s",
+					getProfile().profile_name.c_str(),
+					loop_counter,
+					clock->getClockStateString().c_str(),
+					clock->getGrandmasterClockIdentity().toString().c_str(),
+					clock->getOffsetFromMaster().nanoseconds,
+					pdelay_started ? "Started" : "Halted");*/
+				ClockIdentity GM = clock->getGrandmasterClockIdentity();
+				GPTP_LOG_STATUS("*** NETWORK THREAD: Profile: %s, Loop: %llu,  GM Identity: %s,  PDelay State: %s",
+					getProfile().profile_name.c_str(),
+					loop_counter,
+					GM.getIdentityString(),
+					pdelay_started ? "Started" : "Halted");
+
             }
 
             if (loop_counter == 1) {
-                GPTP_LOG_STATUS("*** NETWORK THREAD: First entry into receive loop (loop_counter=1) ***");
+                GPTP_LOG_INFO("*** NETWORK THREAD: First entry into receive loop (loop_counter=1) ***");
             }
 
             // Log before every lock/unlock/wait/timer operation
