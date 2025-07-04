@@ -1925,8 +1925,16 @@ void PTPMessagePathDelayRespFollowUp::processMessage
 				port->setAsCapable( true );
 			} else {
 				// Profile: Less than required successful exchanges, keep current state
+				unsigned needed = min_successes - pdelay_count;
+				long long next_interval = ((long long)(pow((double)2,eport->getPDelayInterval())*1000000000.0));
+				double estimated_time_to_capable = needed * (next_interval / 1000000000.0);
+				
 				GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay success %d/%d - need %d more before setting asCapable=true ***", 
-					eport->getProfile().profile_name.c_str(), pdelay_count, min_successes, min_successes - pdelay_count);
+					eport->getProfile().profile_name.c_str(), pdelay_count, min_successes, needed);
+				GPTP_LOG_STATUS("*** ASCAPABLE PROGRESS: Estimated time to asCapable=true: %.1f seconds (assuming no timeouts) ***", 
+					estimated_time_to_capable);
+				GPTP_LOG_STATUS("*** ASCAPABLE TIMING: Next PDelay request in %.1f seconds ***", 
+					next_interval / 1000000000.0);
 			}
 		}
 		else

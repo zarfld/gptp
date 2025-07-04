@@ -194,10 +194,28 @@ void EtherPort::startPDelay()
 	
 	if(!pdelayHalted()) {
 		if( getPDelayInterval() != PTPMessageSignalling::sigMsgInterval_NoSend) {
+			// Enhanced startup logging for asCapable progress tracking
+			unsigned current_pdelay_count = getPdelayCount();
+			unsigned min_required = getProfile().min_pdelay_successes;
+			bool currently_as_capable = getAsCapable();
+			
 			// Use profile-configured PDelay interval for all profiles
 			uint64_t pdelay_interval_ns = (uint64_t)(pow(2.0, (double)getPDelayInterval()) * 1000000000.0);
 			GPTP_LOG_DEBUG("%s profile - starting PDelay timer with %llu ns interval (%.3f s) ***", 
 				getProfile().profile_name.c_str(), pdelay_interval_ns, pdelay_interval_ns / 1000000000.0);
+			
+			// Show initial asCapable status and requirements
+			if (!currently_as_capable) {
+				unsigned needed = (min_required > current_pdelay_count) ? (min_required - current_pdelay_count) : 0;
+				double estimated_time = needed * (pdelay_interval_ns / 1000000000.0);
+				GPTP_LOG_STATUS("*** ASCAPABLE STARTUP: Beginning PDelay exchanges - need %d successful exchanges for asCapable=true (estimated: %.1f seconds) ***", 
+					needed, estimated_time);
+				GPTP_LOG_STATUS("*** ASCAPABLE CONFIG: Profile '%s' requires %d successful PDelay exchanges minimum ***", 
+					getProfile().profile_name.c_str(), min_required);
+			} else {
+				GPTP_LOG_STATUS("*** ASCAPABLE STARTUP: Already asCapable=true with %d successful exchanges ***", current_pdelay_count);
+			}
+			
 			pdelay_started = true;
 			startPDelayIntervalTimer(pdelay_interval_ns);
 			GPTP_LOG_DEBUG("*** PDelay timer started with interval: %d (%.3f seconds) ***", 
@@ -918,22 +936,31 @@ bool EtherPort::_processEvent( Event e )
 
 				timeout = timeout > EVENT_TIMER_GRANULARITY ?
 					timeout : EVENT_TIMER_GRANULARITY;
+				
+				// Enhanced logging: Show progress toward asCapable and timeout information
+				unsigned current_pdelay_count = getPdelayCount();
+				unsigned min_required = getProfile().min_pdelay_successes;
+				bool currently_as_capable = getAsCapable();
+				
+				GPTP_LOG_STATUS("*** PDELAY PROGRESS: PDelay request sent - asCapable progress: %d/%d successful exchanges (need %d more for asCapable=true) ***", 
+					current_pdelay_count, min_required, 
+					(min_required > current_pdelay_count) ? (min_required - current_pdelay_count) : 0);
+				GPTP_LOG_STATUS("*** PDELAY TIMEOUT: Expecting response within %.1f seconds (timeout multiplier: %d x interval) ***", 
+					timeout / 1000000000.0, PDELAY_RESP_RECEIPT_TIMEOUT_MULTIPLIER);
+				
+				if (!currently_as_capable) {
+					GPTP_LOG_STATUS("*** ASCAPABLE STATUS: Currently asCapable=false - %d more successful PDelay exchanges needed for asCapable=true ***", 
+						(min_required > current_pdelay_count) ? (min_required - current_pdelay_count) : 0);
+				} else {
+					GPTP_LOG_STATUS("*** ASCAPABLE STATUS: Currently asCapable=true with %d successful exchanges ***", current_pdelay_count);
+				}
+				
 				clock->addEventTimerLocked
 					(this, PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES, timeout );
 				GPTP_LOG_DEBUG("Schedule PDELAY_RESP_RECEIPT_TIMEOUT_EXPIRES, "
 					"PDelay interval %d, timeout %lld",
 					getPDelayInterval(), timeout);
-
-				interval =
-					((long long)
-					 (pow((double)2,getPDelayInterval())*1000000000.0));
-				interval = interval > EVENT_TIMER_GRANULARITY ?
-					interval : EVENT_TIMER_GRANULARITY;
-				GPTP_LOG_DEBUG("Restarting PDelay timer with interval=%lld ns (%.3f ms) ***", 
-					interval, interval / 1000000.0);
-				startPDelayIntervalTimer(interval);
-				GPTP_LOG_DEBUG("Restarted PDelay interval timer with interval=%lld ns (%.3f ms)", 
-					interval, interval / 1000000.0);
+				// ...existing code...
 			}
 		}
 		ret = true;
@@ -1042,6 +1069,13 @@ bool EtherPort::_processEvent( Event e )
 		unsigned min_pdelay_required = getProfile().min_pdelay_successes;
 		bool maintain_on_timeout = getProfile().maintain_as_capable_on_timeout;
 		bool reset_count_on_timeout = getProfile().reset_pdelay_count_on_timeout;
+		unsigned current_pdelay_count = getPdelayCount();
+		
+		// Enhanced timeout information
+		long long next_interval = ((long long)(pow((double)2,getPDelayInterval())*1000000000.0));
+		GPTP_LOG_STATUS("*** TIMEOUT DETAILS: PDelay response timeout occurred after %.1f seconds, next request in %.1f seconds ***", 
+			(PDELAY_RESP_RECEIPT_TIMEOUT_MULTIPLIER * next_interval) / 1000000000.0, 
+			next_interval / 1000000000.0);
 		
 		// Check if this is a truly missing response vs a late one that never arrived
 		bool response_received = getPDelayResponseReceived();
@@ -1054,11 +1088,15 @@ bool EtherPort::_processEvent( Event e )
 			GPTP_LOG_STATUS("*** %s COMPLIANCE: PDelay response missing (consecutive missing: %d) ***", 
 				getProfile().profile_name.c_str(), missing_count);
 			
+			// Enhanced asCapable progress logging
 			// Use profile configuration to determine asCapable behavior
 			if( getPdelayCount() < min_pdelay_required ) {
 				// Haven't reached minimum requirement yet
+				unsigned needed = min_pdelay_required - getPdelayCount();
 				GPTP_LOG_STATUS("*** %s COMPLIANCE: asCapable remains false - need %d more successful PDelay exchanges (current: %d/%d minimum) ***", 
-					getProfile().profile_name.c_str(), min_pdelay_required - getPdelayCount(), getPdelayCount(), min_pdelay_required);
+					getProfile().profile_name.c_str(), needed, getPdelayCount(), min_pdelay_required);
+				GPTP_LOG_STATUS("*** ASCAPABLE PROGRESS: Missing responses delay progress toward asCapable=true (estimated time: %.1f seconds minimum) ***", 
+					needed * (next_interval / 1000000000.0));
 			} else if( missing_count >= 3 && !maintain_on_timeout ) {
 				// Had successful exchanges before, but now 3+ consecutive missing - this indicates link failure
 				GPTP_LOG_STATUS("*** %s COMPLIANCE: %d consecutive missing responses after %d successful exchanges - setting asCapable=false ***", 
