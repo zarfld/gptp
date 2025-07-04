@@ -33,6 +33,17 @@ struct gPTPProfile {
     int8_t announce_interval_log;          // Announce interval (log2 seconds)
     int8_t pdelay_interval_log;            // PDelay interval (log2 seconds)
     
+    // Automotive Profile: Initial vs Operational intervals (Section 6.2.1.3-6.2.1.6)
+    int8_t initial_sync_interval_log;      // Initial sync interval (automotive)
+    int8_t operational_sync_interval_log;  // Operational sync interval (automotive)
+    int8_t initial_pdelay_interval_log;    // Initial PDelay interval (automotive)
+    int8_t operational_pdelay_interval_log; // Operational PDelay interval (automotive)
+    
+    // Automotive Profile: Interval management timeouts
+    uint32_t interval_transition_timeout_s; // Time to wait before switching to operational intervals (60s default)
+    bool signaling_enabled;                // Support for gPTP signaling messages
+    uint32_t signaling_response_timeout_ms; // Response timeout for signaling messages (250ms or 2*interval)
+    
     // Timeout and receipt configuration
     unsigned int sync_receipt_timeout;     // Sync receipt timeout multiplier
     unsigned int announce_receipt_timeout; // Announce receipt timeout multiplier
@@ -87,6 +98,29 @@ struct gPTPProfile {
     unsigned int test_status_interval_log; // Test status message interval (Automotive)
     bool force_slave_mode;                 // Force slave mode (disable grandmaster)
     
+    // Automotive Profile: Persistent storage configuration
+    bool persistent_neighbor_delay;        // Store neighborPropDelay in non-volatile memory
+    bool persistent_rate_ratio;            // Store rateRatio in non-volatile memory
+    bool persistent_neighbor_rate_ratio;   // Store neighborRateRatio in non-volatile memory
+    uint32_t neighbor_delay_update_threshold_ns; // Update stored value if differs by >100ns
+    
+    // Automotive Profile: Special behaviors
+    bool disable_source_port_identity_check; // Disable sourcePortIdentity verification (no announces)
+    bool disable_announce_transmission;     // Never send announce messages in automotive mode
+    bool automotive_holdover_enabled;      // Enable automotive holdover behavior for AED-E
+    bool automotive_bridge_behavior;       // Enable automotive AED-B sync timeout behavior
+    
+    // Automotive Profile: Port type classification and behavior
+    bool is_time_critical_port;             // Time critical vs non-time critical port (Table 12)
+    bool is_grandmaster_device;             // isGM variable (Section 6.2.1.1)
+    bool disable_neighbor_delay_threshold;  // Don't set asCapable=false on threshold exceeded
+    uint32_t max_startup_sync_wait_s;       // Max time to wait for initial sync (20s default)
+    
+    // Automotive Profile: Advanced signaling and interval management
+    bool send_signaling_on_sync_achieved;   // Send signaling within 60s of sync achievement
+    uint32_t signaling_send_timeout_s;      // Timeout for sending signaling after sync (60s)
+    bool revert_to_initial_on_link_event;   // Revert to initial intervals on link down/up
+    
     // Performance and compliance limits
     uint32_t max_convergence_time_ms;      // Maximum convergence time (0=no limit)
     uint32_t max_sync_jitter_ns;           // Maximum sync jitter (0=no limit)
@@ -118,6 +152,17 @@ struct gPTPProfile {
         sync_interval_log = 0;              // 1 second
         announce_interval_log = 0;          // 1 second
         pdelay_interval_log = 0;            // 1 second
+        
+        // Automotive Profile: Initial vs Operational intervals (Section 6.2.1.3-6.2.1.6)
+        initial_sync_interval_log = 0;      // 1 second (initial)
+        operational_sync_interval_log = 0;  // 1 second (operational)
+        initial_pdelay_interval_log = 0;    // 1 second (initial)
+        operational_pdelay_interval_log = 0; // 1 second (operational)
+        
+        // Automotive Profile: Interval management timeouts
+        interval_transition_timeout_s = 60; // 60 seconds default
+        signaling_enabled = false;          // Disable signaling messages by default
+        signaling_response_timeout_ms = 250; // 250ms default response timeout
         
         // Standard timeouts
         sync_receipt_timeout = 3;
@@ -162,12 +207,29 @@ struct gPTPProfile {
         requires_strict_timeouts = false;
         supports_bmca = true;
         
-        // Standard features (disabled)
+        // Standard profile features
         stream_aware_bmca = false;
         redundant_gm_support = false;
         automotive_test_status = false;
-        bmca_enabled = true;                // BMCA enabled by default
-        follow_up_enabled = true;           // FollowUp enabled by default
+        bmca_enabled = true;
+        follow_up_enabled = true;
+        
+        // Automotive Profile: Initialize automotive-specific fields to standard values
+        persistent_neighbor_delay = false;      // Disabled by default
+        persistent_rate_ratio = false;          // Disabled by default
+        persistent_neighbor_rate_ratio = false; // Disabled by default
+        neighbor_delay_update_threshold_ns = 100; // 100ns per spec
+        disable_source_port_identity_check = false; // Standard verification
+        disable_announce_transmission = false;   // Standard announce behavior
+        automotive_holdover_enabled = false;    // Disabled by default
+        automotive_bridge_behavior = false;     // Disabled by default
+        is_time_critical_port = false;          // Non-time critical by default
+        is_grandmaster_device = false;          // Not GM by default
+        disable_neighbor_delay_threshold = false; // Standard threshold behavior
+        max_startup_sync_wait_s = 20;           // 20 seconds max wait
+        send_signaling_on_sync_achieved = false; // Disabled by default
+        signaling_send_timeout_s = 60;          // 60 seconds per spec
+        revert_to_initial_on_link_event = false; // Disabled by default
         
         // Test and diagnostic features
         test_status_interval_log = 0;       // 1 second

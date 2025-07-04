@@ -179,27 +179,42 @@ gPTPProfile createAutomotiveProfile() {
     
     // Automotive profile identification
     profile.profile_name = "automotive";
-    profile.profile_version = "1.0";
-    profile.profile_description = "AVnu Automotive Profile";
+    profile.profile_version = "1.6";
+    profile.profile_description = "AVnu Automotive Profile (AVB Spec 1.6 Compliant)";
     
-    // Automotive timing intervals
-    profile.sync_interval_log = 0;          // 1 second
-    profile.announce_interval_log = 0;      // 1 second
-    profile.pdelay_interval_log = 0;        // 1 second
+    // Automotive timing intervals per Table 12 (Time Critical Ports by default)
+    // Section 6.2.6: Time Critical Port ranges
+    profile.initial_sync_interval_log = -3;    // 125ms (31.25ms-125ms range, using 125ms)
+    profile.initial_pdelay_interval_log = 0;   // 1s (fixed at 1s per spec)
+    
+    // Operational intervals for reduced overhead  
+    profile.operational_sync_interval_log = 0; // 1s (125ms-1s range, using 1s for reduced overhead)
+    profile.operational_pdelay_interval_log = 3; // 8s (1s-8s range, using 8s for minimal overhead)
+    
+    // Use initial intervals as current intervals (will switch after 60s)
+    profile.sync_interval_log = profile.initial_sync_interval_log;
+    profile.pdelay_interval_log = profile.initial_pdelay_interval_log;
+    profile.announce_interval_log = 127;       // SPEC: No announce messages (disabled)
+    
+    // Automotive interval management (Section 6.2.3)
+    profile.interval_transition_timeout_s = 60;    // 60 seconds per spec
+    profile.signaling_enabled = true;              // Support gPTP signaling
+    profile.signaling_response_timeout_ms = 250;   // 250ms or 2*interval per spec (minimum 250ms)
     
     // Automotive timeouts
     profile.sync_receipt_timeout = 3;
-    profile.announce_receipt_timeout = 3;
+    profile.announce_receipt_timeout = 3;      // Not used (no announces)
     profile.pdelay_receipt_timeout = 3;
-    profile.delay_req_interval_log = 0;     // DelayReq interval (not used in PDelay mode)
+    profile.delay_req_interval_log = 0;        // DelayReq interval (not used in PDelay mode)
     
     // Automotive message rate configuration
     profile.announce_receipt_timeout_multiplier = 3;
     profile.pdelay_receipt_timeout_multiplier = 3;
     
-    // Automotive thresholds
-    profile.neighbor_prop_delay_thresh = 800000; // 800μs
-    profile.sync_receipt_thresh = 8;        // Higher threshold for automotive
+    // Automotive thresholds (Section 6.2.2.1)
+    profile.neighbor_prop_delay_thresh = 800000; // 800μs (still used for monitoring, not asCapable)
+    profile.sync_receipt_thresh = 8;             // Higher threshold for automotive
+    profile.neighbor_delay_update_threshold_ns = 100; // Update stored value if differs by >100ns
     
     // Automotive clock quality
     profile.clock_class = 248;
@@ -208,45 +223,65 @@ gPTPProfile createAutomotiveProfile() {
     profile.priority1 = 248;
     profile.priority2 = 248;
     
-    // Automotive asCapable behavior
-    profile.initial_as_capable = true;     // Start false
-    profile.as_capable_on_link_up = true;   // Automotive: asCapable=true immediately on link up
-    profile.as_capable_on_link_down = true; // Lose asCapable on link down
-    profile.min_pdelay_successes = 0;       // No PDelay requirement
-    profile.max_pdelay_successes = 0;       // No upper limit
-    profile.maintain_as_capable_on_timeout = true;   // Always maintain
-    profile.maintain_as_capable_on_late_response = true; // Always maintain
+    // Automotive asCapable behavior (Section 6.2.1.2)
+    profile.initial_as_capable = false;        // Start false, set true on link up
+    profile.as_capable_on_link_up = true;      // SPEC REQUIRED: asCapable=true on link up
+    profile.as_capable_on_link_down = true;    // Lose asCapable on link down
+    profile.min_pdelay_successes = 0;          // No PDelay requirement for asCapable
+    profile.max_pdelay_successes = 0;          // No upper limit
+    profile.maintain_as_capable_on_timeout = true;    // Don't lose asCapable on timeout
+    profile.maintain_as_capable_on_late_response = true; // Don't lose asCapable on late response
     
-    // Automotive late response handling (lenient)
-    profile.late_response_threshold_ms = 50; // More lenient threshold
-    profile.consecutive_late_limit = 10;     // Allow more consecutive late responses
-    profile.reset_pdelay_count_on_timeout = false; // Don't reset
+    // Automotive late response handling (lenient for fixed topology)
+    profile.late_response_threshold_ms = 50;   // More lenient threshold
+    profile.consecutive_late_limit = 10;       // Allow more consecutive late responses
+    profile.reset_pdelay_count_on_timeout = false; // Don't reset count
     
-    // Automotive protocol behavior
-    profile.send_announce_when_as_capable_only = false; // Always send announce
-    profile.process_sync_regardless_as_capable = true;
+    // Automotive protocol behavior (Section 6.3)
+    profile.send_announce_when_as_capable_only = false; // SPEC: Never send announces
+    profile.disable_announce_transmission = true;      // SPEC REQUIRED: No announce messages  
+    profile.process_sync_regardless_as_capable = true; // Always process sync
     profile.start_pdelay_on_link_up = true;
     profile.allows_negative_correction_field = true;
     profile.requires_strict_timeouts = false;
-    profile.supports_bmca = false;          // Automotive typically disables BMCA
+    profile.supports_bmca = false;             // SPEC REQUIRED: BMCA shall not execute
+    profile.disable_source_port_identity_check = true; // SPEC REQUIRED: No sourcePortIdentity verification
     
-    // Automotive-specific features
+    // Automotive-specific features (Section 6.2.2, 6.3)
     profile.stream_aware_bmca = false;
     profile.redundant_gm_support = false;
-    profile.automotive_test_status = true;  // Enable automotive test status messages
-    profile.bmca_enabled = false;           // Automotive typically disables BMCA
-    profile.follow_up_enabled = true;       // FollowUp enabled
+    profile.automotive_test_status = true;     // Enable automotive test status messages
+    profile.bmca_enabled = false;              // SPEC REQUIRED: BMCA disabled
+    profile.follow_up_enabled = true;          // SPEC REQUIRED: FollowUp with TLVs
+    profile.automotive_holdover_enabled = true; // Enable automotive holdover (AED-E)
+    profile.automotive_bridge_behavior = true;  // Enable automotive bridge behavior (AED-B)
+    
+    // Automotive persistent storage (Section 6.2.2)
+    profile.persistent_neighbor_delay = true;     // Store neighborPropDelay
+    profile.persistent_rate_ratio = true;         // Store rateRatio
+    profile.persistent_neighbor_rate_ratio = true; // Store neighborRateRatio
+    
+    // Automotive port type and behavior (Section 6.2.1.1, 6.2.2.1)
+    profile.is_time_critical_port = true;         // Time critical port by default (can be configured)
+    profile.is_grandmaster_device = false;        // Not GM by default (configurable per device)
+    profile.disable_neighbor_delay_threshold = true; // SPEC REQUIRED: Don't set asCapable=false on threshold
+    profile.max_startup_sync_wait_s = 20;         // 20 seconds max wait for initial sync
+    
+    // Automotive signaling and interval management (Section 6.2.3)
+    profile.send_signaling_on_sync_achieved = true; // Send signaling within 60s of sync
+    profile.signaling_send_timeout_s = 60;        // 60 seconds per spec
+    profile.revert_to_initial_on_link_event = true; // Revert to initial intervals on link events
     
     // Automotive test and diagnostic features
-    profile.test_status_interval_log = 0;   // 1 second test status messages
-    profile.force_slave_mode = true;        // Automotive often forces slave mode
+    profile.test_status_interval_log = 0;      // 1 second test status messages
+    profile.force_slave_mode = false;          // Can be GM or slave (configurable)
     
-    // No specific compliance limits
+    // No specific compliance limits for automotive profile
     profile.max_convergence_time_ms = 0;
     profile.max_sync_jitter_ns = 0;
     profile.max_path_delay_variation_ns = 0;
     
-    GPTP_LOG_INFO("*** AUTOMOTIVE PROFILE CREATED: Immediate asCapable on link up, test status enabled ***");
+    GPTP_LOG_INFO("*** AUTOMOTIVE PROFILE CREATED (AVB Spec 1.6): No BMCA, no announces, signaling enabled, asCapable on link up ***");
     return profile;
 }
 

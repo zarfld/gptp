@@ -292,8 +292,10 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
     static int packet_count = 0;
     static int consecutive_timeouts = 0;
     static int consecutive_errors = 0;
-    const int MAX_CONSECUTIVE_TIMEOUTS = 50; // Lowered for faster recovery
-    const int MAX_CONSECUTIVE_ERRORS = 10;
+    const int MAX_CONSECUTIVE_TIMEOUTS = 200; // Increased for single-device robustness
+    const int MAX_CONSECUTIVE_ERRORS = 20;   // Increased error tolerance
+    const int INTERFACE_REOPEN_RETRY_LIMIT = 3; // Max attempts to reopen interface
+    static int interface_reopen_attempts = 0;
 
     // --- Heartbeat update: call on every receive attempt ---
     extern void update_network_thread_heartbeat();
@@ -365,19 +367,41 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
             consecutive_timeouts++;
             consecutive_errors = 0;
             GPTP_LOG_DEBUG("recvFrame: Timeout occurred (total timeouts: %d, consecutive: %d)\n", timeout_count, consecutive_timeouts);
+            
+            // Provide helpful information for single-device scenarios
+            if (consecutive_timeouts == 100) {
+                GPTP_LOG_INFO("*** No gPTP packets received after 100 timeouts - this is normal in single-device test scenarios ***");
+                GPTP_LOG_INFO("*** gPTP will continue running and automatically detect peers when they connect ***");
+            } else if (consecutive_timeouts % 100 == 0 && consecutive_timeouts > 100) {
+                GPTP_LOG_INFO("*** Still waiting for gPTP peers (timeouts: %d) - continuing to monitor network ***", consecutive_timeouts);
+            }
             if (consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
                 GPTP_LOG_ERROR("recvFrame: Too many consecutive timeouts (%d), closing and reopening interface!\n", consecutive_timeouts);
                 closeInterface(handle);
                 packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
                 if (reopen_ret != PACKET_NO_ERROR) {
-                    GPTP_LOG_ERROR("recvFrame: Failed to re-open interface after timeout (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+                    interface_reopen_attempts++;
+                    GPTP_LOG_ERROR("recvFrame: Failed to re-open interface after timeout (error=%d, attempt %d/%d), sleeping 100ms before retry...\n", 
+                                   reopen_ret, interface_reopen_attempts, INTERFACE_REOPEN_RETRY_LIMIT);
                     ReleaseMutex(handle->capture_lock);
                     Sleep(100);
+                    
+                    // If we've reached the retry limit, treat as fatal
+                    if (interface_reopen_attempts >= INTERFACE_REOPEN_RETRY_LIMIT) {
+                        GPTP_LOG_ERROR("recvFrame: Interface reopen attempts exhausted (%d/%d) - treating as fatal network error", 
+                                       interface_reopen_attempts, INTERFACE_REOPEN_RETRY_LIMIT);
+                        ret = PACKET_RECVFAILED_ERROR;
+                        goto fnexit;
+                    }
+                    
+                    // Otherwise, just return timeout and try again next time
+                    ret = PACKET_RECVTIMEOUT_ERROR;
                     goto fnexit;
                 } else {
                     GPTP_LOG_INFO("recvFrame: Interface re-opened successfully after timeout.\n");
                     consecutive_timeouts = 0;
                     consecutive_errors = 0;
+                    interface_reopen_attempts = 0; // Reset attempts on success
                 }
             }
         } else if( pcap_result < 0 ) {
@@ -391,14 +415,28 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
                 closeInterface(handle);
                 packet_error_t reopen_ret = openInterfaceByAddr(handle, &handle->iface_addr, DEBUG_TIMEOUT_MS);
                 if (reopen_ret != PACKET_NO_ERROR) {
-                    GPTP_LOG_ERROR("recvFrame: Failed to re-open interface after error (error=%d), sleeping 100ms before retry...\n", reopen_ret);
+                    interface_reopen_attempts++;
+                    GPTP_LOG_ERROR("recvFrame: Failed to re-open interface after error (error=%d, attempt %d/%d), sleeping 100ms before retry...\n", 
+                                   reopen_ret, interface_reopen_attempts, INTERFACE_REOPEN_RETRY_LIMIT);
                     ReleaseMutex(handle->capture_lock);
                     Sleep(100);
+                    
+                    // If we've reached the retry limit, treat as fatal
+                    if (interface_reopen_attempts >= INTERFACE_REOPEN_RETRY_LIMIT) {
+                        GPTP_LOG_ERROR("recvFrame: Interface reopen attempts exhausted (%d/%d) - treating as fatal network error", 
+                                       interface_reopen_attempts, INTERFACE_REOPEN_RETRY_LIMIT);
+                        ret = PACKET_RECVFAILED_ERROR;
+                        goto fnexit;
+                    }
+                    
+                    // Otherwise, just return error and try again next time
+                    ret = PACKET_RECVFAILED_ERROR;
                     goto fnexit;
                 } else {
                     GPTP_LOG_INFO("recvFrame: Interface re-opened successfully after error.\n");
                     consecutive_timeouts = 0;
                     consecutive_errors = 0;
+                    interface_reopen_attempts = 0; // Reset attempts on success
                 }
             }
         } else {
@@ -406,6 +444,7 @@ packet_error_t recvFrame( struct packet_handle *handle, packet_addr_t *addr, uin
             total_packet_count++;
             consecutive_timeouts = 0;
             consecutive_errors = 0;
+            interface_reopen_attempts = 0; // Reset attempts when we receive packets
             if (g_debug_mode) {
                 GPTP_LOG_DEBUG("Packet #%d received, size=%d bytes\n", total_packet_count, hdr_r->len);
                 
