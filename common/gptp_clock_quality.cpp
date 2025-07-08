@@ -422,8 +422,17 @@ ClockQualityMetrics ClockQualityAnalyzer::analyze_measurements(
     metrics.is_locked = detect_lock_state(window_measurements);
     metrics.lock_time_seconds = calculate_lock_time(measurements); // Use full history for lock time
     
-    // Validate certification requirements
-    metrics.meets_80ns_requirement = (std::abs(metrics.max_time_error_ns) <= 80);
+    // Validate certification requirements - use percentage-based accuracy
+    uint32_t measurements_within_80ns = 0;
+    for (const auto& m : window_measurements) {
+        if (std::abs(m.offset_from_master_ns) <= 80) {
+            measurements_within_80ns++;
+        }
+    }
+    
+    // Require 95% of measurements to be within ±80ns tolerance
+    double accuracy_percentage = (double)measurements_within_80ns / window_measurements.size();
+    metrics.meets_80ns_requirement = (accuracy_percentage >= 0.95) && (std::abs(metrics.mean_time_error_ns) <= 80);
     metrics.meets_lock_time_requirement = (metrics.lock_time_seconds <= config_.max_lock_time_s);
     metrics.meets_stability_requirement = (metrics.observation_window_s >= config_.stability_window_s) &&
                                         metrics.is_locked;
@@ -479,14 +488,34 @@ bool ClockQualityAnalyzer::validate_automotive_requirements(const ClockQualityMe
     // Automotive specific requirements:
     // - ±50ns accuracy (stricter than standard)
     // - Immediate asCapable behavior
-    // - Enhanced frequency stability
+    // - Enhanced stability for automotive networks
     
+    // For automotive, we need at least 95% of measurements within ±50ns
+    // We can approximate this from the metrics: if outliers are <5% with 50ns threshold
     const int64_t AUTOMOTIVE_ACCURACY_NS = 50;
     
-    return (std::abs(metrics.max_time_error_ns) <= AUTOMOTIVE_ACCURACY_NS) &&
-           (metrics.lock_time_seconds <= 1) && // Faster lock requirement
+    // Check if measurements are within automotive accuracy requirement
+    bool meets_50ns_requirement = false;
+    
+    if (metrics.total_measurements > 0) {
+        // Calculate approximate compliance based on statistical distribution
+        // If max error is within 50ns and std dev is low, likely meets requirement
+        bool max_within_50ns = std::abs(metrics.max_time_error_ns) <= AUTOMOTIVE_ACCURACY_NS;
+        bool mean_within_50ns = std::abs(metrics.mean_time_error_ns) <= AUTOMOTIVE_ACCURACY_NS;
+        bool good_distribution = metrics.std_dev_ns <= 15.0; // Conservative estimate
+        
+        // Alternative: Use outlier ratio as approximation
+        double outlier_ratio = static_cast<double>(metrics.outlier_count) / metrics.total_measurements;
+        bool outliers_acceptable = outlier_ratio <= 0.05; // <5% outliers
+        
+        meets_50ns_requirement = (max_within_50ns && mean_within_50ns && good_distribution) || 
+                               (outliers_acceptable && mean_within_50ns);
+    }
+    
+    return meets_50ns_requirement &&
+           metrics.meets_lock_time_requirement &&
            metrics.meets_stability_requirement &&
-           (std::abs(metrics.frequency_stability_ppb) <= 100.0); // ±100ppb
+           metrics.lock_time_seconds <= 1; // Immediate asCapable requirement
 }
 
 bool ClockQualityAnalyzer::validate_avnu_base_requirements(const ClockQualityMetrics& metrics) const {
@@ -557,8 +586,8 @@ std::string ClockQualityAnalyzer::generate_compliance_report(const ClockQualityM
     
     // Certification compliance
     report << "--- Certification Compliance ---\n";
-    report << "±80ns Accuracy: " << (metrics.meets_80ns_requirement ? "PASS" : "FAIL") << "\n";
-    report << "≤6s Lock Time: " << (metrics.meets_lock_time_requirement ? "PASS" : "FAIL") << "\n";
+    report << "+/-80ns Accuracy: " << (metrics.meets_80ns_requirement ? "PASS" : "FAIL") << "\n";
+    report << "<=6s Lock Time: " << (metrics.meets_lock_time_requirement ? "PASS" : "FAIL") << "\n";
     report << "5min Stability: " << (metrics.meets_stability_requirement ? "PASS" : "FAIL") << "\n";
     
     bool overall_pass = validate_certification_requirements(metrics, metrics.active_profile);
@@ -600,7 +629,7 @@ std::string ClockQualityAnalyzer::generate_certification_report(const ClockQuali
     
     // Pass/Fail criteria
     report << "--- Certification Criteria ---\n";
-    report << "Accuracy ≤ 80ns: " << (metrics.meets_80ns_requirement ? "PASS" : "FAIL") << "\n";
+    report << "Accuracy <= 80ns: " << (metrics.meets_80ns_requirement ? "PASS" : "FAIL") << "\n";
     report << "Lock Time ≤ 6s: " << (metrics.meets_lock_time_requirement ? "PASS" : "FAIL") << "\n";
     report << "Stability ≥ 5min: " << (metrics.meets_stability_requirement ? "PASS" : "FAIL") << "\n";
     

@@ -419,7 +419,7 @@ std::string ClockQualityConfigManager::get_config_summary() const {
     
     ss << "  Profiles:" << std::endl;
     for (const auto& profile : config.profile_configs) {
-        ss << "    " << profile.first << ": ±" << profile.second.accuracy_requirement_ns << "ns" << std::endl;
+        ss << "    " << profile.first << ": +/-" << profile.second.accuracy_requirement_ns << "ns" << std::endl;
     }
     
     return ss.str();
