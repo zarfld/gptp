@@ -5,7 +5,126 @@
 
 #include "gptp_profile.hpp"
 #include "gptp_log.hpp"
+#include "gptp_clock_quality.hpp"
 #include <cstring>
+
+// gPTPProfile implementation
+gPTPProfile::gPTPProfile() {
+    // Default to Standard IEEE 802.1AS profile
+    profile_name = "standard";
+    profile_version = "1.0";
+    profile_description = "Standard IEEE 802.1AS Profile";
+    
+    // Standard timing intervals
+    sync_interval_log = 0;              // 1 second
+    announce_interval_log = 0;          // 1 second
+    pdelay_interval_log = 0;            // 1 second
+    
+    // Automotive Profile: Initial vs Operational intervals (Section 6.2.1.3-6.2.1.6)
+    initial_sync_interval_log = 0;      // 1 second (initial)
+    operational_sync_interval_log = 0;  // 1 second (operational)
+    initial_pdelay_interval_log = 0;    // 1 second (initial)
+    operational_pdelay_interval_log = 0; // 1 second (operational)
+    
+    // Automotive Profile: Interval management timeouts
+    interval_transition_timeout_s = 60; // 60 seconds default
+    signaling_enabled = false;          // Disable signaling messages by default
+    signaling_response_timeout_ms = 250; // 250ms default response timeout
+    
+    // Standard timeouts
+    sync_receipt_timeout = 3;
+    announce_receipt_timeout = 3;
+    pdelay_receipt_timeout = 3;
+    delay_req_interval_log = 0;         // 1 second
+    
+    // Standard message rate configuration
+    announce_receipt_timeout_multiplier = 3;
+    pdelay_receipt_timeout_multiplier = 3;
+    
+    // Standard thresholds
+    neighbor_prop_delay_thresh = 800000; // 800μs
+    sync_receipt_thresh = 3;
+    
+    // Standard clock quality
+    clock_class = 248;
+    clock_accuracy = 0xFE;
+    offset_scaled_log_variance = 0x4E5D;
+    priority1 = 248;
+    priority2 = 248;
+    
+    // Standard asCapable behavior
+    initial_as_capable = false;
+    as_capable_on_link_up = false;
+    as_capable_on_link_down = true;
+    min_pdelay_successes = 1;
+    max_pdelay_successes = 0;           // No upper limit
+    maintain_as_capable_on_timeout = false;
+    maintain_as_capable_on_late_response = false;
+    
+    // Standard late response handling
+    late_response_threshold_ms = 10;
+    consecutive_late_limit = 3;
+    reset_pdelay_count_on_timeout = true;
+    
+    // Standard protocol behavior
+    send_announce_when_as_capable_only = true;
+    process_sync_regardless_as_capable = true;
+    start_pdelay_on_link_up = true;
+    allows_negative_correction_field = false;
+    requires_strict_timeouts = false;
+    supports_bmca = true;
+    
+    // Standard profile features
+    stream_aware_bmca = false;
+    redundant_gm_support = false;
+    automotive_test_status = false;
+    bmca_enabled = true;
+    follow_up_enabled = true;
+    
+    // Automotive Profile: Initialize automotive-specific fields to standard values
+    persistent_neighbor_delay = false;      // Disabled by default
+    persistent_rate_ratio = false;          // Disabled by default
+    persistent_neighbor_rate_ratio = false; // Disabled by default
+    neighbor_delay_update_threshold_ns = 100; // 100ns per spec
+    disable_source_port_identity_check = false; // Standard verification
+    disable_announce_transmission = false;   // Standard announce behavior
+    automotive_holdover_enabled = false;    // Disabled by default
+    automotive_bridge_behavior = false;     // Disabled by default
+    is_time_critical_port = false;          // Non-time critical by default
+    is_grandmaster_device = false;          // Not GM by default
+    disable_neighbor_delay_threshold = false; // Standard threshold behavior
+    max_startup_sync_wait_s = 20;           // 20 seconds max wait
+    send_signaling_on_sync_achieved = false; // Disabled by default
+    signaling_send_timeout_s = 60;          // 60 seconds per spec
+    revert_to_initial_on_link_event = false; // Disabled by default
+    
+    // Test and diagnostic features
+    test_status_interval_log = 0;       // 1 second
+    force_slave_mode = false;           // Allow grandmaster mode
+    
+    // No compliance limits for standard profile
+    max_convergence_time_ms = 0;
+    max_sync_jitter_ns = 0;
+    max_path_delay_variation_ns = 0;
+    
+    // Initialize statistics
+    memset(&stats, 0, sizeof(stats));
+    
+    // Initialize clock quality monitoring (disabled by default)
+    clock_quality_monitoring_enabled = false;
+    clock_quality_measurement_interval_ms = 125;
+    clock_quality_analysis_window_s = 300;
+    clock_quality_target_accuracy_ns = 80;
+    clock_quality_max_lock_time_s = 6;
+    clock_quality_max_history = 10000;
+}
+
+gPTPProfile::~gPTPProfile() {
+    // Destructor is needed for unique_ptr with forward declarations
+    // The unique_ptr destructors will be called automatically here,
+    // and since this is defined in the .cpp file, the complete
+    // class definitions are available.
+}
 
 namespace gPTPProfileFactory {
 
@@ -468,3 +587,108 @@ std::string getProfileDescription(const gPTPProfile& profile) {
 }
 
 } // namespace gPTPProfileFactory
+
+// ============================================================================
+// Clock Quality Monitoring Implementation
+// ============================================================================
+
+#include "gptp_clock_quality.hpp"
+
+void gPTPProfile::enable_clock_quality_monitoring() const {
+    if (!clock_quality_monitoring_enabled) {
+        return;
+    }
+    
+    // Create clock quality monitoring objects if not already created
+    if (!clock_monitor) {
+        OpenAvnu::gPTP::ClockQualityConfig config;
+        config.ingress_monitoring_enabled = true;
+        config.measurement_interval_ms = clock_quality_measurement_interval_ms;
+        config.analysis_window_seconds = clock_quality_analysis_window_s;
+        config.target_accuracy_ns = clock_quality_target_accuracy_ns;
+        config.max_lock_time_s = clock_quality_max_lock_time_s;
+        config.max_history_measurements = clock_quality_max_history;
+        config.profile_type = get_clock_quality_profile_type();
+        
+        clock_monitor = std::make_unique<OpenAvnu::gPTP::IngressEventMonitor>(config);
+        quality_analyzer = std::make_unique<OpenAvnu::gPTP::ClockQualityAnalyzer>(config);
+    }
+    
+    // Enable monitoring
+    clock_monitor->enable_monitoring(clock_quality_measurement_interval_ms);
+    
+    GPTP_LOG_INFO("Clock quality monitoring enabled for profile: %s", profile_name.c_str());
+}
+
+void gPTPProfile::disable_clock_quality_monitoring() const {
+    if (clock_monitor) {
+        clock_monitor->disable_monitoring();
+        GPTP_LOG_INFO("Clock quality monitoring disabled for profile: %s", profile_name.c_str());
+    }
+}
+
+bool gPTPProfile::is_clock_quality_monitoring_active() const {
+    return clock_quality_monitoring_enabled && 
+           clock_monitor && 
+           clock_monitor->is_monitoring_enabled();
+}
+
+void gPTPProfile::record_sync_ingress_event(uint64_t t1_master_tx, uint64_t t2_slave_rx,
+                                          uint64_t path_delay, uint64_t correction_field,
+                                          uint16_t sequence_id) const {
+    if (!is_clock_quality_monitoring_active()) {
+        return;
+    }
+    
+    clock_monitor->record_sync_ingress(t1_master_tx, t2_slave_rx, path_delay, 
+                                     correction_field, sequence_id);
+}
+
+OpenAvnu::gPTP::ClockQualityMetrics gPTPProfile::get_clock_quality_metrics(uint32_t window_seconds) const {
+    if (!clock_monitor || !quality_analyzer) {
+        return OpenAvnu::gPTP::ClockQualityMetrics(); // Return empty metrics
+    }
+    
+    const auto& measurements = clock_monitor->get_measurement_history();
+    return quality_analyzer->analyze_measurements(measurements, window_seconds);
+}
+
+bool gPTPProfile::validate_clock_quality_certification() const {
+    if (!is_clock_quality_monitoring_active()) {
+        return false; // Cannot validate without monitoring
+    }
+    
+    auto metrics = get_clock_quality_metrics(clock_quality_analysis_window_s);
+    OpenAvnu::gPTP::ProfileType profile_type = get_clock_quality_profile_type();
+    
+    return quality_analyzer->validate_certification_requirements(metrics, profile_type);
+}
+
+std::string gPTPProfile::generate_clock_quality_report() const {
+    if (!clock_monitor || !quality_analyzer) {
+        return "Clock quality monitoring not active for profile: " + profile_name + "\n";
+    }
+    
+    auto metrics = get_clock_quality_metrics(clock_quality_analysis_window_s);
+    return quality_analyzer->generate_compliance_report(metrics);
+}
+
+std::vector<uint8_t> gPTPProfile::export_clock_quality_tlv() const {
+    if (!clock_monitor) {
+        return std::vector<uint8_t>(); // Return empty TLV
+    }
+    
+    return clock_monitor->export_tlv_data();
+}
+
+OpenAvnu::gPTP::ProfileType gPTPProfile::get_clock_quality_profile_type() const {
+    if (profile_name == "milan") {
+        return OpenAvnu::gPTP::ProfileType::MILAN;
+    } else if (profile_name == "automotive") {
+        return OpenAvnu::gPTP::ProfileType::AUTOMOTIVE;
+    } else if (profile_name == "avnu_base") {
+        return OpenAvnu::gPTP::ProfileType::AVNU_BASE;
+    } else {
+        return OpenAvnu::gPTP::ProfileType::STANDARD;
+    }
+}

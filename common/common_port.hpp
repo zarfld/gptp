@@ -1268,7 +1268,7 @@ public:
 	// Unified profile accessors
 	const gPTPProfile& getProfile() const { return active_profile; }
 	gPTPProfile& getProfile() { return active_profile; }
-	void setProfile(const gPTPProfile& profile) { active_profile = profile; }
+	void setProfile(gPTPProfile&& profile) { active_profile = std::move(profile); }
 	
 	// Profile-specific behavior helpers (recommended approach)
 	bool shouldSetAsCapableOnStartup() const { return active_profile.initial_as_capable; }

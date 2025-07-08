@@ -14,6 +14,11 @@
 
 #include <string>
 #include <cstdint>
+#include <memory>
+#include <vector>
+
+// Include full definitions for clock quality monitoring
+#include "gptp_clock_quality.hpp"
 
 /**
  * @brief Unified gPTP Profile Configuration
@@ -142,107 +147,89 @@ struct gPTPProfile {
     } stats;
 
     // Constructor with defaults (Standard IEEE 802.1AS profile)
-    gPTPProfile() {
-        // Default to Standard IEEE 802.1AS profile
-        profile_name = "standard";
-        profile_version = "1.0";
-        profile_description = "Standard IEEE 802.1AS Profile";
-        
-        // Standard timing intervals
-        sync_interval_log = 0;              // 1 second
-        announce_interval_log = 0;          // 1 second
-        pdelay_interval_log = 0;            // 1 second
-        
-        // Automotive Profile: Initial vs Operational intervals (Section 6.2.1.3-6.2.1.6)
-        initial_sync_interval_log = 0;      // 1 second (initial)
-        operational_sync_interval_log = 0;  // 1 second (operational)
-        initial_pdelay_interval_log = 0;    // 1 second (initial)
-        operational_pdelay_interval_log = 0; // 1 second (operational)
-        
-        // Automotive Profile: Interval management timeouts
-        interval_transition_timeout_s = 60; // 60 seconds default
-        signaling_enabled = false;          // Disable signaling messages by default
-        signaling_response_timeout_ms = 250; // 250ms default response timeout
-        
-        // Standard timeouts
-        sync_receipt_timeout = 3;
-        announce_receipt_timeout = 3;
-        pdelay_receipt_timeout = 3;
-        delay_req_interval_log = 0;         // 1 second
-        
-        // Standard message rate configuration
-        announce_receipt_timeout_multiplier = 3;
-        pdelay_receipt_timeout_multiplier = 3;
-        
-        // Standard thresholds
-        neighbor_prop_delay_thresh = 800000; // 800μs
-        sync_receipt_thresh = 3;
-        
-        // Standard clock quality
-        clock_class = 248;
-        clock_accuracy = 0xFE;
-        offset_scaled_log_variance = 0x4E5D;
-        priority1 = 248;
-        priority2 = 248;
-        
-        // Standard asCapable behavior
-        initial_as_capable = false;
-        as_capable_on_link_up = false;
-        as_capable_on_link_down = true;
-        min_pdelay_successes = 1;
-        max_pdelay_successes = 0;           // No upper limit
-        maintain_as_capable_on_timeout = false;
-        maintain_as_capable_on_late_response = false;
-        
-        // Standard late response handling
-        late_response_threshold_ms = 10;
-        consecutive_late_limit = 3;
-        reset_pdelay_count_on_timeout = true;
-        
-        // Standard protocol behavior
-        send_announce_when_as_capable_only = true;
-        process_sync_regardless_as_capable = true;
-        start_pdelay_on_link_up = true;
-        allows_negative_correction_field = false;
-        requires_strict_timeouts = false;
-        supports_bmca = true;
-        
-        // Standard profile features
-        stream_aware_bmca = false;
-        redundant_gm_support = false;
-        automotive_test_status = false;
-        bmca_enabled = true;
-        follow_up_enabled = true;
-        
-        // Automotive Profile: Initialize automotive-specific fields to standard values
-        persistent_neighbor_delay = false;      // Disabled by default
-        persistent_rate_ratio = false;          // Disabled by default
-        persistent_neighbor_rate_ratio = false; // Disabled by default
-        neighbor_delay_update_threshold_ns = 100; // 100ns per spec
-        disable_source_port_identity_check = false; // Standard verification
-        disable_announce_transmission = false;   // Standard announce behavior
-        automotive_holdover_enabled = false;    // Disabled by default
-        automotive_bridge_behavior = false;     // Disabled by default
-        is_time_critical_port = false;          // Non-time critical by default
-        is_grandmaster_device = false;          // Not GM by default
-        disable_neighbor_delay_threshold = false; // Standard threshold behavior
-        max_startup_sync_wait_s = 20;           // 20 seconds max wait
-        send_signaling_on_sync_achieved = false; // Disabled by default
-        signaling_send_timeout_s = 60;          // 60 seconds per spec
-        revert_to_initial_on_link_event = false; // Disabled by default
-        
-        // Test and diagnostic features
-        test_status_interval_log = 0;       // 1 second
-        force_slave_mode = false;           // Allow grandmaster mode
-        
-        // No compliance limits for standard profile
-        max_convergence_time_ms = 0;
-        max_sync_jitter_ns = 0;
-        max_path_delay_variation_ns = 0;
-        
-        // Initialize statistics
-        memset(&stats, 0, sizeof(stats));
-    }
+    gPTPProfile();
+    
+    // Custom destructor needed for unique_ptr with forward declarations
+    ~gPTPProfile();
+    
+    // Clock Quality Monitoring Configuration
+    // Based on Avnu Alliance "802.1AS Recovered Clock Quality Testing v1.0"
+    bool clock_quality_monitoring_enabled;          ///< Enable clock quality monitoring
+    uint32_t clock_quality_measurement_interval_ms; ///< Measurement interval (default: 125ms)
+    uint32_t clock_quality_analysis_window_s;       ///< Analysis window (default: 300s)
+    int64_t clock_quality_target_accuracy_ns;       ///< Target accuracy (default: ±80ns)
+    uint32_t clock_quality_max_lock_time_s;         ///< Maximum lock time (default: 6s)
+    uint32_t clock_quality_max_history;             ///< Maximum stored measurements (default: 10000)
+    
+    // Clock Quality Monitoring Objects (created on-demand)
+    mutable std::unique_ptr<OpenAvnu::gPTP::IngressEventMonitor> clock_monitor;
+    mutable std::unique_ptr<OpenAvnu::gPTP::ClockQualityAnalyzer> quality_analyzer;
+    
+    /**
+     * @brief Enable clock quality monitoring
+     */
+    void enable_clock_quality_monitoring() const;
+    
+    /**
+     * @brief Disable clock quality monitoring
+     */
+    void disable_clock_quality_monitoring() const;
+    
+    /**
+     * @brief Check if clock quality monitoring is enabled and active
+     */
+    bool is_clock_quality_monitoring_active() const;
+    
+    /**
+     * @brief Record Sync ingress event for clock quality analysis
+     * @param t1_master_tx Master transmit time from Follow_Up originTimestamp
+     * @param t2_slave_rx Slave receive timestamp from hardware
+     * @param path_delay Measured path delay from PDelay mechanism
+     * @param correction_field Correction field from Follow_Up message
+     * @param sequence_id Sequence ID for duplicate detection
+     */
+    void record_sync_ingress_event(uint64_t t1_master_tx, uint64_t t2_slave_rx,
+                                 uint64_t path_delay, uint64_t correction_field,
+                                 uint16_t sequence_id) const;
+    
+    /**
+     * @brief Get current clock quality metrics
+     * @param window_seconds Analysis window in seconds (0 = all measurements)
+     * @return Current clock quality metrics
+     */
+    OpenAvnu::gPTP::ClockQualityMetrics get_clock_quality_metrics(uint32_t window_seconds = 0) const;
+    
+    /**
+     * @brief Validate certification compliance for this profile
+     * @return true if all certification requirements are met
+     */
+    bool validate_clock_quality_certification() const;
+    
+    /**
+     * @brief Generate clock quality compliance report
+     * @return Human-readable compliance report
+     */
+    std::string generate_clock_quality_report() const;
+    
+    /**
+     * @brief Export clock quality data as TLV for remote monitoring
+     * @return TLV-encoded clock quality data
+     */
+    std::vector<uint8_t> export_clock_quality_tlv() const;
+    
+    /**
+     * @brief Get profile type for clock quality validation
+     */
+    OpenAvnu::gPTP::ProfileType get_clock_quality_profile_type() const;
+
+    // Copy control - needed because of unique_ptr members
+    // Make the class non-copyable to avoid issues with unique_ptr
+    gPTPProfile(const gPTPProfile&) = delete;
+    gPTPProfile& operator=(const gPTPProfile&) = delete;
+    
+    // Allow move operations
+    gPTPProfile(gPTPProfile&&) = default;
+    gPTPProfile& operator=(gPTPProfile&&) = default;
 };
 
 /**

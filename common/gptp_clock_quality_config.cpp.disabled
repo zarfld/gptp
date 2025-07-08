@@ -1,0 +1,587 @@
+// Clock Quality Configuration Management Implementation
+// OpenAvnu gPTP Clock Quality Testing Framework
+
+#include "gptp_clock_quality_config.hpp"
+#include "gptp_log.hpp"
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include <iostream>
+#include <cstdlib>
+#include <vector>
+
+#ifdef WIN32
+#include <windows.h>
+#include <shlobj.h>
+#else
+#include <unistd.h>
+#include <pwd.h>
+#include <sys/types.h>
+#endif
+
+namespace OpenAvnu {
+namespace gPTP {
+
+// Default constructor with sensible defaults
+ClockQualityConfig::ClockQualityConfig() :
+    // Measurement settings
+    ingress_monitoring_enabled(DefaultConfig::INGRESS_MONITORING_ENABLED),
+    reverse_sync_enabled(DefaultConfig::REVERSE_SYNC_ENABLED),
+    pps_monitoring_enabled(DefaultConfig::PPS_MONITORING_ENABLED),
+    primary_method(DefaultConfig::PRIMARY_METHOD),
+    
+    // Analysis parameters
+    measurement_interval_ms(DefaultConfig::MEASUREMENT_INTERVAL_MS),
+    analysis_window_seconds(DefaultConfig::ANALYSIS_WINDOW_SECONDS),
+    max_history_measurements(DefaultConfig::MAX_HISTORY_MEASUREMENTS),
+    real_time_analysis_enabled(DefaultConfig::REAL_TIME_ANALYSIS_ENABLED),
+    
+    // Reporting settings
+    tlv_reporting_enabled(DefaultConfig::TLV_REPORTING_ENABLED),
+    console_output_enabled(DefaultConfig::CONSOLE_OUTPUT_ENABLED),
+    csv_export_enabled(DefaultConfig::CSV_EXPORT_ENABLED),
+    csv_export_path("clock_quality_data.csv"),
+    
+    // Hardware settings
+    pps_gpio_pin(DefaultConfig::PPS_GPIO_PIN),
+    hardware_timestamping_enabled(DefaultConfig::HARDWARE_TIMESTAMPING_ENABLED),
+    
+    // Network settings
+    reverse_sync_domain(DefaultConfig::REVERSE_SYNC_DOMAIN),
+    reverse_sync_bmca_enabled(DefaultConfig::REVERSE_SYNC_BMCA_ENABLED)
+{
+    // Set profile-specific defaults
+    milan_config = {
+        "Milan",
+        DefaultConfig::MILAN_ACCURACY_NS,
+        DefaultConfig::MILAN_LOCK_TIME_SECONDS,
+        DefaultConfig::MILAN_OBSERVATION_WINDOW_SECONDS,
+        DefaultConfig::MILAN_MEASUREMENT_INTERVAL_MS,
+        false, // immediate_ascapable_required
+        DefaultConfig::MILAN_LATE_RESPONSE_THRESHOLD_MS,
+        0, 0 // pdelay_successes not applicable to Milan
+    };
+    
+    automotive_config = {
+        "Automotive",
+        DefaultConfig::AUTOMOTIVE_ACCURACY_NS,
+        DefaultConfig::AUTOMOTIVE_LOCK_TIME_SECONDS,
+        DefaultConfig::ANALYSIS_WINDOW_SECONDS,
+        DefaultConfig::MEASUREMENT_INTERVAL_MS,
+        DefaultConfig::AUTOMOTIVE_IMMEDIATE_ASCAPABLE,
+        0, // late_response_threshold not applicable to Automotive
+        0, 0 // pdelay_successes not applicable to Automotive
+    };
+    
+    avnu_base_config = {
+        "AVnu_Base",
+        DefaultConfig::AVNU_BASE_ACCURACY_NS,
+        DefaultConfig::MILAN_LOCK_TIME_SECONDS, // Use same as Milan
+        DefaultConfig::ANALYSIS_WINDOW_SECONDS,
+        DefaultConfig::MEASUREMENT_INTERVAL_MS,
+        false, // immediate_ascapable_required
+        0, // late_response_threshold not applicable to Base
+        DefaultConfig::AVNU_BASE_MIN_PDELAY_SUCCESSES,
+        DefaultConfig::AVNU_BASE_MAX_PDELAY_SUCCESSES
+    };
+}
+
+ClockQualityConfigManager::ClockQualityConfigManager() :
+    config_loaded(false)
+{
+    load_default_config();
+}
+
+ClockQualityConfigManager::~ClockQualityConfigManager() {
+}
+
+bool ClockQualityConfigManager::load_config_file(const std::string& file_path) {
+    if (file_path.empty()) {
+        GPTP_LOG_WARNING("Empty config file path provided");
+        return false;
+    }
+    
+    config_file_path = file_path;
+    
+    if (!parse_ini_file(file_path)) {
+        GPTP_LOG_WARNING("Failed to parse config file: %s", file_path.c_str());
+        return false;
+    }
+    
+    apply_config_values();
+    config_loaded = true;
+    
+    GPTP_LOG_INFO("Successfully loaded clock quality config from: %s", file_path.c_str());
+    return true;
+}
+
+bool ClockQualityConfigManager::load_config_from_environment() {
+    bool found_env_config = false;
+    
+    // Check environment variables for configuration
+    const char* env_vars[] = {
+        "GPTP_CLOCK_QUALITY_METHOD",
+        "GPTP_CLOCK_QUALITY_INTERVAL",
+        "GPTP_CLOCK_QUALITY_WINDOW",
+        "GPTP_CLOCK_QUALITY_ACCURACY",
+        "GPTP_CLOCK_QUALITY_TLV_ENABLED",
+        "GPTP_CLOCK_QUALITY_CSV_ENABLED",
+        "GPTP_CLOCK_QUALITY_CSV_PATH"
+    };
+    
+    for (const char* env_var : env_vars) {
+        const char* value = std::getenv(env_var);
+        if (value) {
+            std::string key = std::string(env_var);
+            config_values[key] = std::string(value);
+            found_env_config = true;
+            GPTP_LOG_INFO("Found environment config: %s = %s", env_var, value);
+        }
+    }
+    
+    if (found_env_config) {
+        apply_config_values();
+        config_loaded = true;
+    }
+    
+    return found_env_config;
+}
+
+void ClockQualityConfigManager::load_default_config() {
+    config = ClockQualityConfig(); // Reset to defaults
+    config_loaded = true;
+    GPTP_LOG_INFO("Loaded default clock quality configuration");
+}
+
+bool ClockQualityConfigManager::parse_ini_file(const std::string& file_path) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) {
+        return false;
+    }
+    
+    std::string line;
+    std::string current_section = "";
+    
+    while (std::getline(file, line)) {
+        std::string section, key, value;
+        if (parse_ini_line(line, section, key, value)) {
+            if (!section.empty()) {
+                current_section = section;
+            } else if (!key.empty()) {
+                std::string full_key = current_section.empty() ? key : current_section + "." + key;
+                config_values[full_key] = value;
+            }
+        }
+    }
+    
+    return true;
+}
+
+bool ClockQualityConfigManager::parse_ini_line(const std::string& line, std::string& section, std::string& key, std::string& value) {
+    std::string trimmed = line;
+    
+    // Trim whitespace
+    trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+    trimmed.erase(trimmed.find_last_not_of(" \t") + 1);
+    
+    // Skip empty lines and comments
+    if (trimmed.empty() || trimmed[0] == '#' || trimmed[0] == ';') {
+        return false;
+    }
+    
+    // Check for section header [section]
+    if (trimmed[0] == '[' && trimmed.back() == ']') {
+        section = trimmed.substr(1, trimmed.length() - 2);
+        return true;
+    }
+    
+    // Check for key=value pair
+    size_t eq_pos = trimmed.find('=');
+    if (eq_pos != std::string::npos) {
+        key = trimmed.substr(0, eq_pos);
+        value = trimmed.substr(eq_pos + 1);
+        
+        // Trim key and value
+        key.erase(0, key.find_first_not_of(" \t"));
+        key.erase(key.find_last_not_of(" \t") + 1);
+        value.erase(0, value.find_first_not_of(" \t"));
+        value.erase(value.find_last_not_of(" \t") + 1);
+        
+        return true;
+    }
+    
+    return false;
+}
+
+void ClockQualityConfigManager::apply_config_values() {
+    // Apply measurement settings
+    config.ingress_monitoring_enabled = get_bool_value("ClockQuality.enable_ingress_monitoring", config.ingress_monitoring_enabled);
+    config.reverse_sync_enabled = get_bool_value("ClockQuality.enable_reverse_sync", config.reverse_sync_enabled);
+    config.pps_monitoring_enabled = get_bool_value("ClockQuality.enable_pps_monitoring", config.pps_monitoring_enabled);
+    
+    // Apply analysis parameters
+    config.measurement_interval_ms = get_uint32_value("ClockQuality.measurement_interval_ms", config.measurement_interval_ms);
+    config.analysis_window_seconds = get_uint32_value("ClockQuality.analysis_window_seconds", config.analysis_window_seconds);
+    config.max_history_measurements = get_uint32_value("ClockQuality.max_history_measurements", config.max_history_measurements);
+    
+    // Apply certification requirements
+    config.milan_config.accuracy_requirement_ns = get_int32_value("Milan.accuracy_requirement_ns", config.milan_config.accuracy_requirement_ns);
+    config.milan_config.max_lock_time_seconds = get_uint32_value("Milan.max_lock_time_seconds", config.milan_config.max_lock_time_seconds);
+    config.milan_config.late_response_threshold_ms = get_uint32_value("Milan.late_response_threshold_ms", config.milan_config.late_response_threshold_ms);
+    
+    config.automotive_config.accuracy_requirement_ns = get_int32_value("Automotive.accuracy_requirement_ns", config.automotive_config.accuracy_requirement_ns);
+    config.automotive_config.immediate_ascapable_required = get_bool_value("Automotive.immediate_ascapable", config.automotive_config.immediate_ascapable_required);
+    
+    config.avnu_base_config.accuracy_requirement_ns = get_int32_value("AVnuBase.accuracy_requirement_ns", config.avnu_base_config.accuracy_requirement_ns);
+    config.avnu_base_config.min_pdelay_successes = get_uint32_value("AVnuBase.min_pdelay_successes", config.avnu_base_config.min_pdelay_successes);
+    config.avnu_base_config.max_pdelay_successes = get_uint32_value("AVnuBase.max_pdelay_successes", config.avnu_base_config.max_pdelay_successes);
+    
+    // Apply reporting settings
+    config.tlv_reporting_enabled = get_bool_value("ClockQuality.tlv_reporting_enabled", config.tlv_reporting_enabled);
+    config.console_output_enabled = get_bool_value("ClockQuality.console_output_enabled", config.console_output_enabled);
+    config.csv_export_enabled = get_bool_value("ClockQuality.csv_export_enabled", config.csv_export_enabled);
+    config.csv_export_path = get_string_value("ClockQuality.csv_export_path", config.csv_export_path);
+    
+    // Apply hardware settings
+    config.pps_gpio_pin = get_int32_value("Hardware.pps_gpio_pin", config.pps_gpio_pin);
+    config.hardware_timestamping_enabled = get_bool_value("Hardware.hardware_timestamping_enabled", config.hardware_timestamping_enabled);
+    
+    // Apply network settings
+    config.reverse_sync_domain = static_cast<uint8_t>(get_uint32_value("Network.reverse_sync_domain", config.reverse_sync_domain));
+    config.reverse_sync_bmca_enabled = get_bool_value("Network.reverse_sync_bmca_enabled", config.reverse_sync_bmca_enabled);
+    
+    // Apply primary method setting
+    config.primary_method = get_method_value("ClockQuality.primary_method", config.primary_method);
+    
+    // Apply environment variable overrides
+    if (const char* env_method = std::getenv("GPTP_CLOCK_QUALITY_METHOD")) {
+        config.primary_method = string_to_method(env_method);
+    }
+    if (const char* env_interval = std::getenv("GPTP_CLOCK_QUALITY_INTERVAL")) {
+        config.measurement_interval_ms = static_cast<uint32_t>(std::stoul(env_interval));
+    }
+    if (const char* env_window = std::getenv("GPTP_CLOCK_QUALITY_WINDOW")) {
+        config.analysis_window_seconds = static_cast<uint32_t>(std::stoul(env_window));
+    }
+}
+
+bool ClockQualityConfigManager::get_bool_value(const std::string& key, bool default_value) const {
+    auto it = config_values.find(key);
+    if (it == config_values.end()) {
+        return default_value;
+    }
+    
+    std::string value = it->second;
+    std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+    return (value == "true" || value == "1" || value == "yes" || value == "on");
+}
+
+int32_t ClockQualityConfigManager::get_int32_value(const std::string& key, int32_t default_value) const {
+    auto it = config_values.find(key);
+    if (it == config_values.end()) {
+        return default_value;
+    }
+    
+    try {
+        return std::stoi(it->second);
+    } catch (const std::exception&) {
+        return default_value;
+    }
+}
+
+uint32_t ClockQualityConfigManager::get_uint32_value(const std::string& key, uint32_t default_value) const {
+    auto it = config_values.find(key);
+    if (it == config_values.end()) {
+        return default_value;
+    }
+    
+    try {
+        return static_cast<uint32_t>(std::stoul(it->second));
+    } catch (const std::exception&) {
+        return default_value;
+    }
+}
+
+std::string ClockQualityConfigManager::get_string_value(const std::string& key, const std::string& default_value) const {
+    auto it = config_values.find(key);
+    if (it == config_values.end()) {
+        return default_value;
+    }
+    
+    return it->second;
+}
+
+MeasurementMethod ClockQualityConfigManager::get_method_value(const std::string& key, MeasurementMethod default_value) const {
+    auto it = config_values.find(key);
+    if (it == config_values.end()) {
+        return default_value;
+    }
+    
+    return string_to_method(it->second);
+}
+
+void ClockQualityConfigManager::update_measurement_method(MeasurementMethod method) {
+    config.primary_method = method;
+    GPTP_LOG_INFO("Updated measurement method to: %s", method_to_string(method).c_str());
+}
+
+void ClockQualityConfigManager::update_measurement_interval(uint32_t interval_ms) {
+    config.measurement_interval_ms = interval_ms;
+    GPTP_LOG_INFO("Updated measurement interval to: %u ms", interval_ms);
+}
+
+void ClockQualityConfigManager::update_analysis_window(uint32_t window_seconds) {
+    config.analysis_window_seconds = window_seconds;
+    GPTP_LOG_INFO("Updated analysis window to: %u seconds", window_seconds);
+}
+
+void ClockQualityConfigManager::enable_tlv_reporting(bool enabled) {
+    config.tlv_reporting_enabled = enabled;
+    GPTP_LOG_INFO("TLV reporting %s", enabled ? "enabled" : "disabled");
+}
+
+void ClockQualityConfigManager::enable_console_output(bool enabled) {
+    config.console_output_enabled = enabled;
+    GPTP_LOG_INFO("Console output %s", enabled ? "enabled" : "disabled");
+}
+
+void ClockQualityConfigManager::enable_csv_export(bool enabled, const std::string& export_path) {
+    config.csv_export_enabled = enabled;
+    if (!export_path.empty()) {
+        config.csv_export_path = export_path;
+    }
+    GPTP_LOG_INFO("CSV export %s", enabled ? "enabled" : "disabled");
+    if (enabled && !export_path.empty()) {
+        GPTP_LOG_INFO("CSV export path: %s", export_path.c_str());
+    }
+}
+
+ProfileConfig ClockQualityConfigManager::get_profile_config(const std::string& profile_name) const {
+    if (profile_name == "Milan" || profile_name == "milan") {
+        return config.milan_config;
+    } else if (profile_name == "Automotive" || profile_name == "automotive") {
+        return config.automotive_config;
+    } else if (profile_name == "AVnu_Base" || profile_name == "avnu_base" || profile_name == "base") {
+        return config.avnu_base_config;
+    } else {
+        // Return Milan as default
+        return config.milan_config;
+    }
+}
+
+std::string ClockQualityConfigManager::method_to_string(MeasurementMethod method) {
+    switch (method) {
+        case MeasurementMethod::INGRESS_REPORTING: return "ingress_reporting";
+        case MeasurementMethod::REVERSE_SYNC: return "reverse_sync";
+        case MeasurementMethod::PPS_HARDWARE: return "pps_hardware";
+        case MeasurementMethod::COMBINED: return "combined";
+        default: return "ingress_reporting";
+    }
+}
+
+MeasurementMethod ClockQualityConfigManager::string_to_method(const std::string& method_str) {
+    std::string lower_str = method_str;
+    std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(), ::tolower);
+    
+    if (lower_str == "ingress_reporting" || lower_str == "ingress") {
+        return MeasurementMethod::INGRESS_REPORTING;
+    } else if (lower_str == "reverse_sync" || lower_str == "reverse") {
+        return MeasurementMethod::REVERSE_SYNC;
+    } else if (lower_str == "pps_hardware" || lower_str == "pps" || lower_str == "hardware") {
+        return MeasurementMethod::PPS_HARDWARE;
+    } else if (lower_str == "combined") {
+        return MeasurementMethod::COMBINED;
+    } else {
+        return MeasurementMethod::INGRESS_REPORTING;
+    }
+}
+
+std::string ClockQualityConfigManager::get_default_config_path() {
+#ifdef WIN32
+    char path[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, path))) {
+        return std::string(path) + "\\OpenAvnu\\clock_quality_config.ini";
+    }
+    return "clock_quality_config.ini";
+#else
+    const char* home = std::getenv("HOME");
+    if (!home) {
+        struct passwd* pwd = getpwuid(getuid());
+        if (pwd) {
+            home = pwd->pw_dir;
+        }
+    }
+    if (home) {
+        return std::string(home) + "/.openavnu/clock_quality_config.ini";
+    }
+    return "clock_quality_config.ini";
+#endif
+}
+
+ClockQualityConfigManager& ClockQualityConfigManager::get_instance() {
+    static ClockQualityConfigManager instance;
+    return instance;
+}
+
+bool ClockQualityConfigManager::validate_config() const {
+    return get_validation_errors().empty();
+}
+
+std::vector<std::string> ClockQualityConfigManager::get_validation_errors() const {
+    std::vector<std::string> errors;
+    
+    // Validate measurement interval
+    if (config.measurement_interval_ms < 1 || config.measurement_interval_ms > 10000) {
+        errors.push_back("Measurement interval must be between 1ms and 10000ms");
+    }
+    
+    // Validate analysis window
+    if (config.analysis_window_seconds < 1 || config.analysis_window_seconds > 3600) {
+        errors.push_back("Analysis window must be between 1 second and 1 hour");
+    }
+    
+    // Validate accuracy requirements
+    if (config.milan_config.accuracy_requirement_ns <= 0 || config.milan_config.accuracy_requirement_ns > 1000000) {
+        errors.push_back("Milan accuracy requirement must be between 1ns and 1ms");
+    }
+    
+    if (config.automotive_config.accuracy_requirement_ns <= 0 || config.automotive_config.accuracy_requirement_ns > 1000000) {
+        errors.push_back("Automotive accuracy requirement must be between 1ns and 1ms");
+    }
+    
+    // Validate PDelay success range for AVnu Base
+    if (config.avnu_base_config.min_pdelay_successes > config.avnu_base_config.max_pdelay_successes) {
+        errors.push_back("AVnu Base min PDelay successes cannot be greater than max");
+    }
+    
+    // Validate GPIO pin for PPS
+    if (config.pps_monitoring_enabled && config.pps_gpio_pin < 0) {
+        errors.push_back("PPS monitoring enabled but no valid GPIO pin specified");
+    }
+    
+    // Validate reverse sync domain
+    if (config.reverse_sync_enabled && config.reverse_sync_domain == 0) {
+        errors.push_back("Reverse sync enabled but domain 0 is reserved for default gPTP");
+    }
+    
+    return errors;
+}
+
+void ClockQualityConfigManager::print_config_summary() const {
+    std::cout << get_config_summary();
+}
+
+std::string ClockQualityConfigManager::get_config_summary() const {
+    std::ostringstream oss;
+    
+    oss << "=== OpenAvnu Clock Quality Configuration ===\n";
+    oss << "Config loaded: " << (config_loaded ? "Yes" : "No") << "\n";
+    if (!config_file_path.empty()) {
+        oss << "Config file: " << config_file_path << "\n";
+    }
+    oss << "\n";
+    
+    oss << "Measurement Settings:\n";
+    oss << "  Primary method: " << method_to_string(config.primary_method) << "\n";
+    oss << "  Ingress monitoring: " << (config.ingress_monitoring_enabled ? "Enabled" : "Disabled") << "\n";
+    oss << "  Reverse sync: " << (config.reverse_sync_enabled ? "Enabled" : "Disabled") << "\n";
+    oss << "  PPS hardware: " << (config.pps_monitoring_enabled ? "Enabled" : "Disabled") << "\n";
+    oss << "  Measurement interval: " << config.measurement_interval_ms << "ms\n";
+    oss << "  Analysis window: " << config.analysis_window_seconds << "s\n";
+    oss << "\n";
+    
+    oss << "Profile Requirements:\n";
+    oss << "  Milan: ±" << config.milan_config.accuracy_requirement_ns << "ns, " 
+        << config.milan_config.max_lock_time_seconds << "s lock, "
+        << config.milan_config.late_response_threshold_ms << "ms late response\n";
+    oss << "  Automotive: ±" << config.automotive_config.accuracy_requirement_ns << "ns, "
+        << (config.automotive_config.immediate_ascapable_required ? "immediate asCapable" : "normal lock") << "\n";
+    oss << "  AVnu Base: ±" << config.avnu_base_config.accuracy_requirement_ns << "ns, "
+        << config.avnu_base_config.min_pdelay_successes << "-" << config.avnu_base_config.max_pdelay_successes << " PDelay successes\n";
+    oss << "\n";
+    
+    oss << "Reporting Settings:\n";
+    oss << "  TLV reporting: " << (config.tlv_reporting_enabled ? "Enabled" : "Disabled") << "\n";
+    oss << "  Console output: " << (config.console_output_enabled ? "Enabled" : "Disabled") << "\n";
+    oss << "  CSV export: " << (config.csv_export_enabled ? "Enabled" : "Disabled");
+    if (config.csv_export_enabled) {
+        oss << " (" << config.csv_export_path << ")";
+    }
+    oss << "\n";
+    
+    return oss.str();
+}
+
+bool ClockQualityConfigManager::save_config_file(const std::string& file_path) const {
+    std::ofstream file(file_path);
+    if (!file.is_open()) {
+        GPTP_LOG_ERROR("Failed to open config file for writing: %s", file_path.c_str());
+        return false;
+    }
+    
+    file << "# Clock Quality Configuration File\n";
+    file << "# Generated automatically\n\n";
+    
+    file << "[ingress_monitoring]\n";
+    file << "enabled = " << (config.ingress_monitoring_enabled ? "true" : "false") << "\n";
+    file << "reverse_sync_enabled = " << (config.reverse_sync_enabled ? "true" : "false") << "\n";
+    file << "pps_monitoring_enabled = " << (config.pps_monitoring_enabled ? "true" : "false") << "\n";
+    file << "primary_method = " << static_cast<int>(config.primary_method) << "\n\n";
+    
+    file << "[analysis]\n";
+    file << "measurement_interval_ms = " << config.measurement_interval_ms << "\n";
+    file << "analysis_window_seconds = " << config.analysis_window_seconds << "\n";
+    file << "max_history_measurements = " << config.max_history_measurements << "\n";
+    file << "real_time_analysis_enabled = " << (config.real_time_analysis_enabled ? "true" : "false") << "\n\n";
+    
+    file << "[reporting]\n";
+    file << "tlv_reporting_enabled = " << (config.tlv_reporting_enabled ? "true" : "false") << "\n";
+    file << "console_output_enabled = " << (config.console_output_enabled ? "true" : "false") << "\n";
+    file << "csv_export_enabled = " << (config.csv_export_enabled ? "true" : "false") << "\n";
+    file << "csv_export_path = " << config.csv_export_path << "\n\n";
+    
+    file << "[milan_profile]\n";
+    file << "profile_name = " << config.milan_config.profile_name << "\n";
+    file << "accuracy_requirement_ns = " << config.milan_config.accuracy_requirement_ns << "\n";
+    file << "max_lock_time_seconds = " << config.milan_config.max_lock_time_seconds << "\n";
+    file << "observation_window_seconds = " << config.milan_config.observation_window_seconds << "\n";
+    file << "measurement_interval_ms = " << config.milan_config.measurement_interval_ms << "\n";
+    file << "immediate_ascapable_required = " << (config.milan_config.immediate_ascapable_required ? "true" : "false") << "\n";
+    file << "late_response_threshold_ms = " << config.milan_config.late_response_threshold_ms << "\n";
+    file << "min_pdelay_successes = " << config.milan_config.min_pdelay_successes << "\n";
+    file << "max_pdelay_successes = " << config.milan_config.max_pdelay_successes << "\n\n";
+    
+    file << "[automotive_profile]\n";
+    file << "profile_name = " << config.automotive_config.profile_name << "\n";
+    file << "accuracy_requirement_ns = " << config.automotive_config.accuracy_requirement_ns << "\n";
+    file << "max_lock_time_seconds = " << config.automotive_config.max_lock_time_seconds << "\n";
+    file << "observation_window_seconds = " << config.automotive_config.observation_window_seconds << "\n";
+    file << "measurement_interval_ms = " << config.automotive_config.measurement_interval_ms << "\n";
+    file << "immediate_ascapable_required = " << (config.automotive_config.immediate_ascapable_required ? "true" : "false") << "\n";
+    file << "late_response_threshold_ms = " << config.automotive_config.late_response_threshold_ms << "\n";
+    file << "min_pdelay_successes = " << config.automotive_config.min_pdelay_successes << "\n";
+    file << "max_pdelay_successes = " << config.automotive_config.max_pdelay_successes << "\n\n";
+    
+    file << "[hardware]\n";
+    file << "pps_gpio_pin = " << config.pps_gpio_pin << "\n";
+    file << "hardware_timestamping_enabled = " << (config.hardware_timestamping_enabled ? "true" : "false") << "\n\n";
+    
+    file << "[network]\n";
+    file << "reverse_sync_domain = " << static_cast<int>(config.reverse_sync_domain) << "\n";
+    file << "reverse_sync_bmca_enabled = " << (config.reverse_sync_bmca_enabled ? "true" : "false") << "\n\n";
+    
+    file.close();
+    GPTP_LOG_INFO("Configuration saved to: %s", file_path.c_str());
+    return true;
+}
+
+bool ClockQualityConfigManager::save_config_file() const {
+    if (config_file_path.empty()) {
+        GPTP_LOG_ERROR("No config file path available for saving");
+        return false;
+    }
+    return save_config_file(config_file_path);
+}
+
+} // namespace gPTP
+} // namespace OpenAvnu
