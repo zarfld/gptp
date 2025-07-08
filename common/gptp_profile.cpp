@@ -66,7 +66,9 @@ gPTPProfile createMilanProfile() {
     profile.maintain_as_capable_on_late_response = true; // Milan Annex B.2.3
     
     // Milan late response handling (Annex B.2.3)
-    profile.late_response_threshold_ms = 10;  // 10ms threshold
+    // SPEC: Pdelay turnaround time relaxed by 50% = 15ms maximum
+    // Responses later than 10ms but before pdelayReqInterval should not result in asCapable=FALSE
+    profile.late_response_threshold_ms = 15;  // 15ms threshold per Milan Annex B.2.3
     profile.consecutive_late_limit = 3;       // Allow 3+ consecutive late responses
     profile.reset_pdelay_count_on_timeout = false; // Don't reset after establishment
     
@@ -89,12 +91,12 @@ gPTPProfile createMilanProfile() {
     profile.test_status_interval_log = 0;   // Not used in Milan
     profile.force_slave_mode = false;       // Milan allows grandmaster mode
     
-    // Milan compliance limits
+    // Milan compliance limits (enhanced for better compliance)
     profile.max_convergence_time_ms = 100;  // 100ms convergence target
     profile.max_sync_jitter_ns = 1000;      // 1000ns max sync jitter
     profile.max_path_delay_variation_ns = 10000; // 10000ns max path delay variation
     
-    GPTP_LOG_INFO("*** MILAN PROFILE CREATED: 125ms sync, 100ms convergence target, asCapable starts FALSE, earned via 2-5 PDelay ***");
+    GPTP_LOG_INFO("*** MILAN PROFILE CREATED: 125ms sync, 15ms late response threshold, asCapable earned via 2-5 PDelay ***");
     return profile;
 }
 
@@ -276,12 +278,12 @@ gPTPProfile createAutomotiveProfile() {
     profile.test_status_interval_log = 0;      // 1 second test status messages
     profile.force_slave_mode = false;          // Can be GM or slave (configurable)
     
-    // No specific compliance limits for automotive profile
-    profile.max_convergence_time_ms = 0;
-    profile.max_sync_jitter_ns = 0;
-    profile.max_path_delay_variation_ns = 0;
+    // Automotive compliance - no specific limits but enable monitoring
+    profile.max_convergence_time_ms = 0;       // No hard limit
+    profile.max_sync_jitter_ns = 0;            // No hard limit  
+    profile.max_path_delay_variation_ns = 0;   // No hard limit
     
-    GPTP_LOG_INFO("*** AUTOMOTIVE PROFILE CREATED (AVB Spec 1.6): No BMCA, no announces, signaling enabled, asCapable on link up ***");
+    GPTP_LOG_INFO("*** AUTOMOTIVE PROFILE CREATED (AVB Spec 1.6): No BMCA, no announces, signaling enabled, asCapable on link up, interval management after 60s ***");
     return profile;
 }
 
@@ -318,24 +320,132 @@ gPTPProfile createProfileByName(const std::string& profile_name) {
 bool validateProfile(const gPTPProfile& profile) {
     bool valid = true;
     
+    GPTP_LOG_INFO("*** VALIDATING PROFILE: %s v%s ***", 
+                  profile.profile_name.c_str(), profile.profile_version.c_str());
+    
     // Validate timing intervals
     if (profile.sync_interval_log < -8 || profile.sync_interval_log > 8) {
-        GPTP_LOG_ERROR("*** PROFILE VALIDATION ERROR: Invalid sync_interval_log %d ***", profile.sync_interval_log);
+        GPTP_LOG_ERROR("*** PROFILE VALIDATION ERROR: Invalid sync_interval_log %d (valid range: -8 to 8) ***", 
+                       profile.sync_interval_log);
+        valid = false;
+    }
+    
+    if (profile.announce_interval_log < -8 || profile.announce_interval_log > 8) {
+        GPTP_LOG_ERROR("*** PROFILE VALIDATION ERROR: Invalid announce_interval_log %d (valid range: -8 to 8) ***", 
+                       profile.announce_interval_log);
+        valid = false;
+    }
+    
+    if (profile.pdelay_interval_log < -8 || profile.pdelay_interval_log > 8) {
+        GPTP_LOG_ERROR("*** PROFILE VALIDATION ERROR: Invalid pdelay_interval_log %d (valid range: -8 to 8) ***", 
+                       profile.pdelay_interval_log);
         valid = false;
     }
     
     // Validate asCapable parameters
     if (profile.min_pdelay_successes > profile.max_pdelay_successes && profile.max_pdelay_successes > 0) {
-        GPTP_LOG_ERROR("*** PROFILE VALIDATION ERROR: min_pdelay_successes > max_pdelay_successes ***");
+        GPTP_LOG_ERROR("*** PROFILE VALIDATION ERROR: min_pdelay_successes (%d) > max_pdelay_successes (%d) ***",
+                       profile.min_pdelay_successes, profile.max_pdelay_successes);
         valid = false;
     }
     
-    // Validate Milan-specific limits
+    // Profile-specific validation
     if (profile.profile_name == "milan") {
-        if (profile.max_convergence_time_ms == 0 || profile.max_convergence_time_ms > 1000) {
-            GPTP_LOG_ERROR("*** MILAN VALIDATION ERROR: Invalid convergence time %dms ***", profile.max_convergence_time_ms);
+        // Milan Baseline Interoperability Specification validation
+        if (profile.sync_interval_log != -3) {
+            GPTP_LOG_ERROR("*** MILAN VALIDATION ERROR: sync_interval_log must be -3 (125ms), got %d ***", 
+                           profile.sync_interval_log);
             valid = false;
         }
+        
+        if (profile.announce_interval_log != 0) {
+            GPTP_LOG_ERROR("*** MILAN VALIDATION ERROR: announce_interval_log must be 0 (1s), got %d ***", 
+                           profile.announce_interval_log);
+            valid = false;
+        }
+        
+        if (profile.pdelay_interval_log != 0) {
+            GPTP_LOG_ERROR("*** MILAN VALIDATION ERROR: pdelay_interval_log must be 0 (1s), got %d ***", 
+                           profile.pdelay_interval_log);
+            valid = false;
+        }
+        
+        if (profile.min_pdelay_successes < 2 || profile.max_pdelay_successes > 5) {
+            GPTP_LOG_ERROR("*** MILAN VALIDATION ERROR: PDelay successes must be 2-5, got %d-%d ***",
+                           profile.min_pdelay_successes, profile.max_pdelay_successes);
+            valid = false;
+        }
+        
+        if (profile.neighbor_prop_delay_thresh != 800000) {
+            GPTP_LOG_ERROR("*** MILAN VALIDATION ERROR: neighborPropDelayThresh must be 800000ns, got %ld ***",
+                           profile.neighbor_prop_delay_thresh);
+            valid = false;
+        }
+        
+        if (profile.clock_class != 248 || profile.clock_accuracy != 0xFE || 
+            profile.offset_scaled_log_variance != 0x4E5D || profile.priority1 != 248) {
+            GPTP_LOG_ERROR("*** MILAN VALIDATION ERROR: Invalid clock quality parameters ***");
+            valid = false;
+        }
+        
+    } else if (profile.profile_name == "avnu_base") {
+        // AVnu Base/ProAV Functional Interoperability Specification validation
+        if (profile.min_pdelay_successes < 2 || profile.max_pdelay_successes > 10) {
+            GPTP_LOG_ERROR("*** AVNU BASE VALIDATION ERROR: PDelay successes must be 2-10, got %d-%d ***",
+                           profile.min_pdelay_successes, profile.max_pdelay_successes);
+            valid = false;
+        }
+        
+        if (profile.neighbor_prop_delay_thresh != 800000) {
+            GPTP_LOG_ERROR("*** AVNU BASE VALIDATION ERROR: neighborPropDelayThresh must be 800000ns, got %ld ***",
+                           profile.neighbor_prop_delay_thresh);
+            valid = false;
+        }
+        
+    } else if (profile.profile_name == "automotive") {
+        // Automotive Ethernet AVB Functional Interoperability Specification validation
+        if (!profile.as_capable_on_link_up) {
+            GPTP_LOG_ERROR("*** AUTOMOTIVE VALIDATION ERROR: asCapable must be TRUE on link up ***");
+            valid = false;
+        }
+        
+        if (profile.min_pdelay_successes != 0) {
+            GPTP_LOG_ERROR("*** AUTOMOTIVE VALIDATION ERROR: No PDelay requirement for asCapable, got %d ***",
+                           profile.min_pdelay_successes);
+            valid = false;
+        }
+        
+        if (profile.bmca_enabled) {
+            GPTP_LOG_ERROR("*** AUTOMOTIVE VALIDATION ERROR: BMCA must be disabled ***");
+            valid = false;
+        }
+        
+        if (!profile.disable_announce_transmission) {
+            GPTP_LOG_ERROR("*** AUTOMOTIVE VALIDATION ERROR: Announce transmission must be disabled ***");
+            valid = false;
+        }
+        
+        if (!profile.disable_source_port_identity_check) {
+            GPTP_LOG_ERROR("*** AUTOMOTIVE VALIDATION ERROR: sourcePortIdentity check must be disabled ***");
+            valid = false;
+        }
+        
+        if (!profile.signaling_enabled) {
+            GPTP_LOG_ERROR("*** AUTOMOTIVE VALIDATION ERROR: gPTP signaling must be enabled ***");
+            valid = false;
+        }
+        
+        if (profile.interval_transition_timeout_s != 60) {
+            GPTP_LOG_ERROR("*** AUTOMOTIVE VALIDATION ERROR: Interval transition timeout must be 60s, got %ds ***",
+                           profile.interval_transition_timeout_s);
+            valid = false;
+        }
+    }
+    
+    if (valid) {
+        GPTP_LOG_INFO("*** PROFILE VALIDATION PASSED: %s ***", profile.profile_name.c_str());
+    } else {
+        GPTP_LOG_ERROR("*** PROFILE VALIDATION FAILED: %s ***", profile.profile_name.c_str());
     }
     
     return valid;
