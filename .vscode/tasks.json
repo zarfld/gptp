@@ -117,7 +117,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Debug gptp with Milan (Admin)",
+      "label": "Debug gptp with Milan (Admin) - Run as Administrator",
       "type": "shell",
       "windows": {
         "command": "powershell",
@@ -125,16 +125,10 @@
           "-NoProfile",
           "-ExecutionPolicy",
           "Bypass",
-          "-Command",
-          " $ts = Get-Date -Format yyyyMMdd_HHmmss; " +
-          " $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*'' } | Select-Object -First 1 -ExpandProperty MacAddress); " +
-          " $log = \"build\\Debug\\gptp_$ts.log\"; " +
-          " $err = \"build\\Debug\\gptp_$ts.err\"; " +
-          " try { & 'build\\Debug\\gptp.exe' -Milan $mac -debug-packets 2>&1 | Tee-Object -FilePath \"build\\Debug\\gptp_$ts.log\"; Write-Host \"gptp execution completed. Log saved to build\\Debug\\gptp_$ts.log\"; } " +
-          " catch { $_ | Out-File -FilePath \"build\\Debug\\gptp_$ts.err\" -Append; Write-Host \"Error occurred. Details in build\\Debug\\gptp_$ts.err\"; }"
+          "-File",
+          "run_admin_milan.ps1"
         ]
       },
-      
       "dependsOn": [
         "Build project Debug"
       ],
@@ -142,7 +136,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Debug gptp with Automotive (Admin)",
+      "label": "Debug gptp with Automotive (Admin) - Run as Administrator",
       "type": "shell",
       "windows": {
         "command": "powershell",
@@ -150,23 +144,54 @@
           "-NoProfile",
           "-ExecutionPolicy",
           "Bypass",
-          "-Command",
-          " $ts = Get-Date -Format yyyyMMdd_HHmmss; " +
-          " $mac = (Get-NetAdapter | Where-Object { $_.InterfaceDescription -like ''*I21*'' } | Select-Object -First 1 -ExpandProperty MacAddress); " +
-          " $log = \"build\\Debug\\gptp_$ts.log\"; " +
-          " $err = \"build\\Debug\\gptp_$ts.err\"; " +
-          " try { & 'build\\Debug\\gptp.exe' -Automotive $mac -debug-packets 2>&1 | Tee-Object -FilePath \"build\\Debug\\gptp_$ts.log\"; Write-Host \"gptp execution completed. Log saved to build\\Debug\\gptp_$ts.log\"; } " +
-          " catch { $_ | Out-File -FilePath \"build\\Debug\\gptp_$ts.err\" -Append; Write-Host \"Error occurred. Details in build\\Debug\\gptp_$ts.err\"; }"
+          "-File",
+          "run_admin_automotive.ps1"
         ]
       },
-      
       "dependsOn": [
         "Build project Debug"
       ],
       "group": "build",
       "problemMatcher": []
     },
-
+    {
+      "label": "Debug gptp with Milan (Admin) - STABLE MODE",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "run_admin_milan_stable.ps1"
+        ]
+      },
+      "dependsOn": [
+        "Build project Debug"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Debug gptp with Automotive (Admin) - STABLE MODE",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "run_admin_automotive_stable.ps1"
+        ]
+      },
+      "dependsOn": [
+        "Build project Debug"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
     {
       "label": "View Latest gptp Log",
       "type": "shell",
