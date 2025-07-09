@@ -75,35 +75,35 @@ elseif(WIN32)
   # Copy configuration files to output directory for deployment
   add_custom_command(TARGET gptp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_CURRENT_SOURCE_DIR}/gptp_cfg.ini"
+      "${CMAKE_SOURCE_DIR}/gptp_cfg.ini"
       "$<TARGET_FILE_DIR:gptp>/gptp_cfg.ini"
     COMMENT "Copying gptp_cfg.ini to output directory"
   )
   
   add_custom_command(TARGET gptp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_CURRENT_SOURCE_DIR}/test_milan_config.ini"
+      "${CMAKE_SOURCE_DIR}/test_milan_config.ini"
       "$<TARGET_FILE_DIR:gptp>/test_milan_config.ini"
     COMMENT "Copying test_milan_config.ini to output directory"
   )
   
   add_custom_command(TARGET gptp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_CURRENT_SOURCE_DIR}/avnu_presonus_config.ini"
+      "${CMAKE_SOURCE_DIR}/avnu_presonus_config.ini"
       "$<TARGET_FILE_DIR:gptp>/avnu_presonus_config.ini"
     COMMENT "Copying avnu_presonus_config.ini to output directory"
   )
   
   add_custom_command(TARGET gptp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_CURRENT_SOURCE_DIR}/avnu_base_config.ini"
+      "${CMAKE_SOURCE_DIR}/avnu_base_config.ini"
       "$<TARGET_FILE_DIR:gptp>/avnu_base_config.ini"
     COMMENT "Copying avnu_base_config.ini to output directory"
   )
   
   add_custom_command(TARGET gptp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_CURRENT_SOURCE_DIR}/test_unified_profiles.ini"
+      "${CMAKE_SOURCE_DIR}/test_unified_profiles.ini"
       "$<TARGET_FILE_DIR:gptp>/test_unified_profiles.ini"
     COMMENT "Copying test_unified_profiles.ini to output directory"
   )

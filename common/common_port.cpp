@@ -65,7 +65,7 @@ CommonPort::CommonPort( PortInit_t *portInit ) :
 	qualified_announce = NULL;
 	
 	// Initialize unified profile system
-	active_profile = portInit->profile;
+	active_profile = std::move(portInit->profile);
 	
 	// Configure neighbor delay threshold from profile
 	if (active_profile.neighbor_prop_delay_thresh != 0) {

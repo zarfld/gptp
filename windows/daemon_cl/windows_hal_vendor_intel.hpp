@@ -67,6 +67,34 @@ struct IntelDeviceSpec {
 };
 
 /**
+ * @brief Intel device information structure (enhanced for I225 support)
+ */
+struct IntelDeviceInfo {
+    uint64_t clock_rate;
+    bool hw_timestamp_supported;
+    bool registry_configured;
+    const char* model_name;
+    const char* description;
+    
+    // I225-specific fields
+    bool is_i225_family;
+    uint8_t i225_stepping;        // Hardware stepping (A0, A1, A2, etc.)
+    bool requires_ipg_mitigation; // True if stepping has IPG timing issues
+    bool supports_2_5gbe;         // True if 2.5GbE is supported
+};
+
+/**
+ * @brief I225 stepping information
+ */
+struct I225SteppingInfo {
+    uint8_t stepping_id;
+    const char* stepping_name;
+    bool has_ipg_issue;
+    bool requires_speed_limit;
+    const char* mitigation_notes;
+};
+
+/**
  * @brief Check if MAC address belongs to Intel
  * @param mac_bytes MAC address bytes (must be at least 6 bytes)
  * @return true if Intel OUI detected, false otherwise
@@ -109,5 +137,37 @@ const IntelOUIPrefix* getIntelOUIPrefixes();
  * @return Array of Intel device specs (terminated by NULL model_pattern)
  */
 const IntelDeviceSpec* getIntelDeviceSpecs();
+
+/**
+ * @brief Get comprehensive Intel device information (enhanced for I225 support)
+ * @param device_desc Device description string
+ * @param mac_bytes MAC address bytes (optional)
+ * @param device_info Output structure for device information
+ * @param pci_device_id PCI device ID (for I225 stepping detection)
+ * @param pci_revision PCI revision ID (for I225 stepping detection)
+ * @return true if device is recognized Intel device
+ */
+bool getIntelDeviceInfo(const char* device_desc, const uint8_t* mac_bytes, 
+                       IntelDeviceInfo* device_info,
+                       uint16_t pci_device_id = 0, uint8_t pci_revision = 0);
+
+/**
+ * @brief Detect I225 stepping and determine mitigation requirements
+ * @param device_desc Device description string
+ * @param pci_device_id PCI device ID (0x15F2, 0x15F3, etc.)
+ * @param pci_revision PCI revision ID (contains stepping info)
+ * @return Pointer to stepping info structure, or NULL if not I225
+ */
+const I225SteppingInfo* detectI225Stepping(const char* device_desc, 
+                                          uint16_t pci_device_id,
+                                          uint8_t pci_revision);
+
+/**
+ * @brief Apply I225-specific mitigations based on stepping
+ * @param device_desc Device description
+ * @param stepping_info Stepping information
+ * @return true if mitigation was applied successfully
+ */
+bool applyI225Mitigation(const char* device_desc, const I225SteppingInfo* stepping_info);
 
 #endif // WINDOWS_HAL_VENDOR_INTEL_HPP
