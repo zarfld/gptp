@@ -36,10 +36,16 @@
 
 /**@file*/
 
+// Prevent WinSock header conflicts
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
 #include <cstdint>
 #include "../../common/ieee1588.hpp"
 #include "../../common/ptptypes.hpp"
+#include "intel_hal_vendor_extensions.hpp"
 
 /**
  * @brief Windows cross-timestamping implementation
@@ -100,6 +106,19 @@ public:
      */
     uint64_t getEstimatedError() const;
 
+    /**
+     * @brief Initialize Intel HAL integration if available
+     * @param device_name Intel device name for HAL initialization
+     * @return true if Intel HAL integration successful
+     */
+    bool initializeIntelHAL(const char* device_name);
+
+    /**
+     * @brief Check if Intel HAL is available for this interface
+     * @return true if Intel HAL is available and working
+     */
+    bool isIntelHALAvailable() const;
+
 private:
     /**
      * @brief Hardware-specific cross-timestamp methods
@@ -109,6 +128,7 @@ private:
         QPC_SYSTEM_TIME,        // QueryPerformanceCounter + GetSystemTimePreciseAsFileTime
         RDTSC_SYSTEM_TIME,      // RDTSC + GetSystemTimePreciseAsFileTime
         HARDWARE_ASSISTED,      // Hardware-assisted timestamping (Intel I210, etc.)
+        INTEL_HAL_HARDWARE,     // Intel HAL hardware timestamping
         FALLBACK_CORRELATION    // Fallback correlation method
     };
 
@@ -141,6 +161,14 @@ private:
      * @return true if successful
      */
     bool getCrossTimestamp_Hardware(Timestamp* system_time, Timestamp* device_time);
+
+    /**
+     * @brief Get cross-timestamp using Intel HAL hardware timestamping
+     * @param system_time Output system timestamp
+     * @param device_time Output device timestamp
+     * @return true if successful, false otherwise
+     */
+    bool getCrossTimestamp_IntelHAL(Timestamp* system_time, Timestamp* device_time);
 
     /**
      * @brief Fallback correlation method
@@ -208,6 +236,10 @@ private:
     // Hardware-specific data
     void* m_hw_context;             // Hardware-specific context
     bool m_hw_available;            // Hardware timestamping available
+    
+    // Intel HAL integration
+    void* m_intel_hal_context;      // Intel HAL context (IntelVendorExtensions::IntelHALContext*)
+    bool m_intel_hal_available;     // Intel HAL available and working
     
     // Statistics
     struct Statistics {

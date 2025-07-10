@@ -51,6 +51,8 @@ WindowsCrossTimestamp::WindowsCrossTimestamp()
     , m_estimated_error_ns(0)
     , m_hw_context(nullptr)
     , m_hw_available(false)
+    , m_intel_hal_context(nullptr)
+    , m_intel_hal_available(false)
 {
     memset(&m_interface_label, 0, sizeof(m_interface_label));
     memset(&m_qpc_frequency, 0, sizeof(m_qpc_frequency));
@@ -91,6 +93,14 @@ bool WindowsCrossTimestamp::initialize(const char* iface_label)
         }
         break;
 
+    case TimestampMethod::INTEL_HAL_HARDWARE:
+        // Intel HAL hardware timestamping
+        if (!initializeIntelHAL(iface_label)) {
+            GPTP_LOG_WARNING("Intel HAL initialization failed, falling back to QPC");
+            m_method = TimestampMethod::QPC_SYSTEM_TIME;
+        }
+        break;
+
     case TimestampMethod::HARDWARE_ASSISTED:
         // TODO: Initialize hardware-specific timestamping
         // For now, fall back to QPC method
@@ -118,6 +128,16 @@ bool WindowsCrossTimestamp::initialize(const char* iface_label)
 void WindowsCrossTimestamp::cleanup()
 {
     if (m_initialized) {
+        // Clean up Intel HAL resources
+        if (m_intel_hal_context) {
+            IntelVendorExtensions::IntelHALContext* hal_ctx = 
+                static_cast<IntelVendorExtensions::IntelHALContext*>(m_intel_hal_context);
+            IntelVendorExtensions::CleanupIntelHAL(hal_ctx);
+            delete hal_ctx;
+            m_intel_hal_context = nullptr;
+            m_intel_hal_available = false;
+        }
+        
         // Clean up hardware-specific resources
         if (m_hw_context) {
             // TODO: Hardware-specific cleanup
@@ -152,6 +172,14 @@ bool WindowsCrossTimestamp::getCrossTimestamp(
 
     case TimestampMethod::RDTSC_SYSTEM_TIME:
         success = getCrossTimestamp_RDTSC(system_time, device_time);
+        break;
+
+    case TimestampMethod::INTEL_HAL_HARDWARE:
+        success = getCrossTimestamp_IntelHAL(system_time, device_time);
+        if (!success) {
+            // Fall back to QPC method
+            success = getCrossTimestamp_QPC(system_time, device_time);
+        }
         break;
 
     case TimestampMethod::HARDWARE_ASSISTED:
@@ -205,6 +233,12 @@ uint64_t WindowsCrossTimestamp::getEstimatedError() const
 
 WindowsCrossTimestamp::TimestampMethod WindowsCrossTimestamp::detectBestMethod()
 {
+    // Check for Intel HAL support (highest priority for Intel devices)
+    if (IntelVendorExtensions::IsIntelHALSupported(m_interface_label, 0)) {
+        GPTP_LOG_INFO("Intel HAL timestamping available for interface: %s", m_interface_label);
+        return TimestampMethod::INTEL_HAL_HARDWARE;
+    }
+    
     // Check for hardware-assisted timestamping
     if (m_hw_available) {
         GPTP_LOG_INFO("Hardware-assisted timestamping available");
@@ -533,3 +567,117 @@ uint64_t getHighPrecisionSystemTime()
 }
 
 } // namespace WindowsTimestampUtils
+
+bool WindowsCrossTimestamp::initializeIntelHAL(const char* device_name)
+{
+    if (!device_name) {
+        return false;
+    }
+    
+    // Clean up any existing Intel HAL context
+    if (m_intel_hal_context) {
+        IntelVendorExtensions::IntelHALContext* hal_ctx = 
+            static_cast<IntelVendorExtensions::IntelHALContext*>(m_intel_hal_context);
+        IntelVendorExtensions::CleanupIntelHAL(hal_ctx);
+        delete hal_ctx;
+        m_intel_hal_context = nullptr;
+    }
+    
+    // Check if Intel HAL is supported for this device
+    if (!IntelVendorExtensions::IsIntelHALSupported(device_name, 0)) {
+        GPTP_LOG_DEBUG("Intel HAL not supported for device: %s", device_name);
+        return false;
+    }
+    
+    // Create Intel HAL context
+    IntelVendorExtensions::IntelHALContext* hal_ctx = 
+        new IntelVendorExtensions::IntelHALContext();
+    
+    // Initialize Intel HAL
+    if (!IntelVendorExtensions::InitializeIntelHAL(device_name, 0, hal_ctx)) {
+        GPTP_LOG_ERROR("Failed to initialize Intel HAL for device: %s", device_name);
+        delete hal_ctx;
+        return false;
+    }
+    
+    m_intel_hal_context = hal_ctx;
+    m_intel_hal_available = true;
+    
+    GPTP_LOG_STATUS("Intel HAL initialized successfully for device: %s", device_name);
+    
+    // Get HAL status for logging
+    char status_message[256];
+    if (IntelVendorExtensions::GetHALStatus(hal_ctx, status_message, sizeof(status_message))) {
+        GPTP_LOG_INFO("Intel HAL Status: %s", status_message);
+    }
+    
+    return true;
+}
+
+bool WindowsCrossTimestamp::isIntelHALAvailable() const
+{
+    return m_intel_hal_available && m_intel_hal_context != nullptr;
+}
+
+bool WindowsCrossTimestamp::getCrossTimestamp_IntelHAL(Timestamp* system_time, Timestamp* device_time)
+{
+    if (!isIntelHALAvailable() || !system_time || !device_time) {
+        return false;
+    }
+    
+    IntelVendorExtensions::IntelHALContext* hal_ctx = 
+        static_cast<IntelVendorExtensions::IntelHALContext*>(m_intel_hal_context);
+    
+    LARGE_INTEGER qpc_before, qpc_after;
+    uint64_t hw_timestamp_ns = 0;
+    FILETIME ft;
+    
+    // Get synchronized timestamps as close together as possible
+    QueryPerformanceCounter(&qpc_before);
+    
+    // Get Intel HAL hardware timestamp
+    bool hal_success = IntelVendorExtensions::GetHardwareTimestamp(hal_ctx, &hw_timestamp_ns);
+    
+    // Get system time
+    if (WindowsTimestampUtils::isSystemTimePreciseAvailable()) {
+        g_GetSystemTimePreciseAsFileTime(&ft);
+    } else {
+        GetSystemTimeAsFileTime(&ft);
+    }
+    
+    QueryPerformanceCounter(&qpc_after);
+    
+    if (!hal_success) {
+        GPTP_LOG_DEBUG("Intel HAL timestamp failed");
+        return false;
+    }
+    
+    // Calculate timing synchronization quality
+    uint64_t qpc_delta = qpc_after.QuadPart - qpc_before.QuadPart;
+    double sync_window_ns = (static_cast<double>(qpc_delta) * 1000000000.0) / m_qpc_frequency.QuadPart;
+    
+    // Convert system time to timestamp
+    *system_time = fileTimeToTimestamp(ft);
+    
+    // Convert Intel HAL timestamp to gPTP timestamp format
+    device_time->seconds_ms = static_cast<uint32_t>(hw_timestamp_ns / 1000000000ULL) << 16;
+    device_time->seconds_ls = static_cast<uint32_t>(hw_timestamp_ns / 1000000000ULL) & 0xFFFF;
+    device_time->nanoseconds = static_cast<uint32_t>(hw_timestamp_ns % 1000000000ULL);
+    
+    // Update quality metrics based on synchronization window
+    if (sync_window_ns < 1000.0) {         // < 1µs
+        m_quality = 95;
+        m_estimated_error_ns = static_cast<uint64_t>(sync_window_ns);
+    } else if (sync_window_ns < 10000.0) {  // < 10µs
+        m_quality = 85;
+        m_estimated_error_ns = static_cast<uint64_t>(sync_window_ns);
+    } else {                               // >= 10µs
+        m_quality = 70;
+        m_estimated_error_ns = static_cast<uint64_t>(sync_window_ns);
+    }
+    
+    GPTP_LOG_VERBOSE("Intel HAL timestamp: %llu ns, sync window: %.1f ns, quality: %u", 
+                     hw_timestamp_ns, sync_window_ns, m_quality);
+    
+    return true;
+}

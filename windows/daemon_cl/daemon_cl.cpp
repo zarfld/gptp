@@ -144,10 +144,16 @@ int parseMacAddr( _TCHAR *macstr, uint8_t *octet_string ) {
 	int i;
 	_TCHAR *cur = macstr;
 
-	if( strnlen_s( macstr, MACSTR_LENGTH ) != 17 ) return -1;
+	GPTP_LOG_INFO("Parsing MAC address string: '%s' (length: %d)", macstr, (int)strnlen_s( macstr, MACSTR_LENGTH ));
+
+	if( strnlen_s( macstr, MACSTR_LENGTH ) != 17 ) {
+		GPTP_LOG_ERROR("MAC address string length is %d, expected 17", (int)strnlen_s( macstr, MACSTR_LENGTH ));
+		return -1;
+	}
 
 	for( i = 0; i < ETHER_ADDR_OCTETS; ++i ) {
 		octet_string[i] = strtol( cur, &cur, 16 ) & 0xFF;
+		GPTP_LOG_INFO("  Byte %d: %02X", i, octet_string[i]);
 		++cur;
 	}
 

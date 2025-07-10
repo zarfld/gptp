@@ -48,6 +48,7 @@
 #include "avbts_osthread.hpp"
 #include "avbts_osipc.hpp"
 #include "wireless_tstamper.hpp"
+#include "ieee1588.hpp"  // For TIMESTAMP_TO_NS macro
 #include "windows_crosststamp.hpp"
 #include "ether_tstamper.hpp"
 #include "packet.hpp"
@@ -1298,6 +1299,29 @@ use_enhanced_software_timestamping:
 	 */
 	virtual int HWTimestamper_txtimestamp(PortIdentity *identity, PTPMessageId messageId, Timestamp &timestamp, unsigned &clock_value, bool last)
 	{
+#ifdef OPENAVNU_BUILD_INTEL_HAL
+		// 🚀 INTEL HAL INTEGRATION: Try Intel HAL first for better reliability
+		WindowsCrossTimestamp& txCrossTimestamp = getGlobalCrossTimestamp();
+		if (txCrossTimestamp.isIntelHALAvailable()) {
+			Timestamp system_time, device_time;
+			
+			if (txCrossTimestamp.getCrossTimestamp(&system_time, &device_time)) {
+				timestamp = device_time;
+				timestamp._version = version;
+				
+				GPTP_LOG_VERBOSE("Intel HAL TX timestamp successful: messageType=%d, seq=%u, timestamp=%llu.%09u", 
+					messageId.getMessageType(), messageId.getSequenceId(),
+					TIMESTAMP_TO_NS(timestamp) / 1000000000ULL, 
+					(uint32_t)(TIMESTAMP_TO_NS(timestamp) % 1000000000ULL));
+				
+				return GPTP_EC_SUCCESS;
+			}
+			
+			GPTP_LOG_DEBUG("Intel HAL TX timestamp failed, falling back to legacy OID method");
+		}
+#endif
+
+		// Legacy OID-based timestamping (fallback when Intel HAL not available/enabled)
 		DWORD buf[4], buf_tmp[4];
 		DWORD returned = 0;
 		uint64_t tx_r,tx_s;
@@ -1384,12 +1408,12 @@ use_enhanced_software_timestamping:
 			messageId.getMessageType(), messageId.getSequenceId());
 		
 		// Try cross-timestamping first for best accuracy
-		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
-		if (crossTimestamp.isPreciseTimestampingSupported()) {
+		WindowsCrossTimestamp& txFallbackCrossTimestamp = getGlobalCrossTimestamp();
+		if (txFallbackCrossTimestamp.isPreciseTimestampingSupported()) {
 			Timestamp system_time, device_time;
 			uint32_t local_clock, nominal_clock_rate;
 			
-			if (crossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
+			if (txFallbackCrossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
 				timestamp = device_time;
 				timestamp._version = version;
 				
@@ -1443,6 +1467,29 @@ use_enhanced_software_timestamping:
 	 */
 	virtual int HWTimestamper_rxtimestamp(PortIdentity *identity, PTPMessageId messageId, Timestamp &timestamp, unsigned &clock_value, bool last)
 	{
+#ifdef OPENAVNU_BUILD_INTEL_HAL
+		// 🚀 INTEL HAL INTEGRATION: Try Intel HAL first for better reliability
+		WindowsCrossTimestamp& rxCrossTimestamp = getGlobalCrossTimestamp();
+		if (rxCrossTimestamp.isIntelHALAvailable()) {
+			Timestamp system_time, device_time;
+			
+			if (rxCrossTimestamp.getCrossTimestamp(&system_time, &device_time)) {
+				timestamp = device_time;
+				timestamp._version = version;
+				
+				GPTP_LOG_VERBOSE("Intel HAL RX timestamp successful: messageType=%d, seq=%u, timestamp=%llu.%09u", 
+					messageId.getMessageType(), messageId.getSequenceId(),
+					TIMESTAMP_TO_NS(timestamp) / 1000000000ULL, 
+					(uint32_t)(TIMESTAMP_TO_NS(timestamp) % 1000000000ULL));
+				
+				return GPTP_EC_SUCCESS;
+			}
+			
+			GPTP_LOG_DEBUG("Intel HAL RX timestamp failed, falling back to legacy OID method");
+		}
+#endif
+
+		// Legacy OID-based timestamping (fallback when Intel HAL not available/enabled)
 		DWORD buf[4], buf_tmp[4];
 		DWORD returned;
 		uint64_t rx_r,rx_s;
@@ -1600,10 +1647,10 @@ use_enhanced_software_timestamping:
 		uint32_t local_clock, nominal_clock_rate;
 		
 		// Use the same cross-timestamping mechanism as HWTimestamper_gettime
-		WindowsCrossTimestamp& crossTimestamp = getGlobalCrossTimestamp();
+		WindowsCrossTimestamp& rxFallbackCrossTimestamp = getGlobalCrossTimestamp();
 		
-		if (crossTimestamp.isPreciseTimestampingSupported()) {
-			if (crossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
+		if (rxFallbackCrossTimestamp.isPreciseTimestampingSupported()) {
+			if (rxFallbackCrossTimestamp.getCrossTimestamp(&system_time, &device_time, &local_clock, &nominal_clock_rate)) {
 				// Use device time as software RX timestamp approximation
 				timestamp = device_time;
 				timestamp._version = version;

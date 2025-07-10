@@ -182,12 +182,30 @@ packet_error_t openInterfaceByAddr( struct packet_handle *handle, packet_addr_t 
         goto fnexit;
     }
 
+    // Debug: Log all available adapters and target MAC address
+    GPTP_LOG_INFO("Target MAC address: %02X-%02X-%02X-%02X-%02X-%02X",
+        addr->addr[0], addr->addr[1], addr->addr[2], 
+        addr->addr[3], addr->addr[4], addr->addr[5]);
+    GPTP_LOG_INFO("Available network adapters:");
+    
     for( pAdapterAddress = AdapterAddress; pAdapterAddress != NULL; pAdapterAddress = pAdapterAddress->Next ) {
+        if( pAdapterAddress->PhysicalAddressLength == ETHER_ADDR_OCTETS ) {
+            GPTP_LOG_INFO("  Adapter: %s, MAC: %02X-%02X-%02X-%02X-%02X-%02X", 
+                pAdapterAddress->AdapterName,
+                pAdapterAddress->PhysicalAddress[0], pAdapterAddress->PhysicalAddress[1],
+                pAdapterAddress->PhysicalAddress[2], pAdapterAddress->PhysicalAddress[3],
+                pAdapterAddress->PhysicalAddress[4], pAdapterAddress->PhysicalAddress[5]);
+        }
+        
         if( pAdapterAddress->PhysicalAddressLength == ETHER_ADDR_OCTETS &&
             memcmp( pAdapterAddress->PhysicalAddress, addr->addr, ETHER_ADDR_OCTETS ) == 0 ) {
+            GPTP_LOG_INFO("  ✅ Found matching adapter: %s", pAdapterAddress->AdapterName);
             break;
         }
     }
+    
+    GPTP_LOG_INFO("Search for MAC address completed. Adapter found: %s", 
+                  pAdapterAddress ? "YES" : "NO");
 
     if( pAdapterAddress != NULL ) {
         strcpy_s( name, PCAP_INTERFACENAMEPREFIX );
@@ -210,13 +228,16 @@ packet_error_t openInterfaceByAddr( struct packet_handle *handle, packet_addr_t 
             GPTP_LOG_INFO("Using optimized timeout %dms for direct connection\n", optimized_timeout);
         }
         
+        GPTP_LOG_INFO("About to open interface: %s", name);
         handle->iface = pcap_open(  name, MAX_FRAME_SIZE, 
                                    PCAP_OPENFLAG_MAX_RESPONSIVENESS | PCAP_OPENFLAG_PROMISCUOUS | PCAP_OPENFLAG_NOCAPTURE_LOCAL,
                                    optimized_timeout, NULL, handle->errbuf );
         if( handle->iface == NULL ) {
+            GPTP_LOG_ERROR("pcap_open failed for %s: %s", name, handle->errbuf);
             ret = PACKET_IFLOOKUP_ERROR;
             goto fnexit;
         }
+        GPTP_LOG_INFO("Successfully opened interface: %s", name);
         handle->iface_addr = *addr;
     } else {
         ret = PACKET_IFNOTFOUND_ERROR;

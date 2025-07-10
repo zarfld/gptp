@@ -69,8 +69,31 @@ elseif(WIN32)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS -DHAVE_REMOTE)
   include_directories( include "./windows/daemon_cl" ${PCAP_ROOT_DIR}/Include )
   file(GLOB GPTP_OS "./windows/daemon_cl/*.cpp" "./windows/daemon_cl/gptp.manifest")
+  
+  # Intel HAL integration (if enabled)
+  if(OPENAVNU_BUILD_INTEL_HAL)
+    message(STATUS "✅ Intel HAL integration enabled for gPTP")
+    add_definitions(-DOPENAVNU_BUILD_INTEL_HAL)
+    
+    # Add Intel HAL include directories
+    include_directories("../intel-ethernet-hal/include")
+    
+    # Add Intel HAL vendor extension sources
+    list(APPEND GPTP_OS "./windows/daemon_cl/intel_hal_vendor_extensions.cpp")
+    
+    message(STATUS "   - Intel HAL headers: ../intel-ethernet-hal/include")
+    message(STATUS "   - Intel HAL library: intel-ethernet-hal-static")
+  else()
+    message(STATUS "⚠️  Intel HAL integration disabled (use -DOPENAVNU_BUILD_INTEL_HAL=ON to enable)")
+  endif()
+  
   add_executable (gptp ${GPTP_COMMON} ${GPTP_OS})
   target_link_libraries(gptp ${PCAP_LIBRARY_NAME} Iphlpapi Ws2_32)
+  
+  # Link Intel HAL library after executable is created
+  if(OPENAVNU_BUILD_INTEL_HAL)
+    target_link_libraries(gptp intel-ethernet-hal-static)
+  endif()
 
   # Copy configuration files to output directory for deployment
   add_custom_command(TARGET gptp POST_BUILD
