@@ -53,7 +53,7 @@
 // Forward declarations for Intel HAL integration
 #ifdef OPENAVNU_BUILD_INTEL_HAL
 extern "C" {
-    #include "../../../../intel-ethernet-hal/include/intel_ethernet_hal.h"
+    #include "../../../intel-ethernet-hal/include/intel_ethernet_hal.h"
 }
 #endif
 
